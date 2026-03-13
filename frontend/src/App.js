@@ -4138,9 +4138,10 @@ const POSPage = () => {
     const p1 = product.price1 || product.retail_price || 0;
     const p2 = product.price2 || p1;
     const p3 = product.price3 || product.wholesale_price || p1;
+    const boxQty = product.box_quantity || 1;
     switch (mode) {
       case "price2": return p2;
-      case "box": return p3; // box mode = per-piece price at box rate
+      case "box": return p3 * boxQty; // per-box price
       default: return p1;
     }
   };
@@ -4149,14 +4150,20 @@ const POSPage = () => {
     const p1 = product.price1 || product.retail_price || 0;
     const p2 = product.price2 || p1;
     const p3 = product.price3 || product.wholesale_price || p1;
-    // quantity ALWAYS represents pieces, price mode only changes unit price
-    if (mode === "box") return quantity * p3;
+    const boxQty = product.box_quantity || 1;
+    if (mode === "box") {
+      // quantity = number of boxes
+      return quantity * boxQty * p3;
+    }
     const unitPrice = mode === "price2" ? p2 : p1;
     return quantity * unitPrice;
   };
 
   const getActualItems = (item) => {
-    return item.quantity; // quantity always represents pieces
+    if (item.price_mode === "box") {
+      return item.quantity * (item.product.box_quantity || 1);
+    }
+    return item.quantity;
   };
 
   const handlePriceModeChange = (mode) => {
@@ -4270,13 +4277,36 @@ const POSPage = () => {
 
   const changeItemPriceMode = (productId, newMode) => {
     setCart(prev => prev.map(i => {
-      if (i.product_id === productId) {
-        // Only change price mode and recalculate - quantity stays the same
-        const amount = calcCartItemAmount(i.product, i.quantity, newMode);
-        const unitPrice = getItemPriceByMode(i.product, newMode);
-        return {...i, price_mode: newMode, unit_price: unitPrice, amount};
+      if (i.product_id !== productId) return i;
+      const boxQty = i.product.box_quantity || 1;
+
+      // Switching TO box mode from piece mode
+      if (newMode === "box" && i.price_mode !== "box") {
+        const boxCount = Math.max(1, Math.floor(i.quantity / boxQty) || 1);
+        const amount = calcCartItemAmount(i.product, boxCount, "box");
+        const unitPrice = getItemPriceByMode(i.product, "box");
+        return {...i, price_mode: "box", quantity: boxCount, unit_price: unitPrice, amount, _saved_pieces: i.quantity};
       }
-      return i;
+
+      // Switching FROM box mode to piece mode
+      if (newMode !== "box" && i.price_mode === "box") {
+        // Restore saved piece count if user didn't manually change box qty
+        const autoBoxCount = Math.max(1, Math.floor((i._saved_pieces || 1) / boxQty) || 1);
+        let newQty;
+        if (i._saved_pieces && i.quantity === autoBoxCount) {
+          newQty = i._saved_pieces; // restore original
+        } else {
+          newQty = i.quantity * boxQty; // user changed boxes, convert
+        }
+        const amount = calcCartItemAmount(i.product, newQty, newMode);
+        const unitPrice = getItemPriceByMode(i.product, newMode);
+        return {...i, price_mode: newMode, quantity: newQty, unit_price: unitPrice, amount, _saved_pieces: undefined};
+      }
+
+      // Switching between piece modes (price1 <-> price2)
+      const amount = calcCartItemAmount(i.product, i.quantity, newMode);
+      const unitPrice = getItemPriceByMode(i.product, newMode);
+      return {...i, price_mode: newMode, unit_price: unitPrice, amount};
     }));
   };
 
@@ -4291,7 +4321,8 @@ const POSPage = () => {
   // Discount: max discount = total - total_cost (can't sell below cost)
   const cartCost = cart.reduce((sum, i) => {
     const cost = i.product.cost_price || 0;
-    return sum + cost * i.quantity;
+    const qty = i.price_mode === "box" ? i.quantity * (i.product.box_quantity || 1) : i.quantity;
+    return sum + cost * qty;
   }, 0);
   const maxDiscountPercent = cartTotal > 0 ? Math.floor((1 - cartCost / cartTotal) * 100) : 0;
   const safeDiscount = Math.min(discountPercent, maxDiscountPercent);
@@ -4309,7 +4340,7 @@ const POSPage = () => {
       customer_id: null,
       items: cart.map(i => ({
         product_id: i.product_id,
-        quantity: i.quantity,
+        quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity,
         unit_price: i.unit_price,
         discount: safeDiscount,
         amount: i.amount * (1 - safeDiscount / 100)
@@ -4723,9 +4754,7 @@ const POSPage = () => {
                   cart.map((item, idx) => {
                     const boxQty = item.product.box_quantity || 1;
                     const isBoxMode = item.price_mode === "box";
-                    const totalPieces = item.quantity; // quantity always represents pieces
-                    const numBoxes = Math.floor(item.quantity / boxQty);
-                    const remainPieces = item.quantity % boxQty;
+                    const totalPieces = isBoxMode ? item.quantity * boxQty : item.quantity;
                     const displayAmount = showBs ? item.amount * (exchangeRates.usd_to_ves || 1) : item.amount;
                     const displayUnitPrice = showBs ? getItemPriceByMode(item.product, item.price_mode) * (exchangeRates.usd_to_ves || 1) : getItemPriceByMode(item.product, item.price_mode);
                     const priceModes = ["price1", "price2", "box"];
@@ -4738,15 +4767,15 @@ const POSPage = () => {
                         <td className="px-4 py-3">
                           <p className="text-white text-sm font-medium">{item.product.name}</p>
                           <p className="text-slate-500 text-xs">{item.product.code}</p>
-                          {/* Box calculation: show box equivalent */}
+                          {/* Box calculation: show per-box breakdown */}
                           {isBoxMode && (() => {
                             const rate = exchangeRates.usd_to_ves || 1;
                             const p3 = item.product.price3 || item.product.wholesale_price || 0;
                             const perBoxTotal = boxQty * p3;
                             return (
                               <p className="text-blue-300 text-xs mt-0.5">
-                                {boxQty}{t('pieces')}/{t('box')} × {getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)} = {getPriceSymbol()}{(showBs ? perBoxTotal*rate : perBoxTotal).toFixed(2)}/{t('box')}
-                                {numBoxes > 0 && <span className="text-slate-400 ml-1">({numBoxes}{t('boxes')}{remainPieces > 0 ? `+${remainPieces}${t('pieces')}` : ''})</span>}
+                                {boxQty}×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{(showBs ? perBoxTotal*rate : perBoxTotal).toFixed(2)}/{t('box')}
+                                <span className="text-slate-400 ml-1">({totalPieces}{t('pieces')})</span>
                               </p>
                             );
                           })()}
