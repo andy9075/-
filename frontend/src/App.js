@@ -927,7 +927,7 @@ const WarehousesPage = () => {
 const OnlineOrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
     fetchOrders();
@@ -935,7 +935,8 @@ const OnlineOrdersPage = () => {
 
   const fetchOrders = async () => {
     try {
-      const res = await axios.get(`${API}/shop/orders`, { params: { status: statusFilter || undefined } });
+      const params = statusFilter !== "all" ? { status: statusFilter } : {};
+      const res = await axios.get(`${API}/shop/orders`, { params });
       setOrders(res.data);
     } catch (e) {
       toast.error("加载订单失败");
@@ -979,7 +980,7 @@ const OnlineOrdersPage = () => {
             <SelectValue placeholder="全部状态" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">全部状态</SelectItem>
+            <SelectItem value="all">全部状态</SelectItem>
             <SelectItem value="pending">待处理</SelectItem>
             <SelectItem value="processing">处理中</SelectItem>
             <SelectItem value="shipped">已发货</SelectItem>
