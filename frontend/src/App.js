@@ -3056,6 +3056,7 @@ const POSPage = () => {
   const [priceMode, setPriceMode] = useState("price1"); // global display: price1, bs
   const [exchangeRates, setExchangeRates] = useState({ usd_to_ves: 36.5 });
   const [showBs, setShowBs] = useState(false); // Bs. display toggle
+  const [showProductSearch, setShowProductSearch] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem("pos_user");
@@ -3387,217 +3388,266 @@ const POSPage = () => {
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col">
       {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+      <header className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-blue-400" />
-            <span className="text-white font-bold">POS</span>
+            <CreditCard className="w-5 h-5 text-blue-400" />
+            <span className="text-white font-bold text-sm">POS</span>
           </div>
-          <div className="text-slate-400 text-sm">
+          <span className="text-slate-400 text-sm">
             <span className="text-white">{selectedStore?.name}</span> | {user?.name || user?.username}
-          </div>
+          </span>
         </div>
         <div className="flex items-center gap-3">
-          {/* Bs. Toggle */}
-          <div className="flex bg-slate-700 rounded-lg p-1">
-            <button 
-              onClick={() => setShowBs(false)}
-              className={`px-3 py-1 text-sm rounded ${!showBs ? 'bg-emerald-500 text-white' : 'text-slate-300 hover:text-white'}`}
-              data-testid="price-mode-usd"
-            >
-              $ USD
-            </button>
-            <button 
-              onClick={() => setShowBs(true)}
-              className={`px-3 py-1 text-sm rounded ${showBs ? 'bg-orange-500 text-white' : 'text-slate-300 hover:text-white'}`}
-              data-testid="price-mode-bs"
-            >
-              Bs.
-            </button>
+          {/* Currency Toggle - Up/Down */}
+          <div className="flex items-center gap-1 bg-slate-700 rounded-lg px-2 py-1">
+            <span className="text-xs text-slate-400 mr-1">币种</span>
+            <span className={`text-sm font-bold min-w-[36px] text-center ${showBs ? 'text-orange-400' : 'text-emerald-400'}`}>
+              {showBs ? 'Bs.' : '$'}
+            </span>
+            <div className="flex flex-col">
+              <button onClick={() => setShowBs(!showBs)} className="text-slate-400 hover:text-white leading-none" data-testid="currency-up">
+                <ChevronDown className="w-3 h-3 rotate-180" />
+              </button>
+              <button onClick={() => setShowBs(!showBs)} className="text-slate-400 hover:text-white leading-none" data-testid="currency-down">
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </div>
           </div>
           {shift ? (
-            <Badge className="bg-green-500/20 text-green-400">
-              Turno Activo desde {new Date(shift.start_time).toLocaleTimeString()}
+            <Badge className="bg-green-500/20 text-green-400 text-xs">
+              Turno desde {new Date(shift.start_time).toLocaleTimeString()}
             </Badge>
           ) : (
-            <Badge className="bg-yellow-500/20 text-yellow-400">Sin Turno</Badge>
+            <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">Sin Turno</Badge>
           )}
           {!shift ? (
-            <Button size="sm" onClick={handleStartShift} className="bg-green-600 hover:bg-green-700" data-testid="start-shift-btn">
-              Iniciar Turno
+            <Button size="sm" onClick={handleStartShift} className="bg-green-600 hover:bg-green-700 h-7 text-xs" data-testid="start-shift-btn">
+              当班
             </Button>
           ) : (
-            <Button size="sm" onClick={handleEndShift} className="bg-orange-600 hover:bg-orange-700" data-testid="end-shift-btn">
-              Cerrar Turno
+            <Button size="sm" onClick={handleEndShift} className="bg-orange-600 hover:bg-orange-700 h-7 text-xs" data-testid="end-shift-btn">
+              交班
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={handleLogout} className="border-slate-600 text-slate-300">
-            <LogOut className="w-4 h-4" />
+          <Button size="sm" variant="outline" onClick={handleLogout} className="border-slate-600 text-slate-300 h-7">
+            <LogOut className="w-3 h-3" />
           </Button>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Products Section */}
-        <div className="flex-1 flex flex-col p-4 overflow-hidden">
-          {/* Search & Categories */}
-          <div className="flex gap-3 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                placeholder="Buscar producto o escanear código..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-slate-800 border-slate-700 text-white"
-                data-testid="pos-search"
-                autoFocus
-              />
-            </div>
+      {/* Main Content - Full Screen Cart */}
+      <div className="flex-1 flex flex-col p-4 overflow-hidden">
+        {/* Search Bar */}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              placeholder="扫描条码 / 搜索商品名称..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); if(e.target.value) setShowProductSearch(true); }}
+              onFocus={() => setShowProductSearch(true)}
+              className="pl-10 bg-slate-800 border-slate-700 text-white h-10"
+              data-testid="pos-search"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && filteredProducts.length === 1) {
+                  addToCart(filteredProducts[0]);
+                  setSearchTerm('');
+                  setShowProductSearch(false);
+                }
+              }}
+            />
           </div>
-
-          {/* Category Tabs */}
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-            <Button
-              size="sm"
-              variant={selectedCategory === "all" ? "default" : "outline"}
-              onClick={() => setSelectedCategory("all")}
-              className={selectedCategory === "all" ? "bg-blue-500" : "border-slate-600 text-slate-300"}
-            >
-              Todos
-            </Button>
-            {categories.map(cat => (
-              <Button
-                key={cat.id}
-                size="sm"
-                variant={selectedCategory === cat.id ? "default" : "outline"}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={selectedCategory === cat.id ? "bg-blue-500" : "border-slate-600 text-slate-300"}
-              >
-                {cat.name}
-              </Button>
-            ))}
-          </div>
-
-          {/* Products Grid */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {filteredProducts.map(product => (
-                <div
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  className="bg-slate-800 border border-slate-700 rounded-lg p-3 cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all"
-                  data-testid={`pos-product-${product.id}`}
-                >
-                  <div className="aspect-square bg-slate-700 rounded-lg mb-2 flex items-center justify-center">
-                    <Package className="w-8 h-8 text-slate-500" />
-                  </div>
-                  <p className="text-white text-sm font-medium truncate">{product.name}</p>
-                  <p className="text-slate-400 text-xs">{product.code}</p>
-                  <p className={`font-bold mt-1 text-emerald-400`}>
-                    {getPriceSymbol()}{getProductPrice(product).toFixed(2)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
+          <Button onClick={() => setShowProductSearch(!showProductSearch)} className="bg-blue-500 hover:bg-blue-600 h-10 px-4" data-testid="open-products-btn">
+            <Package className="w-4 h-4 mr-2" /> 商品
+          </Button>
         </div>
 
-        {/* Cart Section */}
-        <div className="w-96 bg-slate-800 border-l border-slate-700 flex flex-col">
-          <div className="p-4 border-b border-slate-700">
-            <div className="flex items-center justify-between">
-              <h2 className="text-white font-bold flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5" /> Carrito
-              </h2>
-              <div className="flex items-center gap-2">
-                <Badge className={showBs ? 'bg-orange-500' : 'bg-emerald-500'}>
-                  {showBs ? 'Bs.' : 'USD'}
-                </Badge>
-                <Badge className="bg-slate-600">{cartCount} items</Badge>
-              </div>
-            </div>
-          </div>
-
-          {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {cart.length === 0 ? (
-              <div className="text-center text-slate-400 py-8">
-                <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Carrito vacío</p>
-                <p className="text-sm">Seleccione productos</p>
-              </div>
-            ) : (
-              cart.map(item => {
-                const boxQty = item.product.box_quantity || 1;
-                const isBoxMode = item.price_mode === "box" && boxQty > 1;
-                const boxes = isBoxMode ? Math.floor(item.quantity / boxQty) : 0;
-                const remainder = isBoxMode ? item.quantity % boxQty : 0;
-                const displayAmount = showBs ? item.amount * (exchangeRates.usd_to_ves || 1) : item.amount;
-                return (
-                <div key={item.product_id} className="bg-slate-700/50 rounded-lg p-3" data-testid={`cart-item-${item.product_id}`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <div className="flex-1">
-                      <p className="text-white text-sm font-medium">{item.product.name}</p>
-                    </div>
-                    <button onClick={() => removeFromCart(item.product_id)} className="text-red-400 hover:text-red-300">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {/* Per-item price mode selector */}
-                  <div className="flex gap-1 mb-2">
-                    {["price1","price2","box"].map(mode => (
-                      <button key={mode} onClick={() => changeItemPriceMode(item.product_id, mode)}
-                        className={`px-2 py-0.5 text-xs rounded ${item.price_mode === mode 
-                          ? mode === 'box' ? 'bg-blue-500 text-white' : mode === 'price2' ? 'bg-yellow-500 text-white' : 'bg-emerald-500 text-white'
-                          : 'bg-slate-600 text-slate-300 hover:bg-slate-500'}`}
-                        data-testid={`cart-mode-${mode}-${item.product_id}`}
-                      >
-                        {mode === 'price1' ? '价格1' : mode === 'price2' ? '价格2' : '整箱'}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Box calculation display */}
-                  {isBoxMode && (
-                    <div className="text-xs text-blue-300 mb-1 bg-blue-500/10 rounded px-2 py-1">
-                      {boxes > 0 && <span>{boxes}箱×{getPriceSymbol()}{showBs ? ((item.product.price3||item.product.wholesale_price||0)*(exchangeRates.usd_to_ves||1)).toFixed(2) : (item.product.price3||item.product.wholesale_price||0).toFixed(2)}</span>}
-                      {boxes > 0 && remainder > 0 && <span> + </span>}
-                      {remainder > 0 && <span>{remainder}件×{getPriceSymbol()}{showBs ? ((item.product.price2||item.product.price1||item.product.retail_price||0)*(exchangeRates.usd_to_ves||1)).toFixed(2) : (item.product.price2||item.product.price1||item.product.retail_price||0).toFixed(2)}</span>}
-                      <span className="text-slate-400 ml-1">(每箱{boxQty}件)</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" className="w-8 h-8 p-0 border-slate-600" onClick={() => updateQuantity(item.product_id, -1)}>-</Button>
-                      <span className="text-white w-8 text-center">{item.quantity}</span>
-                      <Button size="sm" variant="outline" className="w-8 h-8 p-0 border-slate-600" onClick={() => updateQuantity(item.product_id, 1)}>+</Button>
-                    </div>
-                    <p className="text-blue-400 font-bold">{getPriceSymbol()}{displayAmount.toFixed(2)}</p>
-                  </div>
-                </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Cart Footer */}
-          <div className="p-4 border-t border-slate-700 space-y-3">
-            <div className="flex justify-between text-lg">
-              <span className="text-slate-300">Total:</span>
-              <span className="font-bold text-2xl text-white">
-                {getPriceSymbol()}{(showBs ? cartTotal * (exchangeRates.usd_to_ves || 1) : cartTotal).toFixed(2)}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={clearCart} className="border-slate-600 text-slate-300" disabled={cart.length === 0}>
-                Limpiar
+        {/* Product Search Popup */}
+        {showProductSearch && (
+          <div className="absolute left-4 right-4 top-[120px] z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl max-h-[60vh] flex flex-col" data-testid="product-search-popup">
+            {/* Category Tabs */}
+            <div className="flex gap-1 p-3 border-b border-slate-700 overflow-x-auto flex-shrink-0">
+              <Button size="sm" variant={selectedCategory === "all" ? "default" : "outline"}
+                onClick={() => setSelectedCategory("all")}
+                className={`h-7 text-xs ${selectedCategory === "all" ? "bg-blue-500" : "border-slate-600 text-slate-300"}`}
+              >
+                全部
               </Button>
+              {categories.map(cat => (
+                <Button key={cat.id} size="sm" variant={selectedCategory === cat.id ? "default" : "outline"}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`h-7 text-xs whitespace-nowrap ${selectedCategory === cat.id ? "bg-blue-500" : "border-slate-600 text-slate-300"}`}
+                >
+                  {cat.name}
+                </Button>
+              ))}
+            </div>
+            {/* Product List */}
+            <div className="overflow-y-auto p-2 flex-1">
+              <div className="grid grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+                {filteredProducts.map(product => (
+                  <div key={product.id}
+                    onClick={() => { addToCart(product); setSearchTerm(''); setShowProductSearch(false); }}
+                    className="bg-slate-700/50 border border-slate-600 rounded-lg p-2 cursor-pointer hover:bg-slate-600 hover:border-blue-500 transition-all text-center"
+                    data-testid={`pos-product-${product.id}`}
+                  >
+                    <p className="text-white text-xs font-medium truncate">{product.name}</p>
+                    <p className="text-slate-400 text-[10px]">{product.code}</p>
+                    <p className="text-emerald-400 text-xs font-bold mt-1">
+                      {getPriceSymbol()}{getProductPrice(product).toFixed(2)}
+                    </p>
+                  </div>
+                ))}
+                {filteredProducts.length === 0 && (
+                  <p className="text-slate-400 text-sm col-span-full text-center py-4">没有找到商品</p>
+                )}
+              </div>
+            </div>
+            {/* Close button */}
+            <div className="p-2 border-t border-slate-700 text-right">
+              <Button size="sm" variant="outline" onClick={() => setShowProductSearch(false)} className="border-slate-600 text-slate-300 h-7 text-xs">
+                关闭
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Click backdrop to close product search */}
+        {showProductSearch && (
+          <div className="fixed inset-0 z-40" onClick={() => setShowProductSearch(false)} />
+        )}
+
+        {/* Full Screen Cart Table */}
+        <div className="flex-1 bg-slate-800 rounded-lg border border-slate-700 flex flex-col overflow-hidden">
+          {/* Cart Header */}
+          <div className="bg-slate-750 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="text-white font-bold">销售单</h2>
+              <Badge className="bg-slate-600 text-xs">{cartCount} 件</Badge>
+            </div>
+            <Button size="sm" variant="outline" onClick={clearCart} className="border-slate-600 text-slate-300 h-7 text-xs" disabled={cart.length === 0}>
+              清空
+            </Button>
+          </div>
+
+          {/* Cart Table */}
+          <div className="flex-1 overflow-y-auto">
+            <table className="w-full">
+              <thead className="bg-slate-700/50 sticky top-0">
+                <tr className="text-slate-400 text-xs">
+                  <th className="text-left px-4 py-2 w-8">#</th>
+                  <th className="text-left px-4 py-2">商品名称</th>
+                  <th className="text-center px-2 py-2 w-32">数量</th>
+                  <th className="text-center px-2 py-2 w-28">价格类型</th>
+                  <th className="text-right px-4 py-2 w-28">单价</th>
+                  <th className="text-right px-4 py-2 w-36">金额</th>
+                  <th className="text-center px-2 py-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cart.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center text-slate-500 py-16">
+                      <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">搜索或扫描条码添加商品</p>
+                    </td>
+                  </tr>
+                ) : (
+                  cart.map((item, idx) => {
+                    const boxQty = item.product.box_quantity || 1;
+                    const isBoxMode = item.price_mode === "box";
+                    const boxes = isBoxMode && boxQty > 1 ? Math.floor(item.quantity / boxQty) : (isBoxMode ? item.quantity : 0);
+                    const remainder = isBoxMode && boxQty > 1 ? item.quantity % boxQty : 0;
+                    const displayAmount = showBs ? item.amount * (exchangeRates.usd_to_ves || 1) : item.amount;
+                    const displayUnitPrice = showBs ? getItemPriceByMode(item.product, item.price_mode) * (exchangeRates.usd_to_ves || 1) : getItemPriceByMode(item.product, item.price_mode);
+                    const priceModes = ["price1", "price2", "box"];
+                    const currentIdx = priceModes.indexOf(item.price_mode);
+                    const modeLabels = { price1: "价格1", price2: "价格2", box: "整箱" };
+                    const modeColors = { price1: "text-emerald-400", price2: "text-yellow-400", box: "text-blue-400" };
+                    return (
+                      <tr key={item.product_id} className="border-b border-slate-700/50 hover:bg-slate-700/30" data-testid={`cart-row-${item.product_id}`}>
+                        <td className="px-4 py-3 text-slate-500 text-sm">{idx + 1}</td>
+                        <td className="px-4 py-3">
+                          <p className="text-white text-sm font-medium">{item.product.name}</p>
+                          <p className="text-slate-500 text-xs">{item.product.code}</p>
+                          {/* Box detail line */}
+                          {isBoxMode && boxQty > 1 && (
+                            <p className="text-blue-300 text-xs mt-0.5">
+                              {boxes > 0 && <span>{boxes}箱×{getPriceSymbol()}{(showBs ? (item.product.price3||item.product.wholesale_price||0)*(exchangeRates.usd_to_ves||1) : (item.product.price3||item.product.wholesale_price||0)).toFixed(2)}={getPriceSymbol()}{(showBs ? boxes*(item.product.price3||item.product.wholesale_price||0)*(exchangeRates.usd_to_ves||1) : boxes*(item.product.price3||item.product.wholesale_price||0)).toFixed(2)}</span>}
+                              {boxes > 0 && remainder > 0 && " + "}
+                              {remainder > 0 && <span>{remainder}件×{getPriceSymbol()}{(showBs ? (item.product.price2||item.product.price1||item.product.retail_price||0)*(exchangeRates.usd_to_ves||1) : (item.product.price2||item.product.price1||item.product.retail_price||0)).toFixed(2)}={getPriceSymbol()}{(showBs ? remainder*(item.product.price2||item.product.price1||item.product.retail_price||0)*(exchangeRates.usd_to_ves||1) : remainder*(item.product.price2||item.product.price1||item.product.retail_price||0)).toFixed(2)}</span>}
+                            </p>
+                          )}
+                          {isBoxMode && boxQty <= 1 && (
+                            <p className="text-blue-300 text-xs mt-0.5">
+                              {item.quantity}×{getPriceSymbol()}{(showBs ? (item.product.price3||item.product.wholesale_price||0)*(exchangeRates.usd_to_ves||1) : (item.product.price3||item.product.wholesale_price||0)).toFixed(2)}={getPriceSymbol()}{displayAmount.toFixed(2)}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => updateQuantity(item.product_id, -1)} className="w-7 h-7 rounded bg-slate-700 text-white hover:bg-slate-600 flex items-center justify-center text-sm">-</button>
+                            <span className="text-white w-10 text-center font-medium">{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item.product_id, 1)} className="w-7 h-7 rounded bg-slate-700 text-white hover:bg-slate-600 flex items-center justify-center text-sm">+</button>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <span className={`text-xs font-medium min-w-[40px] ${modeColors[item.price_mode]}`}>
+                              {modeLabels[item.price_mode]}
+                            </span>
+                            <div className="flex flex-col">
+                              <button onClick={() => changeItemPriceMode(item.product_id, priceModes[(currentIdx + 2) % 3])}
+                                className="text-slate-400 hover:text-white leading-none" data-testid={`price-up-${item.product_id}`}>
+                                <ChevronDown className="w-3 h-3 rotate-180" />
+                              </button>
+                              <button onClick={() => changeItemPriceMode(item.product_id, priceModes[(currentIdx + 1) % 3])}
+                                className="text-slate-400 hover:text-white leading-none" data-testid={`price-down-${item.product_id}`}>
+                                <ChevronDown className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-300 text-sm">
+                          {getPriceSymbol()}{displayUnitPrice.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-white">
+                          {getPriceSymbol()}{displayAmount.toFixed(2)}
+                        </td>
+                        <td className="px-2 py-3 text-center">
+                          <button onClick={() => removeFromCart(item.product_id)} className="text-red-400 hover:text-red-300">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Cart Footer - Total & Pay */}
+          <div className="border-t border-slate-700 px-4 py-3 flex items-center justify-between bg-slate-800">
+            <div className="text-slate-400 text-sm">
+              {cart.length} 种商品, {cartCount} 件
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <span className="text-slate-400 text-sm mr-3">合计:</span>
+                <span className="text-2xl font-bold text-white">
+                  {getPriceSymbol()}{(showBs ? cartTotal * (exchangeRates.usd_to_ves || 1) : cartTotal).toFixed(2)}
+                </span>
+              </div>
               <Button 
                 onClick={() => setShowPayment(true)} 
-                className="bg-green-600 hover:bg-green-700" 
+                className="bg-green-600 hover:bg-green-700 h-10 px-8 text-base font-bold" 
                 disabled={cart.length === 0 || !shift}
                 data-testid="pos-pay-btn"
               >
-                Cobrar
+                收款
               </Button>
             </div>
           </div>
