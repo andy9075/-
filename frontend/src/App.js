@@ -35,6 +35,10 @@ import StockTakingPage from "@/pages/admin/StockTakingPage";
 import CategoriesPage from "@/pages/admin/CategoriesPage";
 import DailySettlementPage from "@/pages/admin/DailySettlementPage";
 import RefundsPage from "@/pages/admin/RefundsPage";
+import ProfitAnalysisPage from "@/pages/admin/ProfitAnalysisPage";
+import AuditLogPage from "@/pages/admin/AuditLogPage";
+import PromotionsPage from "@/pages/admin/PromotionsPage";
+import AccountsPage from "@/pages/admin/AccountsPage";
 
 function AdminRoute({ children }) {
   return (
@@ -80,6 +84,10 @@ function AppContent() {
           <Route path="/admin/categories" element={<AdminRoute><CategoriesPage /></AdminRoute>} />
           <Route path="/admin/daily-settlement" element={<AdminRoute><DailySettlementPage /></AdminRoute>} />
           <Route path="/admin/refunds" element={<AdminRoute><RefundsPage /></AdminRoute>} />
+          <Route path="/admin/profit-analysis" element={<AdminRoute><ProfitAnalysisPage /></AdminRoute>} />
+          <Route path="/admin/audit-log" element={<AdminRoute><AuditLogPage /></AdminRoute>} />
+          <Route path="/admin/promotions" element={<AdminRoute><PromotionsPage /></AdminRoute>} />
+          <Route path="/admin/accounts" element={<AdminRoute><AccountsPage /></AdminRoute>} />
 
           <Route path="/" element={<Navigate to="/shop" replace />} />
         </Routes>

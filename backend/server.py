@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1954,6 +1955,320 @@ async def get_import_template():
 @api_router.get("/")
 async def root():
     return {"message": "POS System API", "status": "running"}
+
+# ==================== Audit Log ====================
+async def log_audit(user_id: str, username: str, action: str, target_type: str, target_id: str = "", detail: str = ""):
+    await db.audit_logs.insert_one({
+        "id": generate_id(), "user_id": user_id, "username": username,
+        "action": action, "target_type": target_type, "target_id": target_id,
+        "detail": detail, "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+@api_router.get("/audit-logs")
+async def get_audit_logs(
+    action: Optional[str] = None, target_type: Optional[str] = None,
+    start_date: Optional[str] = None, end_date: Optional[str] = None,
+    page: int = 1, limit: int = 50,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if action: query["action"] = action
+    if target_type: query["target_type"] = target_type
+    if start_date: query["created_at"] = {"$gte": start_date}
+    if end_date: query.setdefault("created_at", {})["$lte"] = end_date
+    total = await db.audit_logs.count_documents(query)
+    logs = await db.audit_logs.find(query, {"_id": 0}).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    return {"total": total, "page": page, "limit": limit, "items": logs}
+
+# ==================== Profit Analysis ====================
+@api_router.get("/reports/profit-analysis")
+async def get_profit_analysis(
+    start_date: Optional[str] = None, end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if start_date: query["created_at"] = {"$gte": start_date}
+    if end_date: query.setdefault("created_at", {})["$lte"] = end_date
+    orders = await db.sales_orders.find(query, {"_id": 0}).to_list(10000)
+    product_profit = {}
+    for order in orders:
+        for item in order.get("items", []):
+            pid = item["product_id"]
+            if pid not in product_profit:
+                product_profit[pid] = {"revenue": 0, "cost": 0, "quantity": 0}
+            product_profit[pid]["revenue"] += item.get("amount", 0)
+            product_profit[pid]["quantity"] += item.get("quantity", 0)
+    products = await db.products.find({}, {"_id": 0}).to_list(10000)
+    prod_map = {p["id"]: p for p in products}
+    result = []
+    total_revenue = 0
+    total_cost = 0
+    for pid, data in product_profit.items():
+        product = prod_map.get(pid, {})
+        cost = product.get("cost_price", 0) * data["quantity"]
+        profit = data["revenue"] - cost
+        margin = (profit / data["revenue"] * 100) if data["revenue"] > 0 else 0
+        total_revenue += data["revenue"]
+        total_cost += cost
+        result.append({
+            "product_id": pid, "product_name": product.get("name", "?"),
+            "product_code": product.get("code", ""),
+            "quantity": data["quantity"], "revenue": round(data["revenue"], 2),
+            "cost": round(cost, 2), "profit": round(profit, 2), "margin": round(margin, 1)
+        })
+    result.sort(key=lambda x: x["profit"], reverse=True)
+    total_profit = total_revenue - total_cost
+    overall_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+    return {
+        "items": result, "total_revenue": round(total_revenue, 2),
+        "total_cost": round(total_cost, 2), "total_profit": round(total_profit, 2),
+        "overall_margin": round(overall_margin, 1)
+    }
+
+# ==================== Customer Purchase History & Points/Balance ====================
+@api_router.get("/customers/{customer_id}/purchase-history")
+async def get_customer_purchase_history(customer_id: str, current_user: dict = Depends(get_current_user)):
+    orders = await db.sales_orders.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    total_spent = sum(o.get("total_amount", 0) for o in orders)
+    return {"orders": orders, "total_spent": round(total_spent, 2), "order_count": len(orders)}
+
+@api_router.post("/customers/{customer_id}/points/add")
+async def add_customer_points(customer_id: str, amount: int = Query(..., gt=0), reason: str = "", current_user: dict = Depends(get_current_user)):
+    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not customer: raise HTTPException(404, "Customer not found")
+    new_points = customer.get("points", 0) + amount
+    await db.customers.update_one({"id": customer_id}, {"$set": {"points": new_points}})
+    await db.points_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "earn", "amount": amount, "balance": new_points, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await log_audit(current_user["user_id"], current_user["username"], "points_add", "customer", customer_id, f"+{amount} points")
+    return {"points": new_points}
+
+@api_router.post("/customers/{customer_id}/points/redeem")
+async def redeem_customer_points(customer_id: str, amount: int = Query(..., gt=0), reason: str = "", current_user: dict = Depends(get_current_user)):
+    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not customer: raise HTTPException(404, "Customer not found")
+    current_points = customer.get("points", 0)
+    if current_points < amount: raise HTTPException(400, "Insufficient points")
+    new_points = current_points - amount
+    await db.customers.update_one({"id": customer_id}, {"$set": {"points": new_points}})
+    await db.points_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "redeem", "amount": -amount, "balance": new_points, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await log_audit(current_user["user_id"], current_user["username"], "points_redeem", "customer", customer_id, f"-{amount} points")
+    return {"points": new_points}
+
+@api_router.post("/customers/{customer_id}/balance/topup")
+async def topup_customer_balance(customer_id: str, amount: float = Query(..., gt=0), reason: str = "", current_user: dict = Depends(get_current_user)):
+    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not customer: raise HTTPException(404, "Customer not found")
+    new_balance = round(customer.get("balance", 0) + amount, 2)
+    await db.customers.update_one({"id": customer_id}, {"$set": {"balance": new_balance}})
+    await db.balance_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "topup", "amount": amount, "balance": new_balance, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await log_audit(current_user["user_id"], current_user["username"], "balance_topup", "customer", customer_id, f"+${amount}")
+    return {"balance": new_balance}
+
+@api_router.get("/customers/{customer_id}/points-log")
+async def get_customer_points_log(customer_id: str, current_user: dict = Depends(get_current_user)):
+    logs = await db.points_log.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return logs
+
+@api_router.get("/customers/{customer_id}/balance-log")
+async def get_customer_balance_log(customer_id: str, current_user: dict = Depends(get_current_user)):
+    logs = await db.balance_log.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return logs
+
+# ==================== Report Export (Excel) ====================
+@api_router.get("/reports/export/sales")
+async def export_sales_report(start_date: Optional[str] = None, end_date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    import openpyxl
+    query = {}
+    if start_date: query["created_at"] = {"$gte": start_date}
+    if end_date: query.setdefault("created_at", {})["$lte"] = end_date
+    orders = await db.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sales Report"
+    headers = ["Order No", "Date", "Customer", "Items", "Total", "Payment", "Status"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = openpyxl.styles.Font(bold=True)
+    customers = {c["id"]: c["name"] for c in await db.customers.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(10000)}
+    for row, order in enumerate(orders, 2):
+        ws.cell(row=row, column=1, value=order.get("order_no", ""))
+        ws.cell(row=row, column=2, value=order.get("created_at", "")[:19])
+        ws.cell(row=row, column=3, value=customers.get(order.get("customer_id"), "-"))
+        ws.cell(row=row, column=4, value=len(order.get("items", [])))
+        ws.cell(row=row, column=5, value=order.get("total_amount", 0))
+        ws.cell(row=row, column=6, value=order.get("payment_method", ""))
+        ws.cell(row=row, column=7, value=order.get("status", ""))
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    await log_audit(current_user["user_id"], current_user["username"], "export", "report", "", "Sales report exported")
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sales_report.xlsx"})
+
+@api_router.get("/reports/export/inventory")
+async def export_inventory_report(current_user: dict = Depends(get_current_user)):
+    import openpyxl
+    inventory = await db.inventory.find({}, {"_id": 0}).to_list(10000)
+    products = {p["id"]: p for p in await db.products.find({}, {"_id": 0}).to_list(10000)}
+    warehouses = {w["id"]: w["name"] for w in await db.warehouses.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)}
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Inventory Report"
+    headers = ["Product Code", "Product Name", "Warehouse", "Quantity", "Cost Price", "Total Value"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = openpyxl.styles.Font(bold=True)
+    for row, inv in enumerate(inventory, 2):
+        product = products.get(inv.get("product_id"), {})
+        ws.cell(row=row, column=1, value=product.get("code", ""))
+        ws.cell(row=row, column=2, value=product.get("name", ""))
+        ws.cell(row=row, column=3, value=warehouses.get(inv.get("warehouse_id"), ""))
+        ws.cell(row=row, column=4, value=inv.get("quantity", 0))
+        cost = product.get("cost_price", 0)
+        ws.cell(row=row, column=5, value=cost)
+        ws.cell(row=row, column=6, value=cost * inv.get("quantity", 0))
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    await log_audit(current_user["user_id"], current_user["username"], "export", "report", "", "Inventory report exported")
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=inventory_report.xlsx"})
+
+# ==================== Promotions ====================
+@api_router.post("/promotions")
+async def create_promotion(data: Dict, current_user: dict = Depends(get_current_user)):
+    promo = {
+        "id": generate_id(), **data,
+        "status": data.get("status", "active"),
+        "created_by": current_user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.promotions.insert_one(promo)
+    del promo["_id"]
+    await log_audit(current_user["user_id"], current_user["username"], "create", "promotion", promo["id"], promo.get("name", ""))
+    return promo
+
+@api_router.get("/promotions")
+async def get_promotions(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {}
+    if status: query["status"] = status
+    return await db.promotions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+@api_router.put("/promotions/{promo_id}")
+async def update_promotion(promo_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
+    result = await db.promotions.update_one({"id": promo_id}, {"$set": data})
+    if result.matched_count == 0: raise HTTPException(404, "Promotion not found")
+    await log_audit(current_user["user_id"], current_user["username"], "update", "promotion", promo_id, "")
+    return await db.promotions.find_one({"id": promo_id}, {"_id": 0})
+
+@api_router.delete("/promotions/{promo_id}")
+async def delete_promotion(promo_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.promotions.delete_one({"id": promo_id})
+    if result.deleted_count == 0: raise HTTPException(404, "Promotion not found")
+    await log_audit(current_user["user_id"], current_user["username"], "delete", "promotion", promo_id, "")
+    return {"status": "deleted"}
+
+# ==================== Accounts Receivable / Payable ====================
+@api_router.post("/accounts/receivable")
+async def create_receivable(data: Dict, current_user: dict = Depends(get_current_user)):
+    record = {
+        "id": generate_id(), **data, "type": "receivable",
+        "status": data.get("status", "pending"),
+        "created_by": current_user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.accounts.insert_one(record)
+    del record["_id"]
+    await log_audit(current_user["user_id"], current_user["username"], "create", "receivable", record["id"], f"${data.get('amount', 0)}")
+    return record
+
+@api_router.get("/accounts/receivable")
+async def get_receivables(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {"type": "receivable"}
+    if status: query["status"] = status
+    return await db.accounts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+@api_router.put("/accounts/{account_id}/pay")
+async def pay_account(account_id: str, amount: float = Query(..., gt=0), current_user: dict = Depends(get_current_user)):
+    account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account: raise HTTPException(404, "Account not found")
+    paid = account.get("paid_amount", 0) + amount
+    status = "paid" if paid >= account.get("amount", 0) else "partial"
+    await db.accounts.update_one({"id": account_id}, {"$set": {"paid_amount": paid, "status": status}})
+    await log_audit(current_user["user_id"], current_user["username"], "payment", "account", account_id, f"${amount}")
+    return {"paid_amount": paid, "status": status}
+
+@api_router.post("/accounts/payable")
+async def create_payable(data: Dict, current_user: dict = Depends(get_current_user)):
+    record = {
+        "id": generate_id(), **data, "type": "payable",
+        "status": data.get("status", "pending"),
+        "created_by": current_user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.accounts.insert_one(record)
+    del record["_id"]
+    await log_audit(current_user["user_id"], current_user["username"], "create", "payable", record["id"], f"${data.get('amount', 0)}")
+    return record
+
+@api_router.get("/accounts/payable")
+async def get_payables(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {"type": "payable"}
+    if status: query["status"] = status
+    return await db.accounts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+# ==================== Data Backup ====================
+@api_router.get("/backup/export")
+async def export_backup(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+    collections = ["products", "categories", "customers", "suppliers", "stores", "warehouses", "inventory", "sales_orders", "purchase_orders", "online_orders", "employees", "promotions", "accounts", "exchange_rates", "payment_settings", "system_settings"]
+    backup = {}
+    for col_name in collections:
+        col = db[col_name]
+        docs = await col.find({}, {"_id": 0}).to_list(50000)
+        backup[col_name] = docs
+    backup["exported_at"] = datetime.now(timezone.utc).isoformat()
+    backup["version"] = "1.0"
+    output = io.BytesIO(json.dumps(backup, ensure_ascii=False, indent=2, default=str).encode("utf-8"))
+    await log_audit(current_user["user_id"], current_user["username"], "backup", "system", "", "Full database backup")
+    return StreamingResponse(output, media_type="application/json", headers={"Content-Disposition": f"attachment; filename=pos_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"})
+
+# ==================== Dashboard Trends ====================
+@api_router.get("/dashboard/trends")
+async def get_dashboard_trends(days: int = 7, current_user: dict = Depends(get_current_user)):
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    orders = await db.sales_orders.find({"created_at": {"$gte": since}}, {"_id": 0}).to_list(10000)
+    daily = {}
+    for order in orders:
+        date_key = order.get("created_at", "")[:10]
+        if date_key not in daily:
+            daily[date_key] = {"date": date_key, "sales": 0, "count": 0, "profit": 0}
+        daily[date_key]["sales"] += order.get("total_amount", 0)
+        daily[date_key]["count"] += 1
+    # Fill missing days
+    result = []
+    for i in range(days):
+        d = (datetime.now(timezone.utc) - timedelta(days=days - 1 - i)).strftime("%Y-%m-%d")
+        entry = daily.get(d, {"date": d, "sales": 0, "count": 0, "profit": 0})
+        entry["sales"] = round(entry["sales"], 2)
+        result.append(entry)
+    return result
+
+# ==================== Role Permission Check ====================
+@api_router.get("/auth/permissions")
+async def get_permissions(current_user: dict = Depends(get_current_user)):
+    user = await db.users.find_one({"id": current_user["user_id"]}, {"_id": 0})
+    if not user: raise HTTPException(404, "User not found")
+    role = user.get("role", "staff")
+    perms = user.get("permissions", {})
+    role_defaults = {
+        "admin": {"can_discount": True, "can_refund": True, "can_void": True, "can_export": True, "can_manage_employees": True, "can_view_reports": True, "can_manage_settings": True, "max_discount": 100},
+        "manager": {"can_discount": True, "can_refund": True, "can_void": True, "can_export": True, "can_manage_employees": False, "can_view_reports": True, "can_manage_settings": False, "max_discount": 50},
+        "cashier": {"can_discount": False, "can_refund": False, "can_void": False, "can_export": False, "can_manage_employees": False, "can_view_reports": False, "can_manage_settings": False, "max_discount": 0},
+        "staff": {"can_discount": False, "can_refund": False, "can_void": False, "can_export": False, "can_manage_employees": False, "can_view_reports": False, "can_manage_settings": False, "max_discount": 0},
+    }
+    defaults = role_defaults.get(role, role_defaults["staff"])
+    defaults.update(perms)
+    return {"role": role, "permissions": defaults}
 
 app.include_router(api_router)
 

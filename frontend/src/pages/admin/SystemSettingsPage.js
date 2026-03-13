@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download, Database } from "lucide-react";
 import axios, { API } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
 import { toast } from "sonner";
@@ -52,6 +53,16 @@ export default function SystemSettingsPage() {
             <p className="text-slate-400 text-xs mt-1 ml-6">{t('pricingForeignDesc')}</p><p className="text-cyan-400 text-xs mt-1 ml-6">USD = $Price | Bs. = $Price x Sales Rate</p>
           </div>
         </CardContent></Card>
+        {/* Data Backup */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base flex items-center gap-2"><Database className="w-4 h-4" /> {t('dataBackup')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-slate-400 text-sm">{t('backupDesc')}</p>
+            <Button onClick={() => { const a = document.createElement('a'); a.href = `${API}/backup/export`; a.download = 'backup.json'; document.body.appendChild(a); a.click(); a.remove(); toast.success(t('exporting')); }} className="w-full bg-blue-500 hover:bg-blue-600" data-testid="backup-export-btn">
+              <Download className="w-4 h-4 mr-2" /> {t('exportBackup')}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

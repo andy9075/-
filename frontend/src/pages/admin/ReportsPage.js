@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Download } from "lucide-react";
 import axios, { API } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
+import { toast } from "sonner";
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
@@ -45,6 +48,16 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">{t('reports')}</h1>
+
+      {/* Export Buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <Button onClick={() => { const a = document.createElement('a'); a.href = `${API}/reports/export/sales`; a.download = 'sales_report.xlsx'; document.body.appendChild(a); a.click(); a.remove(); toast.success(t('exporting')); }} className="bg-blue-500 hover:bg-blue-600" data-testid="export-sales-btn">
+          <Download className="w-4 h-4 mr-2" /> {t('exportSalesReport')}
+        </Button>
+        <Button onClick={() => { const a = document.createElement('a'); a.href = `${API}/reports/export/inventory`; a.download = 'inventory_report.xlsx'; document.body.appendChild(a); a.click(); a.remove(); toast.success(t('exporting')); }} className="bg-purple-500 hover:bg-purple-600" data-testid="export-inventory-btn">
+          <Download className="w-4 h-4 mr-2" /> {t('exportInventoryReport')}
+        </Button>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

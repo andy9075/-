@@ -4,7 +4,7 @@ import {
   Store, Package, Warehouse, Users, ShoppingCart, BarChart3,
   Settings, LogOut, Menu, X, Home, Building2, Truck, CreditCard,
   Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight,
-  Tag, Calendar, RotateCcw
+  Tag, Calendar, RotateCcw, TrendingUp, Shield, Megaphone, Banknote
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -33,12 +33,16 @@ export const AdminLayout = ({ children }) => {
     { icon: Calendar, label: t('dailySettlement'), path: "/admin/daily-settlement" },
     { icon: RotateCcw, label: t('refundHistory'), path: "/admin/refunds" },
     { icon: BarChart3, label: t('reports'), path: "/admin/reports" },
+    { icon: TrendingUp, label: t('profitAnalysis'), path: "/admin/profit-analysis" },
+    { icon: Megaphone, label: t('promotions'), path: "/admin/promotions" },
+    { icon: Banknote, label: t('accountsReceivable'), path: "/admin/accounts" },
     { icon: DollarSign, label: t('exchangeRates'), path: "/admin/exchange-rates" },
     { icon: Settings, label: t('paymentSettings'), path: "/admin/payment-settings" },
     { icon: Settings, label: t('systemSettings'), path: "/admin/settings" },
     { icon: Users, label: t('employees'), path: "/admin/employees" },
     { icon: AlertCircle, label: t('stockAlerts'), path: "/admin/stock-alerts" },
     { icon: ClipboardList, label: t('stockTaking'), path: "/admin/stock-taking" },
+    { icon: Shield, label: t('auditLog'), path: "/admin/audit-log" },
   ];
 
   const handleLogout = () => {
