@@ -785,6 +785,13 @@ async def transfer_inventory(
     
     return {"message": "库存调拨成功"}
 
+
+@api_router.get("/transfer-logs")
+async def get_transfer_logs(current_user: dict = Depends(get_current_user)):
+    logs = await db.transfer_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return logs
+
+
 # ==================== Purchase Order Routes ====================
 
 @api_router.post("/purchase-orders", response_model=PurchaseOrderResponse)
