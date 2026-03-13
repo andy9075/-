@@ -383,7 +383,8 @@ const ProductsPage = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({
     code: "", barcode: "", name: "", category_id: "", unit: "件",
-    cost_price: 0, price1: 0, price2: 0, wholesale_price: 0, box_quantity: 1,
+    cost_price: 0, margin1: 0, margin2: 0, margin3: 0,
+    price1: 0, price2: 0, price3: 0, wholesale_price: 0, box_quantity: 1,
     retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
   });
 
@@ -450,7 +451,8 @@ const ProductsPage = () => {
   const resetForm = () => {
     setFormData({
       code: "", barcode: "", name: "", category_id: "", unit: "件",
-      cost_price: 0, price1: 0, price2: 0, wholesale_price: 0, box_quantity: 1,
+      cost_price: 0, margin1: 0, margin2: 0, margin3: 0,
+      price1: 0, price2: 0, price3: 0, wholesale_price: 0, box_quantity: 1,
       retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
     });
   };
@@ -484,11 +486,13 @@ const ProductsPage = () => {
             <TableRow className="border-slate-700">
               <TableHead className="text-slate-300">编码</TableHead>
               <TableHead className="text-slate-300">商品名称</TableHead>
-              <TableHead className="text-slate-300">分类</TableHead>
-              <TableHead className="text-slate-300">价格1 ($)</TableHead>
-              <TableHead className="text-slate-300">价格2 (Bs.)</TableHead>
-              <TableHead className="text-slate-300">批发价</TableHead>
-              <TableHead className="text-slate-300">状态</TableHead>
+              <TableHead className="text-slate-300">成本价</TableHead>
+              <TableHead className="text-slate-300">利率1%</TableHead>
+              <TableHead className="text-slate-300">价格1</TableHead>
+              <TableHead className="text-slate-300">利率2%</TableHead>
+              <TableHead className="text-slate-300">价格2</TableHead>
+              <TableHead className="text-slate-300">利率3%</TableHead>
+              <TableHead className="text-slate-300">价格3(整箱)</TableHead>
               <TableHead className="text-slate-300">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -497,12 +501,13 @@ const ProductsPage = () => {
               <TableRow key={product.id} className="border-slate-700">
                 <TableCell className="text-slate-300">{product.code}</TableCell>
                 <TableCell className="text-white font-medium">{product.name}</TableCell>
-                <TableCell className="text-slate-300">
-                  {categories.find(c => c.id === product.category_id)?.name || '-'}
-                </TableCell>
-                <TableCell className="text-emerald-400">${product.price1?.toFixed(2) || product.retail_price?.toFixed(2)}</TableCell>
-                <TableCell className="text-yellow-400">Bs.{product.price2?.toFixed(2) || '0.00'}</TableCell>
-                <TableCell className="text-blue-400">${product.wholesale_price?.toFixed(2)}</TableCell>
+                <TableCell className="text-slate-400">${(product.cost_price || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-orange-400">{(product.margin1 || 0).toFixed(1)}%</TableCell>
+                <TableCell className="text-emerald-400">${(product.price1 || product.retail_price || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-orange-400">{(product.margin2 || 0).toFixed(1)}%</TableCell>
+                <TableCell className="text-yellow-400">${(product.price2 || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-orange-400">{(product.margin3 || 0).toFixed(1)}%</TableCell>
+                <TableCell className="text-blue-400">${(product.price3 || product.wholesale_price || 0).toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge variant={product.status === 'active' ? 'default' : 'secondary'}>
                     {product.status === 'active' ? '在售' : '下架'}
@@ -559,21 +564,53 @@ const ProductsPage = () => {
               <label className="text-sm text-slate-300">单位</label>
               <Input value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
-            <div>
-              <label className="text-sm text-slate-300">成本价 ($)</label>
-              <Input type="number" value={formData.cost_price} onChange={(e) => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
-            </div>
-            <div>
-              <label className="text-sm text-slate-300">价格1 ($ USD)</label>
-              <Input type="number" value={formData.price1} onChange={(e) => setFormData({...formData, price1: parseFloat(e.target.value) || 0, retail_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" data-testid="product-price1" />
-            </div>
-            <div>
-              <label className="text-sm text-slate-300">价格2 (Bs. 本地)</label>
-              <Input type="number" value={formData.price2} onChange={(e) => setFormData({...formData, price2: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" data-testid="product-price2" />
-            </div>
-            <div>
-              <label className="text-sm text-slate-300">批发价/整箱价 ($)</label>
-              <Input type="number" value={formData.wholesale_price} onChange={(e) => setFormData({...formData, wholesale_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
+            <div className="col-span-2 bg-slate-900 rounded-lg p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-emerald-400">价格设置 (成本 × (1 + 利率%))</h4>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400">成本价 ($)</label>
+                  <Input type="number" step="0.01" value={formData.cost_price} onChange={(e) => {
+                    const cost = parseFloat(e.target.value) || 0;
+                    const m1 = formData.margin1 || 0;
+                    const m2 = formData.margin2 || 0;
+                    const m3 = formData.margin3 || 0;
+                    setFormData({...formData, cost_price: cost,
+                      price1: m1 > 0 ? Math.round(cost * (1 + m1/100) * 100) / 100 : formData.price1,
+                      price2: m2 > 0 ? Math.round(cost * (1 + m2/100) * 100) / 100 : formData.price2,
+                      price3: m3 > 0 ? Math.round(cost * (1 + m3/100) * 100) / 100 : formData.price3
+                    });
+                  }} className="bg-slate-700 border-slate-600" data-testid="product-cost" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">利率1 (%)</label>
+                  <Input type="number" step="0.1" value={formData.margin1} onChange={(e) => {
+                    const m = parseFloat(e.target.value) || 0;
+                    const cost = formData.cost_price || 0;
+                    setFormData({...formData, margin1: m, price1: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price1});
+                  }} className="bg-slate-700 border-slate-600" data-testid="product-margin1" />
+                  <div className="text-xs text-emerald-400 font-medium">价格1: ${(formData.price1 || 0).toFixed(2)}</div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">利率2 (%)</label>
+                  <Input type="number" step="0.1" value={formData.margin2} onChange={(e) => {
+                    const m = parseFloat(e.target.value) || 0;
+                    const cost = formData.cost_price || 0;
+                    setFormData({...formData, margin2: m, price2: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price2});
+                  }} className="bg-slate-700 border-slate-600" data-testid="product-margin2" />
+                  <div className="text-xs text-yellow-400 font-medium">价格2: ${(formData.price2 || 0).toFixed(2)}</div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">利率3 (%) 整箱价</label>
+                  <Input type="number" step="0.1" value={formData.margin3} onChange={(e) => {
+                    const m = parseFloat(e.target.value) || 0;
+                    const cost = formData.cost_price || 0;
+                    setFormData({...formData, margin3: m, price3: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price3});
+                  }} className="bg-slate-700 border-slate-600" data-testid="product-margin3" />
+                  <div className="text-xs text-blue-400 font-medium">价格3(整箱): ${(formData.price3 || 0).toFixed(2)}</div>
+                </div>
+              </div>
             </div>
             <div>
               <label className="text-sm text-slate-300">每箱数量</label>
@@ -2844,18 +2881,18 @@ const POSPage = () => {
   };
 
   const getProductPrice = (product) => {
-    const basePrice = product.price1 || product.retail_price || 0;
+    const p1 = product.price1 || product.retail_price || 0;
     switch (priceMode) {
-      case "price2": return product.price2 || (basePrice * exchangeRates.usd_to_ves);
-      case "wholesale": return product.wholesale_price || basePrice;
-      default: return basePrice;
+      case "price2": return product.price2 || p1;
+      case "price3": return product.price3 || product.wholesale_price || p1;
+      case "bs": return p1 * (exchangeRates.usd_to_ves || 1);
+      default: return p1;
     }
   };
 
   const getPriceSymbol = () => {
     switch (priceMode) {
-      case "price2": return "Bs.";
-      case "wholesale": return "$";
+      case "bs": return "Bs.";
       default: return "$";
     }
   };
@@ -2871,11 +2908,12 @@ const POSPage = () => {
   };
 
   const getProductPriceByMode = (product, mode) => {
-    const basePrice = product.price1 || product.retail_price || 0;
+    const p1 = product.price1 || product.retail_price || 0;
     switch (mode) {
-      case "price2": return product.price2 || (basePrice * exchangeRates.usd_to_ves);
-      case "wholesale": return product.wholesale_price || basePrice;
-      default: return basePrice;
+      case "price2": return product.price2 || p1;
+      case "price3": return product.price3 || product.wholesale_price || p1;
+      case "bs": return p1 * (exchangeRates.usd_to_ves || 1);
+      default: return p1;
     }
   };
 
@@ -3129,21 +3167,28 @@ const POSPage = () => {
               className={`px-3 py-1 text-sm rounded ${priceMode === 'price1' ? 'bg-emerald-500 text-white' : 'text-slate-300 hover:text-white'}`}
               data-testid="price-mode-1"
             >
-              $ USD
+              价格1
             </button>
             <button 
               onClick={() => handlePriceModeChange('price2')}
               className={`px-3 py-1 text-sm rounded ${priceMode === 'price2' ? 'bg-yellow-500 text-white' : 'text-slate-300 hover:text-white'}`}
               data-testid="price-mode-2"
             >
-              Bs.
+              价格2
             </button>
             <button 
-              onClick={() => handlePriceModeChange('wholesale')}
-              className={`px-3 py-1 text-sm rounded ${priceMode === 'wholesale' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:text-white'}`}
-              data-testid="price-mode-wholesale"
+              onClick={() => handlePriceModeChange('price3')}
+              className={`px-3 py-1 text-sm rounded ${priceMode === 'price3' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:text-white'}`}
+              data-testid="price-mode-3"
             >
-              Mayor
+              价格3(整箱)
+            </button>
+            <button 
+              onClick={() => handlePriceModeChange('bs')}
+              className={`px-3 py-1 text-sm rounded ${priceMode === 'bs' ? 'bg-orange-500 text-white' : 'text-slate-300 hover:text-white'}`}
+              data-testid="price-mode-bs"
+            >
+              Bs.
             </button>
           </div>
           {shift ? (
@@ -3242,7 +3287,7 @@ const POSPage = () => {
               </h2>
               <div className="flex items-center gap-2">
                 <Badge className={priceMode === 'price2' ? 'bg-yellow-500' : priceMode === 'wholesale' ? 'bg-blue-500' : 'bg-emerald-500'}>
-                  {priceMode === 'price2' ? 'Bs.' : priceMode === 'wholesale' ? 'Mayor' : 'USD'}
+                  {priceMode === 'bs' ? 'Bs.' : 'USD'}
                 </Badge>
                 <Badge className="bg-slate-600">{cartCount} items</Badge>
               </div>
@@ -3315,7 +3360,7 @@ const POSPage = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
-              <p className="text-slate-400 text-sm">Total a Cobrar ({priceMode === 'price2' ? 'Bs.' : priceMode === 'wholesale' ? 'Mayor' : 'USD'})</p>
+              <p className="text-slate-400 text-sm">Total a Cobrar ({priceMode === 'bs' ? 'Bs.' : 'USD'})</p>
               <p className={`text-4xl font-bold ${priceMode === 'price2' ? 'text-yellow-400' : 'text-white'}`}>
                 {getPriceSymbol()}{cartTotal.toFixed(2)}
               </p>

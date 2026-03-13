@@ -162,11 +162,15 @@ class ProductCreate(BaseModel):
     category_id: Optional[str] = None
     unit: str = "件"
     cost_price: float = 0.0
-    price1: float = 0.0  # 价格1 (零售价 USD)
-    price2: float = 0.0  # 价格2 (零售价 本地货币)
-    wholesale_price: float = 0.0  # 批发价/整箱价
+    margin1: float = 0.0  # 利率1%
+    margin2: float = 0.0  # 利率2%
+    margin3: float = 0.0  # 利率3% (整箱价)
+    price1: float = 0.0  # 价格1 = cost × (1 + margin1%)
+    price2: float = 0.0  # 价格2 = cost × (1 + margin2%)
+    price3: float = 0.0  # 价格3/整箱价 = cost × (1 + margin3%)
+    wholesale_price: float = 0.0  # 兼容旧字段
     box_quantity: int = 1  # 每箱数量
-    retail_price: float = 0.0  # 保留兼容
+    retail_price: float = 0.0  # 兼容旧字段
     min_stock: int = 0
     max_stock: int = 9999
     image_url: str = ""
@@ -181,8 +185,12 @@ class ProductResponse(BaseModel):
     category_id: Optional[str] = None
     unit: str = "件"
     cost_price: float = 0.0
+    margin1: float = 0.0
+    margin2: float = 0.0
+    margin3: float = 0.0
     price1: float = 0.0
     price2: float = 0.0
+    price3: float = 0.0
     wholesale_price: float = 0.0
     box_quantity: int = 1
     retail_price: float = 0.0
@@ -571,9 +579,22 @@ async def delete_category(category_id: str, current_user: dict = Depends(get_cur
 @api_router.post("/products", response_model=ProductResponse)
 async def create_product(product: ProductCreate, current_user: dict = Depends(get_current_user)):
     product_id = generate_id()
+    product_data = product.model_dump()
+    # Auto-calculate prices from cost_price and margins
+    cost = product_data.get("cost_price", 0)
+    if cost > 0:
+        if product_data.get("margin1", 0) > 0:
+            product_data["price1"] = round(cost * (1 + product_data["margin1"] / 100), 2)
+        if product_data.get("margin2", 0) > 0:
+            product_data["price2"] = round(cost * (1 + product_data["margin2"] / 100), 2)
+        if product_data.get("margin3", 0) > 0:
+            product_data["price3"] = round(cost * (1 + product_data["margin3"] / 100), 2)
+    # Sync compatibility fields
+    product_data["retail_price"] = product_data.get("price1", 0)
+    product_data["wholesale_price"] = product_data.get("price3", 0)
     product_doc = {
         "id": product_id,
-        **product.model_dump(),
+        **product_data,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product_doc)
@@ -609,7 +630,20 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
 
 @api_router.put("/products/{product_id}", response_model=ProductResponse)
 async def update_product(product_id: str, product: ProductCreate, current_user: dict = Depends(get_current_user)):
-    result = await db.products.update_one({"id": product_id}, {"$set": product.model_dump()})
+    product_data = product.model_dump()
+    # Auto-calculate prices from cost_price and margins
+    cost = product_data.get("cost_price", 0)
+    if cost > 0:
+        if product_data.get("margin1", 0) > 0:
+            product_data["price1"] = round(cost * (1 + product_data["margin1"] / 100), 2)
+        if product_data.get("margin2", 0) > 0:
+            product_data["price2"] = round(cost * (1 + product_data["margin2"] / 100), 2)
+        if product_data.get("margin3", 0) > 0:
+            product_data["price3"] = round(cost * (1 + product_data["margin3"] / 100), 2)
+    # Sync compatibility fields
+    product_data["retail_price"] = product_data.get("price1", 0)
+    product_data["wholesale_price"] = product_data.get("price3", 0)
+    result = await db.products.update_one({"id": product_id}, {"$set": product_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="商品不存在")
     updated = await db.products.find_one({"id": product_id}, {"_id": 0})
