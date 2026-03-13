@@ -183,6 +183,8 @@ const translations = {
     marketing: "营销管理",
     exportSalesReport: "导出销售报表", exportInventoryReport: "导出库存报表",
     exporting: "导出中...",
+    usePoints: "使用积分", pointsAvailable: "可用积分", pointsEarned: "获得积分",
+    pointsDiscount: "积分抵扣", pointsRate: "积分比例", noCustomerNoPoints: "选择客户后可使用积分",
   },
   en: {
     save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add",
@@ -337,8 +339,9 @@ const translations = {
     marketing: "Marketing",
     exportSalesReport: "Export Sales", exportInventoryReport: "Export Inventory",
     exporting: "Exporting...",
-  },
-  es: {
+    usePoints: "Use Points", pointsAvailable: "Available", pointsEarned: "Points Earned",
+    pointsDiscount: "Points Discount", pointsRate: "Points Rate", noCustomerNoPoints: "Select customer to use points",
+  },  es: {
     save: "Guardar", cancel: "Cancelar", delete: "Eliminar", edit: "Editar", add: "Agregar",
     search: "Buscar", loading: "Cargando...", confirm: "Confirmar", close: "Cerrar",
     clear: "Limpiar", print: "Imprimir", export: "Exportar", all: "Todos",
@@ -491,6 +494,8 @@ const translations = {
     marketing: "Marketing",
     exportSalesReport: "Exportar Ventas", exportInventoryReport: "Exportar Inventario",
     exporting: "Exportando...",
+    usePoints: "Usar Puntos", pointsAvailable: "Disponibles", pointsEarned: "Puntos Ganados",
+    pointsDiscount: "Descuento Puntos", pointsRate: "Tasa Puntos", noCustomerNoPoints: "Seleccione cliente para usar puntos",
   }
 };
 

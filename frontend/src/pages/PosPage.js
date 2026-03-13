@@ -53,6 +53,7 @@ export default function PosPage() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [pointsToUse, setPointsToUse] = useState(0);
   const receiptRef = useRef(null);
   const invoiceRef = useRef(null);
 
@@ -203,28 +204,41 @@ export default function PosPage() {
   const maxDiscountPercent = cartTotal > 0 ? Math.floor((1 - cartCost / cartTotal) * 100) : 0;
   const safeDiscount = Math.min(discountPercent, maxDiscountPercent);
   const discountAmount = cartTotal * safeDiscount / 100;
-  const finalTotal = cartTotal - discountAmount;
+  const pointsValueRate = systemSettings?.points_value_rate || 100;
+  const pointsDiscount = pointsToUse / pointsValueRate;
+  const finalTotal = Math.max(0, cartTotal - discountAmount - pointsDiscount);
   const change = parseFloat(receivedAmount) - finalTotal;
 
   // === Payment ===
   const handlePayment = async () => {
     if (!shift) { toast.error(t('noShift')); return; }
     const orderItems = cart.map(i => ({ product_id: i.product_id, product_name: i.product.name, quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity, unit_price: i.unit_price, discount: safeDiscount, amount: i.amount * (1 - safeDiscount / 100) }));
-    const orderData = { store_id: selectedStore.id, customer_id: selectedCustomer?.id || null, items: orderItems, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : "" };
+    const orderData = { store_id: selectedStore.id, customer_id: selectedCustomer?.id || null, items: orderItems, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : "", points_used: pointsToUse };
     // Capture receipt data before clearing cart
-    const receiptData = { order_no: `SO${Date.now()}`, date: new Date().toISOString(), items: orderItems, subtotal: cartTotal, total_amount: finalTotal, discount: safeDiscount, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, cashier: user?.name || user?.username, store: selectedStore?.name, customer_name: selectedCustomer?.name };
+    const receiptData = { order_no: `SO${Date.now()}`, date: new Date().toISOString(), items: orderItems, subtotal: cartTotal, total_amount: finalTotal, discount: safeDiscount, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, cashier: user?.name || user?.username, store: selectedStore?.name, customer_name: selectedCustomer?.name, points_used: pointsToUse, points_discount: pointsDiscount, points_earned: 0 };
     try {
-      if (isOnline) { const res = await axios.post(`${API}/sales-orders`, orderData); if (res.data?.order_no) receiptData.order_no = res.data.order_no; }
+      if (isOnline) {
+        const res = await axios.post(`${API}/sales-orders`, orderData);
+        if (res.data?.order_no) receiptData.order_no = res.data.order_no;
+        if (res.data?.points_earned) receiptData.points_earned = res.data.points_earned;
+        // Refresh customer data to show updated points
+        if (selectedCustomer) {
+          const cRes = await axios.get(`${API}/customers`);
+          setCustomers(cRes.data);
+          const updated = cRes.data.find(c => c.id === selectedCustomer.id);
+          if (updated) setSelectedCustomer(updated);
+        }
+      }
       else { const newPending = [...pendingOrders, { ...orderData, offline_id: Date.now().toString(), created_at: new Date().toISOString() }]; setPendingOrders(newPending); localStorage.setItem('pos_pending_orders', JSON.stringify(newPending)); }
       const updatedShift = { ...shift, sales: [...shift.sales, { amount: finalTotal, method: paymentMethod, time: new Date().toISOString() }], total_sales: shift.total_sales + finalTotal, total_cash: paymentMethod === 'cash' ? shift.total_cash + finalTotal : shift.total_cash };
       setShift(updatedShift); localStorage.setItem("pos_shift", JSON.stringify(updatedShift));
       toast.success(isOnline ? t('confirmPayment') + " OK" : t('offlineMode') + " - " + t('pendingSync'));
       setLastOrder(receiptData); setShowReceipt(true);
-      setCart([]); setShowPayment(false); setReceivedAmount(""); setDiscountPercent(0);
+      setCart([]); setShowPayment(false); setReceivedAmount(""); setDiscountPercent(0); setPointsToUse(0);
     } catch (e) {
       const newPending = [...pendingOrders, { ...orderData, offline_id: Date.now().toString(), created_at: new Date().toISOString() }]; setPendingOrders(newPending); localStorage.setItem('pos_pending_orders', JSON.stringify(newPending));
       setLastOrder(receiptData); setShowReceipt(true);
-      toast.warning(t('offlineWarning')); setCart([]); setShowPayment(false); setReceivedAmount(""); setDiscountPercent(0);
+      toast.warning(t('offlineWarning')); setCart([]); setShowPayment(false); setReceivedAmount(""); setDiscountPercent(0); setPointsToUse(0);
     }
   };
 
@@ -289,8 +303,11 @@ export default function PosPage() {
             <button onClick={() => setShowCustomerSearch(!showCustomerSearch)} className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs border transition-colors ${selectedCustomer ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-slate-600 text-slate-400 hover:text-white'}`} data-testid="pos-customer-btn">
               <Users className="w-3 h-3" />
               {selectedCustomer ? selectedCustomer.name : t('customer')}
-              {selectedCustomer && <X className="w-3 h-3 ml-1 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); }} />}
+              {selectedCustomer && <X className="w-3 h-3 ml-1 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); setPointsToUse(0); }} />}
             </button>
+            {selectedCustomer && selectedCustomer.points > 0 && (
+              <span className="text-xs text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded" data-testid="customer-points-badge">{selectedCustomer.points} pts</span>
+            )}
             {showCustomerSearch && (
               <div className="absolute top-full left-0 mt-1 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden" data-testid="customer-dropdown">
                 <div className="p-2 border-b border-slate-700"><Input placeholder={t('searchCustomerPlaceholder')} value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} className="bg-slate-700 border-slate-600 h-8 text-sm" autoFocus /></div>
@@ -369,11 +386,29 @@ export default function PosPage() {
       </div>
 
       {/* Payment Modal */}
-      <Dialog open={showPayment} onOpenChange={(open) => { setShowPayment(open); if (!open) { setDiscountPercent(0); setReceivedAmount(""); } }}>
+      <Dialog open={showPayment} onOpenChange={(open) => { setShowPayment(open); if (!open) { setDiscountPercent(0); setReceivedAmount(""); setPointsToUse(0); } }}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg"><DialogHeader><DialogTitle className="text-xl">{t('checkout')} (F9)</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="bg-slate-700/50 rounded-lg p-4 text-center">{showBs ? (<><p className="text-slate-400 text-xs">Bs.</p><p className="text-3xl font-bold text-orange-400">Bs.{(cartTotalDisplay * (1 - safeDiscount / 100)).toFixed(2)}</p><p className="text-slate-400 text-sm mt-1">${finalTotal.toFixed(2)} USD</p></>) : (<><p className="text-slate-400 text-xs">USD</p><p className="text-3xl font-bold text-white">${(cartTotalDisplay * (1 - safeDiscount / 100)).toFixed(2)}</p>{pricingMode === "local_based" && <p className="text-slate-400 text-sm mt-1">Bs.{(cart.reduce((s, i) => s + i.amount * getProductBsMultiplier(i.product), 0) * (1 - safeDiscount / 100)).toFixed(2)}</p>}</>)}{safeDiscount > 0 && <p className="text-red-400 text-sm mt-1">-{safeDiscount}% ({t('discount')})</p>}</div>
+            <div className="bg-slate-700/50 rounded-lg p-4 text-center">{showBs ? (<><p className="text-slate-400 text-xs">Bs.</p><p className="text-3xl font-bold text-orange-400">Bs.{(cartTotalDisplay * (1 - safeDiscount / 100) - pointsDiscount * (exchangeRates?.usd_to_ves || 1)).toFixed(2)}</p><p className="text-slate-400 text-sm mt-1">${finalTotal.toFixed(2)} USD</p></>) : (<><p className="text-slate-400 text-xs">USD</p><p className="text-3xl font-bold text-white">${finalTotal.toFixed(2)}</p>{pricingMode === "local_based" && <p className="text-slate-400 text-sm mt-1">Bs.{(cart.reduce((s, i) => s + i.amount * getProductBsMultiplier(i.product), 0) * (1 - safeDiscount / 100) - pointsDiscount * (exchangeRates?.usd_to_ves || 1)).toFixed(2)}</p>}</>)}{safeDiscount > 0 && <p className="text-red-400 text-sm mt-1">-{safeDiscount}% ({t('discount')})</p>}{pointsToUse > 0 && <p className="text-purple-400 text-sm">-{pointsToUse} pts (-${pointsDiscount.toFixed(2)})</p>}</div>
             <div className="flex items-center gap-3 bg-slate-900 rounded-lg p-3"><label className="text-sm text-slate-300 whitespace-nowrap">{t('discount')} %</label><Input type="number" min="0" max={maxDiscountPercent} value={discountPercent} onChange={(e) => { const v = parseInt(e.target.value) || 0; if (v > maxDiscountPercent) { toast.error(`${t('discount')} max ${maxDiscountPercent}%`); setDiscountPercent(maxDiscountPercent); } else setDiscountPercent(Math.max(0, v)); }} className="bg-slate-700 border-slate-600 w-24 text-center" data-testid="discount-input" /><span className="text-xs text-slate-500">max {maxDiscountPercent}%</span>{discountPercent > 0 && <span className="text-red-400 text-sm">-${discountAmount.toFixed(2)}</span>}</div>
+            {/* Points Redemption */}
+            {selectedCustomer ? (
+              <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-purple-300 font-medium">{t('usePoints')}</span>
+                  <span className="text-xs text-purple-400">{t('pointsAvailable')}: <b>{selectedCustomer.points}</b></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min="0" max={selectedCustomer.points} value={pointsToUse} onChange={e => { const v = Math.min(parseInt(e.target.value) || 0, selectedCustomer.points); setPointsToUse(Math.max(0, v)); }} className="bg-slate-700 border-slate-600 w-28 text-center" data-testid="points-use-input" />
+                  <span className="text-xs text-slate-500">{pointsValueRate} pts = $1</span>
+                  {pointsToUse > 0 && <span className="text-emerald-400 text-sm font-medium">-${pointsDiscount.toFixed(2)}</span>}
+                  {selectedCustomer.points > 0 && <Button size="sm" variant="outline" className="border-purple-500/30 text-purple-400 h-7 text-xs" onClick={() => setPointsToUse(selectedCustomer.points)} data-testid="use-all-points-btn">{t('all')}</Button>}
+                </div>
+                <p className="text-xs text-slate-500">{t('pointsEarned')}: ~{Math.floor((cartTotal - discountAmount - pointsDiscount) * (systemSettings?.points_per_dollar || 1))} pts</p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 text-center">{t('noCustomerNoPoints')}</p>
+            )}
             <div className="space-y-2"><label className="text-sm text-slate-300">{t('paymentMethod')}</label><div className="grid grid-cols-2 gap-2">{[{id:'cash',label:t('cash'),key:'F5',active:'border-emerald-500 bg-emerald-500/10'},{id:'card',label:t('card'),key:'F6',active:'border-blue-500 bg-blue-500/10'},{id:'biopago',label:'Biopago',key:'F7',active:'border-purple-500 bg-purple-500/10'},{id:'transfer',label:'Transfer',key:'F8',active:'border-yellow-500 bg-yellow-500/10'}].map(method => (<div key={method.id} onClick={() => setPaymentMethod(method.id)} className={`p-3 rounded-lg border cursor-pointer transition-colors ${paymentMethod === method.id ? method.active : 'border-slate-600 hover:border-slate-500'}`} data-testid={`pay-method-${method.id}`}><div className="flex items-center justify-between"><span className={`text-sm font-medium ${paymentMethod === method.id ? 'text-white' : 'text-slate-300'}`}>{method.label}</span><kbd className="px-1.5 py-0.5 text-xs bg-slate-700 text-slate-400 rounded">{method.key}</kbd></div></div>))}</div></div>
             {paymentMethod === 'cash' && <div className="space-y-2"><label className="text-sm text-slate-300">{t('received')}</label><Input type="number" value={receivedAmount} onChange={(e) => setReceivedAmount(e.target.value)} className="bg-slate-700 border-slate-600 text-2xl text-center" placeholder="0.00" data-testid="pos-received-amount" autoFocus />{receivedAmount && change >= 0 && <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center"><p className="text-sm text-slate-400">{t('change')}</p><p className="text-2xl font-bold text-green-400">{showBs ? `Bs.${(change * (exchangeRates.usd_to_ves || 1)).toFixed(2)} / $${change.toFixed(2)}` : `$${change.toFixed(2)}`}</p></div>}</div>}
             <div className="grid grid-cols-2 gap-3 pt-2"><Button variant="outline" onClick={() => setShowPayment(false)} className="border-slate-600">ESC {t('cancel')}</Button><Button onClick={handlePayment} className="bg-green-600 hover:bg-green-700" disabled={paymentMethod === 'cash' && (!receivedAmount || change < 0)} data-testid="pos-confirm-payment">{t('confirmPayment')}</Button></div>
@@ -411,6 +446,8 @@ export default function PosPage() {
               <p className="text-3xl font-bold text-emerald-400">${lastOrder?.total_amount?.toFixed(2)}</p>
               <p className="text-slate-400 text-sm mt-1">Bs.{((lastOrder?.total_amount || 0) * (exchangeRates?.usd_to_ves || 1)).toFixed(2)}</p>
               <p className="text-slate-500 text-xs mt-2">{lastOrder?.payment_method === 'cash' ? t('cash') : lastOrder?.payment_method === 'card' ? t('card') : lastOrder?.payment_method || '-'}</p>
+              {lastOrder?.points_used > 0 && <p className="text-purple-400 text-xs mt-1">{t('pointsDiscount')}: -{lastOrder.points_used} pts (-${lastOrder.points_discount?.toFixed(2)})</p>}
+              {lastOrder?.points_earned > 0 && <p className="text-emerald-300 text-xs mt-1">{t('pointsEarned')}: +{lastOrder.points_earned} pts</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Button onClick={handlePrintReceipt} className="bg-blue-500 hover:bg-blue-600" data-testid="print-receipt-btn">

@@ -269,6 +269,7 @@ class SalesOrderCreate(BaseModel):
     payment_method: str = "cash"
     paid_amount: float = 0.0
     notes: str = ""
+    points_used: int = 0  # Points redeemed for discount
 
 class SalesOrderResponse(BaseModel):
     id: str
@@ -277,13 +278,16 @@ class SalesOrderResponse(BaseModel):
     customer_id: Optional[str]
     items: List[Dict]
     total_amount: float
-    discount_amount: float
+    discount_amount: float = 0
     paid_amount: float
     payment_method: str
     status: str
-    notes: str
+    notes: str = ""
     created_by: str
     created_at: str
+    points_used: int = 0
+    points_discount: float = 0
+    points_earned: int = 0
 
 # Payment Settings Models
 class PaymentSettingsUpdate(BaseModel):
@@ -328,6 +332,9 @@ class SystemSettings(BaseModel):
     wholesale_discount_percent: float = 0.0
     # Pricing Mode: "local_based" or "foreign_direct"
     pricing_mode: str = "local_based"
+    # Points/Loyalty
+    points_per_dollar: int = 1  # Points earned per $1 spent
+    points_value_rate: int = 100  # Points needed for $1 discount
 
 # Online Shop Order Models
 class OnlineOrderCreate(BaseModel):
@@ -924,6 +931,21 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
     total_amount = sum(item.amount for item in order.items)
     discount_amount = sum(item.discount for item in order.items)
     
+    # Points redemption: 100 points = $1 (configurable via system settings)
+    sys_settings = await db.system_settings.find_one({"key": "system"}, {"_id": 0}) or {}
+    points_per_dollar = sys_settings.get("points_per_dollar", 1)  # earn rate
+    points_value_rate = sys_settings.get("points_value_rate", 100)  # 100 points = $1
+    points_discount = 0.0
+    if order.points_used > 0 and order.customer_id:
+        customer = await db.customers.find_one({"id": order.customer_id}, {"_id": 0})
+        if not customer or customer.get("points", 0) < order.points_used:
+            raise HTTPException(400, "Insufficient points")
+        points_discount = order.points_used / points_value_rate
+        if points_discount > total_amount:
+            points_discount = total_amount
+    
+    final_total = total_amount - points_discount
+    
     # Get store's warehouse
     store = await db.stores.find_one({"id": order.store_id})
     warehouse_id = store.get("warehouse_id") if store else None
@@ -959,11 +981,14 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
         "store_id": order.store_id,
         "customer_id": order.customer_id,
         "items": order_items,
-        "total_amount": total_amount,
+        "total_amount": final_total,
+        "original_amount": total_amount,
         "discount_amount": discount_amount,
+        "points_used": order.points_used,
+        "points_discount": round(points_discount, 2),
         "paid_amount": order.paid_amount,
         "payment_method": order.payment_method,
-        "status": "completed" if order.paid_amount >= total_amount else "pending",
+        "status": "completed" if order.paid_amount >= final_total else "pending",
         "notes": order.notes,
         "created_by": current_user["user_id"],
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -972,14 +997,37 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
     await db.sales_orders.insert_one(order_doc)
     
     # Update customer points if applicable
+    points_earned = 0
     if order.customer_id:
-        points_earned = int(total_amount / 10)  # 1 point per 10 currency
-        await db.customers.update_one(
-            {"id": order.customer_id},
-            {"$inc": {"points": points_earned}}
-        )
+        points_earned = int(final_total * points_per_dollar)
+        net_points = points_earned - order.points_used
+        if net_points != 0:
+            await db.customers.update_one(
+                {"id": order.customer_id},
+                {"$inc": {"points": net_points}}
+            )
+        # Log points earned
+        if points_earned > 0:
+            await db.points_log.insert_one({
+                "id": generate_id(), "customer_id": order.customer_id,
+                "type": "earn", "amount": points_earned,
+                "reason": f"Purchase {order_no}",
+                "created_by": current_user["user_id"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        # Log points redeemed
+        if order.points_used > 0:
+            await db.points_log.insert_one({
+                "id": generate_id(), "customer_id": order.customer_id,
+                "type": "redeem", "amount": -order.points_used,
+                "reason": f"Redeem at {order_no} (-${points_discount:.2f})",
+                "created_by": current_user["user_id"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
     
-    return SalesOrderResponse(**order_doc)
+    order_doc.pop("_id", None)
+    order_doc["points_earned"] = points_earned
+    return SalesOrderResponse(**{k: v for k, v in order_doc.items() if k in SalesOrderResponse.model_fields})
 
 @api_router.get("/sales-orders", response_model=List[SalesOrderResponse])
 async def get_sales_orders(

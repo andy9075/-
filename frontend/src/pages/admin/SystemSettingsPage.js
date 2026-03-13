@@ -43,6 +43,15 @@ export default function SystemSettingsPage() {
           <div><label className="text-xs text-slate-400">{t('wholesaleMinQty')}</label><Input type="number" value={settings.wholesale_min_quantity || 10} onChange={e => updateField("wholesale_min_quantity", parseInt(e.target.value) || 10)} className="bg-slate-700 border-slate-600" /></div>
           <div><label className="text-xs text-slate-400">{t('wholesaleDiscount')} %</label><Input type="number" value={settings.wholesale_discount_percent || 0} onChange={e => updateField("wholesale_discount_percent", parseFloat(e.target.value) || 0)} className="bg-slate-700 border-slate-600" /></div>
         </CardContent></Card>
+        {/* Points/Loyalty Settings */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">{t('pointsRate')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div><label className="text-xs text-slate-400">{t('addPoints')} / $1</label><Input type="number" value={settings.points_per_dollar || 1} onChange={e => updateField("points_per_dollar", parseInt(e.target.value) || 1)} className="bg-slate-700 border-slate-600" data-testid="points-per-dollar" /></div>
+            <div><label className="text-xs text-slate-400">{t('usePoints')} = $1</label><Input type="number" value={settings.points_value_rate || 100} onChange={e => updateField("points_value_rate", parseInt(e.target.value) || 100)} className="bg-slate-700 border-slate-600" data-testid="points-value-rate" /></div>
+            <p className="text-slate-500 text-xs">{t('pointsRate')}: {settings.points_per_dollar || 1} pts/$1 | {settings.points_value_rate || 100} pts = $1</p>
+          </CardContent>
+        </Card>
         <Card className="bg-slate-800 border-slate-700"><CardHeader><CardTitle className="text-white text-base">{t('pricingMode')}</CardTitle></CardHeader><CardContent className="space-y-3">
           <div onClick={() => updateField("pricing_mode", "local_based")} className={`p-3 rounded-lg cursor-pointer border-2 transition-colors ${settings.pricing_mode === 'local_based' || !settings.pricing_mode ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-600 hover:border-slate-500'}`} data-testid="pricing-local-based">
             <div className="flex items-center gap-2"><div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${settings.pricing_mode === 'local_based' || !settings.pricing_mode ? 'border-emerald-500' : 'border-slate-500'}`}>{(settings.pricing_mode === 'local_based' || !settings.pricing_mode) && <div className="w-2 h-2 rounded-full bg-emerald-500" />}</div><span className="text-white font-medium text-sm">{t('pricingLocalBased')}</span></div>
