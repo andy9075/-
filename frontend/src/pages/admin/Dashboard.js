@@ -1,0 +1,94 @@
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Package, Warehouse, Globe, BarChart3, DollarSign, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import axios, { API } from "@/lib/api";
+import { useLang } from "@/context/LangContext";
+
+export default function Dashboard() {
+  const { t } = useLang();
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    axios.get(`${API}/dashboard/stats`).then(r => setStats(r.data)).catch(console.error).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="text-white">{t('loading')}</div>;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">{t('dashboard')}</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border-emerald-500/30">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-emerald-300 text-sm">{t('todaySales')}</p>
+                <p className="text-2xl font-bold text-white mt-1">${stats?.today_sales_amount?.toFixed(2) || '0.00'}</p>
+                <p className="text-emerald-400 text-xs mt-1">{stats?.today_sales_count || 0} {t('items')}</p>
+              </div>
+              <DollarSign className="w-12 h-12 text-emerald-400" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border-blue-500/30">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-300 text-sm">{t('onlineOrderTotal')}</p>
+                <p className="text-2xl font-bold text-white mt-1">${stats?.today_online_amount?.toFixed(2) || '0.00'}</p>
+                <p className="text-blue-400 text-xs mt-1">{stats?.today_online_count || 0} {t('items')}</p>
+              </div>
+              <Globe className="w-12 h-12 text-blue-400" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border-purple-500/30">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-purple-300 text-sm">{t('totalProducts')}</p>
+                <p className="text-2xl font-bold text-white mt-1">{stats?.products_count || 0}</p>
+                <p className="text-purple-400 text-xs mt-1">{t('active')}</p>
+              </div>
+              <Package className="w-12 h-12 text-purple-400" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border-orange-500/30">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-300 text-sm">{t('pendingOrders')}</p>
+                <p className="text-2xl font-bold text-white mt-1">{stats?.pending_online_orders || 0}</p>
+                <p className="text-orange-400 text-xs mt-1">{t('onlineOrders')}</p>
+              </div>
+              <AlertCircle className="w-12 h-12 text-orange-400" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white">{t('quickActions')}</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <Link to="/admin/products"><Button className="w-full bg-slate-700 hover:bg-slate-600 text-white"><Package className="w-4 h-4 mr-2" /> {t('productManagement')}</Button></Link>
+            <Link to="/admin/online-orders"><Button className="w-full bg-slate-700 hover:bg-slate-600 text-white"><Globe className="w-4 h-4 mr-2" /> {t('onlineOrders')}</Button></Link>
+            <Link to="/admin/warehouses"><Button className="w-full bg-slate-700 hover:bg-slate-600 text-white"><Warehouse className="w-4 h-4 mr-2" /> {t('warehouseManagement')}</Button></Link>
+            <Link to="/admin/reports"><Button className="w-full bg-slate-700 hover:bg-slate-600 text-white"><BarChart3 className="w-4 h-4 mr-2" /> {t('reports')}</Button></Link>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white">{t('reports')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between text-slate-300"><span>{t('storeManagement')}</span><span className="text-white font-medium">{stats?.stores_count || 0}</span></div>
+            <div className="flex justify-between text-slate-300"><span>{t('customerManagement')}</span><span className="text-white font-medium">{stats?.customers_count || 0}</span></div>
+            <div className="flex justify-between text-slate-300"><span>{t('productManagement')}</span><span className="text-white font-medium">{stats?.products_count || 0}</span></div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
