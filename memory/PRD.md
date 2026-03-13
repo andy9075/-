@@ -1,53 +1,47 @@
 # POS System - Product Requirements Document
 
 ## Original Problem Statement
-Build a comprehensive web-based POS system inspired by "秘奥软件" desktop application with:
-1. Admin backend for managing products, categories, inventory, stores, pricing, and exchange rates
-2. Online store for customer-facing e-commerce with Venezuelan payment methods
-3. POS cashier frontend with shift management and multi-currency support
+Web-based POS system with admin backend, online store, and cashier frontend for Venezuelan retail businesses.
 
 ## Tech Stack
-- **Backend**: FastAPI + MongoDB (Motor async driver)
-- **Frontend**: React (single SPA) + TailwindCSS + Shadcn/UI
-- **Auth**: JWT-based authentication
+- Backend: FastAPI + MongoDB | Frontend: React + TailwindCSS + Shadcn/UI | Auth: JWT
 
-## Core Features - All Implemented
+## Implemented Features
 
 ### Multi-Price System (Updated 2026-03-13)
-- **Cost + Margin model**: cost_price × (1 + margin%) = auto-calculated price
-- **3 price tiers**: margin1→price1, margin2→price2, margin3→price3(整箱价)
-- Admin product form: input cost + 3 margins, prices auto-calculate in real-time
-- Product table shows: 编码, 商品名称, 成本价, 利率1%, 价格1, 利率2%, 价格2, 利率3%, 价格3(整箱)
+- Cost + Margin model: cost_price × (1 + margin%) = auto-calculated price
+- 3 price tiers: margin1→price1, margin2→price2, margin3→price3(整箱价)
+- Admin form: input cost + 3 margins, real-time price calculation
 
-### POS Cashier (/pos)
-- 4 price mode buttons: **价格1** / **价格2** / **价格3(整箱)** / **Bs.**
-- Bs. mode converts price1 to Bolivares using exchange rate
-- Cart updates dynamically when switching price modes
-- Currency badge: USD for price modes, Bs. for bs mode
+### POS Cashier - Per-Item Price Selection (Updated 2026-03-13)
+- Each cart item has independent price mode: 价格1 / 价格2 / 整箱
+- Box calculation: full boxes × price3 + remainder × price2
+- Global Bs./USD toggle for currency display
+- Different items in same cart can use different price tiers
 
-### Admin Panel (/admin)
-- Dashboard, store/warehouse management, product/category CRUD
-- Exchange rate settings (manual), payment settings
+### Warehouse Transfer (New 2026-03-13)
+- Admin page /admin/transfers for stock transfer between warehouses
+- Inventory overview: all products × all warehouses stock matrix
+- Transfer history with logs
+- API: POST /api/inventory/transfer, GET /api/transfer-logs
+
+### Online Store Order Tracking
+- /shop/orders: customer lookup by order number or phone
+- Shows purchased items with product name, quantity, unit_price
+
+### Other Features
+- Admin Panel: dashboard, store/warehouse/product/category/customer/supplier CRUD
+- Exchange rate settings (manual), payment settings (Bank Transfer, Pago Móvil)
 - Online order management with payment confirmation
-
-### Online Store (/shop)
-- Product catalog, cart, checkout with Venezuelan payment methods
-- Order tracking at /shop/orders (lookup by order number or phone)
 - WhatsApp click-to-chat on order success
 
-## Key DB Schema
-- products: {code, name, cost_price, margin1, margin2, margin3, price1, price2, price3, wholesale_price, retail_price, ...}
-- categories, stores, warehouses, inventory, online_orders, sales_orders, settings
-
 ## Testing
-- iteration_2.json: 25/25 API tests passed
-- iteration_3.json: 8/8 backend + full frontend verified (multi-price system)
-- Test files: /app/backend/tests/test_multi_price_system.py
+- iteration_4.json: 11/11 backend + full frontend verified
+- All test files: /app/backend/tests/
 
 ## Credentials
 - Admin: username=admin, password=admin123
 
 ## Backlog
-- P2: Refactor server.py into multiple router modules
-- P2: Refactor App.js into separate component files
-- P3: Product image upload, barcode scanner, customer loyalty
+- P2: Refactor server.py and App.js into modules
+- P3: Product images, barcode scanner, customer loyalty
