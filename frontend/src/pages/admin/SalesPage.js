@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Printer, Eye } from "lucide-react";
+import { Printer, Eye, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,6 +20,9 @@ export default function SalesPage() {
   const [showDetail, setShowDetail] = useState(false);
   const [exchangeRates, setExchangeRates] = useState({ usd_to_ves: 1, local_currency_symbol: 'Bs.' });
   const [settings, setSettings] = useState({});
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const receiptRef = useRef(null);
   const invoiceRef = useRef(null);
 
@@ -31,6 +35,13 @@ export default function SalesPage() {
       .catch(e => { if (e.response?.status !== 401 && e.response?.status !== 403) toast.error(t('loadFailed')); })
       .finally(() => setLoading(false));
   }, []);
+
+  const filteredOrders = orders.filter(o => {
+    if (search && !o.order_no?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (dateFrom && new Date(o.created_at) < new Date(dateFrom)) return false;
+    if (dateTo && new Date(o.created_at) > new Date(dateTo + 'T23:59:59')) return false;
+    return true;
+  });
 
   const handlePrintReceipt = (order) => {
     setSelectedOrder(order);
@@ -45,6 +56,15 @@ export default function SalesPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">{t('salesManagement')}</h1>
+      <div className="flex gap-4 items-end flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input placeholder={t('orderNo')} value={search} onChange={e => setSearch(e.target.value)} className="pl-10 bg-slate-800 border-slate-700 text-white" data-testid="sales-search" />
+        </div>
+        <div><label className="text-xs text-slate-400 block mb-1">{t('dateFrom')}</label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-slate-800 border-slate-700 text-white w-40" data-testid="sales-date-from" /></div>
+        <div><label className="text-xs text-slate-400 block mb-1">{t('dateTo')}</label><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-slate-800 border-slate-700 text-white w-40" data-testid="sales-date-to" /></div>
+        <Badge className="bg-slate-700 text-slate-300">{filteredOrders.length} / {orders.length}</Badge>
+      </div>
       <Card className="bg-slate-800 border-slate-700">
         <Table>
           <TableHeader>
@@ -59,7 +79,7 @@ export default function SalesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.map((order) => (
+            {filteredOrders.map((order) => (
               <TableRow key={order.id} className="border-slate-700">
                 <TableCell className="text-white font-mono">{order.order_no}</TableCell>
                 <TableCell className="text-slate-300">{order.items?.length || 0}</TableCell>

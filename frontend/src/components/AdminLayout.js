@@ -3,7 +3,8 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Store, Package, Warehouse, Users, ShoppingCart, BarChart3,
   Settings, LogOut, Menu, X, Home, Building2, Truck, CreditCard,
-  Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight
+  Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight,
+  Tag, Calendar, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +22,7 @@ export const AdminLayout = ({ children }) => {
     { icon: Building2, label: t('storeManagement'), path: "/admin/stores" },
     { icon: Warehouse, label: t('warehouseManagement'), path: "/admin/warehouses" },
     { icon: Package, label: t('productManagement'), path: "/admin/products" },
+    { icon: Tag, label: t('categoryManagement'), path: "/admin/categories" },
     { icon: ArrowLeftRight, label: t('transferManagement'), path: "/admin/transfers" },
     { icon: Users, label: t('customerManagement'), path: "/admin/customers" },
     { icon: Truck, label: t('supplierManagement'), path: "/admin/suppliers" },
@@ -28,6 +30,8 @@ export const AdminLayout = ({ children }) => {
     { icon: CreditCard, label: t('salesManagement'), path: "/admin/sales" },
     { icon: Globe, label: t('onlineOrders'), path: "/admin/online-orders" },
     { icon: FileText, label: t('salesReport'), path: "/admin/sales-report" },
+    { icon: Calendar, label: t('dailySettlement'), path: "/admin/daily-settlement" },
+    { icon: RotateCcw, label: t('refundHistory'), path: "/admin/refunds" },
     { icon: BarChart3, label: t('reports'), path: "/admin/reports" },
     { icon: DollarSign, label: t('exchangeRates'), path: "/admin/exchange-rates" },
     { icon: Settings, label: t('paymentSettings'), path: "/admin/payment-settings" },

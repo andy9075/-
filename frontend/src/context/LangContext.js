@@ -155,6 +155,10 @@ const translations = {
     pricingLocalDesc: "Bs.价格=进货价×部门汇率, USD=Bs.÷销售汇率（适用黑市汇率）",
     pricingForeignDirect: "外币价格按本身价格",
     pricingForeignDesc: "直接使用商品设定的USD价格（适用央行汇率）",
+    dailySettlement: "日结报表", grossProfit: "毛利润",
+    refundHistory: "退款记录", categoryManagement: "分类管理",
+    categoryRateDesc: "每个分类可设置独立汇率，用于计算Bs.价格",
+    systemRates: "系统汇率",
   },
   en: {
     save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add",
@@ -284,6 +288,8 @@ const translations = {
     pricingLocalDesc: "Bs.=Cost×Dept.Rate, USD=Bs.÷Sales Rate (black market rate)",
     pricingForeignDirect: "Use direct foreign price",
     pricingForeignDesc: "Use stored USD prices directly (central bank rate)",
+    dailySettlement: "Daily Settlement", grossProfit: "Gross Profit",
+    refundHistory: "Refund History", categoryManagement: "Categories",
   },
   es: {
     save: "Guardar", cancel: "Cancelar", delete: "Eliminar", edit: "Editar", add: "Agregar",
@@ -413,6 +419,8 @@ const translations = {
     pricingLocalDesc: "Bs.=Costo×Tasa Dpto., USD=Bs.÷Tasa Venta (tasa paralela)",
     pricingForeignDirect: "Usar precio directo en divisa",
     pricingForeignDesc: "Usar precios USD almacenados directamente (tasa BCV)",
+    dailySettlement: "Cierre Diario", grossProfit: "Ganancia Bruta",
+    refundHistory: "Historial de Devoluciones", categoryManagement: "Categorias",
   }
 };
 

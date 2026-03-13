@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   CreditCard, Search, Package, Plus, X, ChevronDown,
-  LogOut, Wifi, WifiOff, ShoppingBag, Printer
+  LogOut, Wifi, WifiOff, ShoppingBag, Printer, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,10 @@ export default function PosPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
   const [systemSettings, setSystemSettings] = useState({});
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
   const receiptRef = useRef(null);
   const invoiceRef = useRef(null);
 
@@ -108,6 +112,8 @@ export default function PosPage() {
       setProducts(productsRes.data); setCategories(categoriesRes.data); setStores(storesRes.data.filter(s => s.type === 'retail')); setExchangeRates(ratesRes.data);
       if (settingsRes.data?.pricing_mode) setPricingMode(settingsRes.data.pricing_mode);
       setSystemSettings(settingsRes.data || {});
+      // Fetch customers
+      axios.get(`${API}/customers`).then(r => setCustomers(r.data)).catch(() => {});
     } catch (e) { console.error(e); }
   };
 
@@ -204,9 +210,9 @@ export default function PosPage() {
   const handlePayment = async () => {
     if (!shift) { toast.error(t('noShift')); return; }
     const orderItems = cart.map(i => ({ product_id: i.product_id, product_name: i.product.name, quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity, unit_price: i.unit_price, discount: safeDiscount, amount: i.amount * (1 - safeDiscount / 100) }));
-    const orderData = { store_id: selectedStore.id, customer_id: null, items: orderItems, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : "" };
+    const orderData = { store_id: selectedStore.id, customer_id: selectedCustomer?.id || null, items: orderItems, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : "" };
     // Capture receipt data before clearing cart
-    const receiptData = { order_no: `SO${Date.now()}`, date: new Date().toISOString(), items: orderItems, subtotal: cartTotal, total_amount: finalTotal, discount: safeDiscount, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, cashier: user?.name || user?.username, store: selectedStore?.name };
+    const receiptData = { order_no: `SO${Date.now()}`, date: new Date().toISOString(), items: orderItems, subtotal: cartTotal, total_amount: finalTotal, discount: safeDiscount, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, cashier: user?.name || user?.username, store: selectedStore?.name, customer_name: selectedCustomer?.name };
     try {
       if (isOnline) { const res = await axios.post(`${API}/sales-orders`, orderData); if (res.data?.order_no) receiptData.order_no = res.data.order_no; }
       else { const newPending = [...pendingOrders, { ...orderData, offline_id: Date.now().toString(), created_at: new Date().toISOString() }]; setPendingOrders(newPending); localStorage.setItem('pos_pending_orders', JSON.stringify(newPending)); }
@@ -275,7 +281,29 @@ export default function PosPage() {
     <div className="min-h-screen bg-slate-900 flex flex-col">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-4"><div className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-blue-400" /><span className="text-white font-bold text-sm">POS</span></div><span className="text-slate-400 text-sm"><span className="text-white">{selectedStore?.name}</span> | {user?.name || user?.username}</span></div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-blue-400" /><span className="text-white font-bold text-sm">POS</span></div>
+          <span className="text-slate-400 text-sm"><span className="text-white">{selectedStore?.name}</span> | {user?.name || user?.username}</span>
+          {/* Customer selector */}
+          <div className="relative">
+            <button onClick={() => setShowCustomerSearch(!showCustomerSearch)} className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs border transition-colors ${selectedCustomer ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-slate-600 text-slate-400 hover:text-white'}`} data-testid="pos-customer-btn">
+              <Users className="w-3 h-3" />
+              {selectedCustomer ? selectedCustomer.name : t('customer')}
+              {selectedCustomer && <X className="w-3 h-3 ml-1 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); }} />}
+            </button>
+            {showCustomerSearch && (
+              <div className="absolute top-full left-0 mt-1 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden" data-testid="customer-dropdown">
+                <div className="p-2 border-b border-slate-700"><Input placeholder={t('searchCustomerPlaceholder')} value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} className="bg-slate-700 border-slate-600 h-8 text-sm" autoFocus /></div>
+                <div className="max-h-48 overflow-y-auto">{customers.filter(c => !customerSearch || c.name?.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone?.includes(customerSearch)).map(c => (
+                  <div key={c.id} onClick={() => { setSelectedCustomer(c); setShowCustomerSearch(false); setCustomerSearch(""); }} className="px-3 py-2 hover:bg-slate-700 cursor-pointer flex justify-between" data-testid={`customer-option-${c.id}`}>
+                    <span className="text-white text-sm">{c.name}</span>
+                    <span className="text-slate-500 text-xs">{c.phone || c.member_level}</span>
+                  </div>
+                ))}{customers.filter(c => !customerSearch || c.name?.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone?.includes(customerSearch)).length === 0 && <p className="text-slate-500 text-xs text-center py-3">{t('noData')}</p>}</div>
+              </div>
+            )}
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-0.5">{[{k:'zh',l:'中'},{k:'en',l:'EN'},{k:'es',l:'ES'}].map(({k,l}) => (<button key={k} onClick={() => changeLang(k)} className={`px-1.5 py-0.5 text-xs rounded ${lang === k ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`} data-testid={`pos-lang-${k}`}>{l}</button>))}</div>
           <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`} data-testid="online-status">{isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}{isOnline ? t('online') : t('offline')}{pendingOrders.length > 0 && <Badge className="ml-1 bg-orange-500 text-white text-xs px-1 py-0">{pendingOrders.length}</Badge>}</div>
