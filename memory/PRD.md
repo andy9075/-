@@ -9,45 +9,30 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 - **Database:** MongoDB
 - **State:** React Context (Auth, Lang)
 
-## Architecture (Post-Refactoring)
+## Architecture
 ```
 /app
 ├── backend/
-│   └── server.py           # Monolithic FastAPI (to be refactored later)
+│   └── server.py
 ├── frontend/src/
-│   ├── App.js              # Clean routing file (~80 lines)
-│   ├── lib/api.js          # Shared API constant + axios config
+│   ├── App.js              # Clean routing (~80 lines)
+│   ├── lib/api.js
 │   ├── context/
-│   │   ├── AuthContext.js   # Auth provider (login/logout/token)
+│   │   ├── AuthContext.js
 │   │   └── LangContext.js   # i18n (zh/en/es)
 │   ├── components/
-│   │   ├── AdminLayout.js   # Admin sidebar + layout
+│   │   ├── AdminLayout.js
 │   │   ├── ProtectedRoute.js
-│   │   └── ui/              # Shadcn components
+│   │   ├── ReceiptPrint.js  # 80mm thermal receipt
+│   │   ├── InvoicePrint.js  # A4 invoice
+│   │   ├── PriceLabelPrint.js # Price labels (3-col grid)
+│   │   └── ui/
 │   └── pages/
 │       ├── LoginPage.js
-│       ├── PosPage.js       # Full POS cash register
-│       ├── ShopPage.js      # Online storefront
+│       ├── PosPage.js
+│       ├── ShopPage.js
 │       ├── ShopOrdersPage.js
-│       └── admin/
-│           ├── Dashboard.js
-│           ├── ProductsPage.js (with import)
-│           ├── StoresPage.js
-│           ├── WarehousesPage.js
-│           ├── CustomersPage.js
-│           ├── SuppliersPage.js
-│           ├── PurchasesPage.js
-│           ├── SalesPage.js
-│           ├── OnlineOrdersPage.js
-│           ├── SalesReportPage.js
-│           ├── ReportsPage.js
-│           ├── TransferPage.js
-│           ├── ExchangeRatesPage.js
-│           ├── PaymentSettingsPage.js
-│           ├── SystemSettingsPage.js
-│           ├── EmployeesPage.js
-│           ├── StockAlertsPage.js
-│           └── StockTakingPage.js
+│       └── admin/ (18 pages)
 ```
 
 ## Completed Features
@@ -57,29 +42,14 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 - [x] Online Store with cart and checkout
 - [x] Product Import (CSV/Excel/JSON)
 - [x] i18n (Chinese/English/Spanish)
-- [x] Offline mode with pending order queue
-- [x] **Frontend Refactoring** (2026-03-13): 5322-line monolithic App.js → 25+ modular files
-- [x] **Bug fixes**: getProductBsRate→getProductBsMultiplier, setShowSearch→setShowProductSearch
-- [x] **Offline sync logic**: Auto-sync pending orders when coming back online
-
-## Bugs Fixed (2026-03-13)
-- `getProductBsRate` was called but never defined → fixed to use `getProductBsMultiplier`
-- `setShowSearch` was called but didn't exist → fixed to `setShowProductSearch`
-- Duplicate `onKeyDown` handler on search input → consolidated into single handler
-
-## P0 - Verified / Stable
-- Login/Auth flow
-- Admin dashboard with stats
-- All admin sidebar navigation (15+ pages)
-- Products management (CRUD + import)
-- POS login → store select → shift → cart → payment
-- Online shop → cart → checkout
-- Language switcher (zh/en/es)
-- Currency toggle ($/Bs.)
+- [x] Offline mode with auto-sync
+- [x] **Frontend Refactoring** (2026-03-13): Monolithic → 25+ modular files
+- [x] **80mm Thermal Receipt** (2026-03-13): Print after POS payment, dual currency
+- [x] **A4 Invoice** (2026-03-13): Print from POS or Sales management
+- [x] **Price Labels** (2026-03-13): Select products → print labels (3-col grid, triple price)
 
 ## P1 - Next Tasks
-- Verify POS pricing logic correctness (user was previously reporting incorrect calculations)
-- Receipt/Invoice Printing (80mm thermal + A4)
+- Verify POS pricing logic correctness (user previously reported issues)
 - Wholesale Module
 - Backend server.py refactoring into API routers
 
@@ -92,4 +62,5 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 - Username: admin / Password: admin123
 
 ## Test Reports
-- /app/test_reports/iteration_11.json (2026-03-13, 100% pass - 8 features verified)
+- /app/test_reports/iteration_11.json (refactoring - 100% pass)
+- /app/test_reports/iteration_12.json (print features - 95% pass)
