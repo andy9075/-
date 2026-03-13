@@ -725,7 +725,7 @@ const ProductsPage = () => {
                   )}
                   {formData.cost_price > 0 && selectedCatRate > 1 && (
                     <p className="text-xs text-emerald-400 mt-0.5">
-                      ${formData.cost_price}×{selectedCatRate}/{sysRate} = ${autoCalcPrice(formData.cost_price, selectedCatRate).toFixed(2)}
+                      {t('pricingLocalBased')}: ${formData.cost_price}×{selectedCatRate}/{sysRate} = ${autoCalcPrice(formData.cost_price, selectedCatRate).toFixed(2)}
                     </p>
                   )}
                 </div>
@@ -4269,23 +4269,30 @@ const POSPage = () => {
 
   const getProductPrice = (product) => {
     const p1 = product.price1 || product.retail_price || 0;
-    if (!showBs) return p1;
-    if (pricingMode === "foreign_direct") {
-      // Direct mode: Bs. = USD price × system rate
-      return p1 * (exchangeRates.usd_to_ves || 1);
+    if (!showBs) {
+      if (pricingMode === "local_based") {
+        // USD = selling_price × category_rate / system_rate
+        const cat = categories.find(c => c.id === product.category_id);
+        const catRate = cat?.exchange_rate;
+        if (catRate && catRate > 1) {
+          return p1 * catRate / (exchangeRates.usd_to_ves || 1);
+        }
+      }
+      return p1;
     }
-    // Local-based mode: Bs. = cost × category_rate
+    // Bs. mode
     const cat = categories.find(c => c.id === product.category_id);
     const catRate = cat?.exchange_rate;
-    if (catRate && catRate > 1 && product.cost_price > 0) {
-      return product.cost_price * catRate;
+    if (pricingMode === "local_based" && catRate && catRate > 1) {
+      // Bs. = selling_price × category_rate
+      return p1 * catRate;
     }
     return p1 * (exchangeRates.usd_to_ves || 1);
   };
 
   const getPriceSymbol = () => showBs ? "Bs." : "$";
 
-  // Get the Bs. rate for a specific product (based on its category)
+  // Get the effective Bs. rate for a product
   const getProductBsRate = (product) => {
     if (pricingMode === "foreign_direct") return exchangeRates.usd_to_ves || 1;
     const cat = categories.find(c => c.id === product.category_id);
@@ -4294,20 +4301,20 @@ const POSPage = () => {
     return exchangeRates.usd_to_ves || 1;
   };
 
-  // Convert a USD price to display value (Bs. or USD)
+  // Convert a USD price to display value
   const toDisplayPrice = (usdPrice, product) => {
-    if (!showBs) return usdPrice;
-    if (pricingMode === "foreign_direct") {
-      // Direct: Bs. = USD × system_rate
-      return usdPrice * (exchangeRates.usd_to_ves || 1);
+    if (!showBs) {
+      if (pricingMode === "local_based") {
+        const rate = getProductBsRate(product);
+        if (rate !== (exchangeRates.usd_to_ves || 1)) {
+          // USD = usdPrice × category_rate / system_rate
+          return usdPrice * rate / (exchangeRates.usd_to_ves || 1);
+        }
+      }
+      return usdPrice;
     }
-    // Local-based: Bs. = cost × category_rate × (price/base_price) ratio
+    // Bs. = selling_price × category_rate (or system_rate)
     const rate = getProductBsRate(product);
-    if (product.cost_price > 0) {
-      const basePrice = product.price1 || product.retail_price || usdPrice || 1;
-      const priceRatio = usdPrice / basePrice;
-      return product.cost_price * rate * (priceRatio || 1);
-    }
     return usdPrice * rate;
   };
 
@@ -4495,19 +4502,20 @@ const POSPage = () => {
 
   const cartTotal = cart.reduce((sum, i) => sum + i.amount, 0);
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
-  // Display total in Bs. using category rates or system rate
-  const cartTotalDisplay = showBs
-    ? (pricingMode === "foreign_direct"
-      ? cartTotal * (exchangeRates.usd_to_ves || 1)
-      : cart.reduce((sum, i) => {
-          const rate = getProductBsRate(i.product);
-          if (i.product.cost_price > 0) {
-            const basePrice = i.product.price1 || i.product.retail_price || 1;
-            return sum + (i.amount / basePrice) * i.product.cost_price * rate;
-          }
-          return sum + i.amount * rate;
-        }, 0))
-    : cartTotal;
+  // Display total using category rates
+  const cartTotalDisplay = (() => {
+    if (!showBs && pricingMode !== "local_based") return cartTotal;
+    return cart.reduce((sum, i) => {
+      const rate = getProductBsRate(i.product);
+      const sysRate = exchangeRates.usd_to_ves || 1;
+      if (showBs) {
+        return sum + i.amount * rate;
+      } else {
+        // USD in local_based mode: amount × category_rate / system_rate
+        return sum + (rate !== sysRate ? i.amount * rate / sysRate : i.amount);
+      }
+    }, 0);
+  })();
   // Discount: max discount = total - total_cost (can't sell below cost)
   const cartCost = cart.reduce((sum, i) => {
     const cost = i.product.cost_price || 0;
@@ -4945,8 +4953,8 @@ const POSPage = () => {
                     const boxQty = item.product.box_quantity || 1;
                     const isBoxMode = item.price_mode === "box";
                     const totalPieces = isBoxMode ? item.quantity * boxQty : item.quantity;
-                    const displayAmount = showBs ? toDisplayPrice(item.amount / (item.quantity || 1), item.product) * item.quantity : item.amount;
-                    const displayUnitPrice = showBs ? toDisplayPrice(getItemPriceByMode(item.product, item.price_mode), item.product) : getItemPriceByMode(item.product, item.price_mode);
+                    const displayUnitPrice = toDisplayPrice(getItemPriceByMode(item.product, item.price_mode), item.product);
+                    const displayAmount = displayUnitPrice * item.quantity;
                     const priceModes = ["price1", "price2", "box"];
                     const currentIdx = priceModes.indexOf(item.price_mode);
                     const modeLabels = { price1: t('price1'), price2: t('price2'), box: t('box') };
@@ -5049,10 +5057,20 @@ const POSPage = () => {
                     </div>
                   </>
                 ) : (
-                  <div>
-                    <span className="text-slate-400 text-sm mr-2">{t('total')}:</span>
-                    <span className="text-2xl font-bold text-white">${finalTotal.toFixed(2)}</span>
-                  </div>
+                  <>
+                    <div>
+                      <span className="text-slate-400 text-sm mr-2">{t('total')}:</span>
+                      <span className="text-2xl font-bold text-white">${(cartTotalDisplay * (1 - safeDiscount / 100)).toFixed(2)}</span>
+                    </div>
+                    {pricingMode === "local_based" && (
+                      <div>
+                        <span className="text-slate-500 text-xs mr-1">Bs.</span>
+                        <span className="text-sm text-slate-400">
+                          {(cart.reduce((s, i) => s + i.amount * getProductBsRate(i.product), 0) * (1 - safeDiscount / 100)).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <Button 
@@ -5086,11 +5104,14 @@ const POSPage = () => {
               ) : (
                 <>
                   <p className="text-slate-400 text-xs">USD</p>
-                  <p className="text-3xl font-bold text-white">${finalTotal.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-white">${(cartTotalDisplay * (1 - safeDiscount / 100)).toFixed(2)}</p>
+                  {pricingMode === "local_based" && (
+                    <p className="text-slate-400 text-sm mt-1">Bs.{(cart.reduce((s, i) => s + i.amount * getProductBsRate(i.product), 0) * (1 - safeDiscount / 100)).toFixed(2)}</p>
+                  )}
                 </>
               )}
               {safeDiscount > 0 && (
-                <p className="text-red-400 text-sm mt-1">-{safeDiscount}% ({t('discount')}: ${discountAmount.toFixed(2)})</p>
+                <p className="text-red-400 text-sm mt-1">-{safeDiscount}% ({t('discount')})</p>
               )}
             </div>
 
