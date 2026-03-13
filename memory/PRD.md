@@ -1,63 +1,53 @@
 # POS System - Product Requirements Document
 
 ## Original Problem Statement
-Build a comprehensive web-based POS system inspired by "秘奥软件" desktop application. The system includes:
+Build a comprehensive web-based POS system inspired by "秘奥软件" desktop application with:
 1. Admin backend for managing products, categories, inventory, stores, pricing, and exchange rates
 2. Online store for customer-facing e-commerce with Venezuelan payment methods
 3. POS cashier frontend with shift management and multi-currency support
-
-## Target Market
-- Venezuelan retail businesses needing multi-currency support (USD + Bolivares)
-- Local payment methods: Bank Transfer, Pago Movil
 
 ## Tech Stack
 - **Backend**: FastAPI + MongoDB (Motor async driver)
 - **Frontend**: React (single SPA) + TailwindCSS + Shadcn/UI
 - **Auth**: JWT-based authentication
-- **Architecture**: Monolithic (server.py backend, App.js frontend)
 
-## Core Requirements - All Implemented & Tested
+## Core Features - All Implemented
 
-### Admin Panel
-- Dashboard with sales stats, product counts, pending orders
-- Store/warehouse/product/customer/supplier/category CRUD
-- Multi-price system: price1 (USD), price2 (Bs.), wholesale_price per product
-- Exchange rate management (system-wide and per-category, manual)
-- Venezuelan payment settings (Bank Transfer + Pago Movil)
-- Online order management with payment confirmation workflow
-
-### Online Store (/shop)
-- Product catalog with categories
-- Shopping cart and checkout
-- Venezuelan payment methods display
-- WhatsApp click-to-chat on order success
-- Order tracking at /shop/orders (lookup by order number or phone)
+### Multi-Price System (Updated 2026-03-13)
+- **Cost + Margin model**: cost_price × (1 + margin%) = auto-calculated price
+- **3 price tiers**: margin1→price1, margin2→price2, margin3→price3(整箱价)
+- Admin product form: input cost + 3 margins, prices auto-calculate in real-time
+- Product table shows: 编码, 商品名称, 成本价, 利率1%, 价格1, 利率2%, 价格2, 利率3%, 价格3(整箱)
 
 ### POS Cashier (/pos)
-- Login, store selection, shift management
-- Product grid with category filtering and barcode search
-- Price mode switching: USD / Bs. / Mayor (wholesale)
-- Cart with dynamic currency symbol updates
-- Payment modal with cash change calculation
+- 4 price mode buttons: **价格1** / **价格2** / **价格3(整箱)** / **Bs.**
+- Bs. mode converts price1 to Bolivares using exchange rate
+- Cart updates dynamically when switching price modes
+- Currency badge: USD for price modes, Bs. for bs mode
 
-## Bug Fixes Applied (2026-03-13)
-- Fixed: Cart item amounts showed hardcoded `$` instead of dynamic currency symbol (Bs./$/Mayor)
-- Fixed: Payment change display used hardcoded `$` symbol
-- Fixed: Wholesale mode displayed awkward "$ Mayor" prefix, simplified to "$"
-- Fixed: Stale closure in handlePriceModeChange using functional state update
-- Fixed: Shop page used ¥ (Yuan) symbol instead of $ for USD prices
+### Admin Panel (/admin)
+- Dashboard, store/warehouse management, product/category CRUD
+- Exchange rate settings (manual), payment settings
+- Online order management with payment confirmation
 
-## Testing Status
-- Backend: 25/25 API tests passing
-- Frontend: All pages verified, price switching tested across all 3 modes
-- Test files: /app/backend/tests/test_pos_api.py, /app/test_reports/iteration_2.json
+### Online Store (/shop)
+- Product catalog, cart, checkout with Venezuelan payment methods
+- Order tracking at /shop/orders (lookup by order number or phone)
+- WhatsApp click-to-chat on order success
+
+## Key DB Schema
+- products: {code, name, cost_price, margin1, margin2, margin3, price1, price2, price3, wholesale_price, retail_price, ...}
+- categories, stores, warehouses, inventory, online_orders, sales_orders, settings
+
+## Testing
+- iteration_2.json: 25/25 API tests passed
+- iteration_3.json: 8/8 backend + full frontend verified (multi-price system)
+- Test files: /app/backend/tests/test_multi_price_system.py
 
 ## Credentials
 - Admin: username=admin, password=admin123
 
-## Backlog / Future Tasks
+## Backlog
 - P2: Refactor server.py into multiple router modules
 - P2: Refactor App.js into separate component files
-- P3: Add product image upload
-- P3: Add barcode scanner support for POS
-- P3: Implement customer loyalty/points system
+- P3: Product image upload, barcode scanner, customer loyalty
