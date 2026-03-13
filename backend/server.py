@@ -901,12 +901,21 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
                 {"$inc": {"quantity": -item.quantity}}
             )
     
+    # Build items with product names
+    order_items = []
+    for item in order.items:
+        item_dict = item.model_dump()
+        product = await db.products.find_one({"id": item.product_id})
+        if product:
+            item_dict["product_name"] = product["name"]
+        order_items.append(item_dict)
+    
     order_doc = {
         "id": order_id,
         "order_no": order_no,
         "store_id": order.store_id,
         "customer_id": order.customer_id,
-        "items": [item.model_dump() for item in order.items],
+        "items": order_items,
         "total_amount": total_amount,
         "discount_amount": discount_amount,
         "paid_amount": order.paid_amount,
@@ -1118,11 +1127,20 @@ async def create_online_order(order: OnlineOrderCreate):
             {"$inc": {"reserved": item.quantity}}
         )
     
+    # Build items with product names
+    online_items = []
+    for item in order.items:
+        item_dict = item.model_dump()
+        product = await db.products.find_one({"id": item.product_id})
+        if product:
+            item_dict["product_name"] = product["name"]
+        online_items.append(item_dict)
+    
     order_doc = {
         "id": order_id,
         "order_no": order_no,
         "customer_id": order.customer_id,
-        "items": [item.model_dump() for item in order.items],
+        "items": online_items,
         "total_amount": total_amount,
         "shipping_fee": shipping_fee,
         "shipping_address": order.shipping_address,
