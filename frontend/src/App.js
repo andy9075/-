@@ -413,6 +413,7 @@ const ProductsPage = () => {
   const { t } = useLang();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [exchangeRates, setExchangeRates] = useState({ usd_to_ves: 1, local_currency_symbol: 'Bs.' });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -442,8 +443,12 @@ const ProductsPage = () => {
 
   const fetchCategories = async () => {
     try {
-      const res = await axios.get(`${API}/categories`);
-      setCategories(res.data);
+      const [catRes, rateRes] = await Promise.all([
+        axios.get(`${API}/categories`),
+        axios.get(`${API}/exchange-rates`)
+      ]);
+      setCategories(catRes.data);
+      setExchangeRates(rateRes.data);
     } catch (e) {
       console.error(e);
     }
@@ -492,6 +497,16 @@ const ProductsPage = () => {
       retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
     });
   };
+
+  // Get Bs. rate for a category: use category rate if > 1, otherwise use system rate
+  const getCategoryRate = (categoryId) => {
+    const cat = categories.find(c => c.id === categoryId);
+    const catRate = cat?.exchange_rate || 0;
+    return catRate > 1 ? catRate : (exchangeRates.usd_to_ves || 1);
+  };
+  const localSymbol = exchangeRates.local_currency_symbol || 'Bs.';
+  const selectedCatRate = getCategoryRate(formData.category_id);
+  const toBs = (usd) => (usd * selectedCatRate).toFixed(2);
 
   // Import functionality
   const [showImport, setShowImport] = useState(false);
@@ -552,12 +567,13 @@ const ProductsPage = () => {
         </div>
       </div>
 
-      <Card className="bg-slate-800 border-slate-700">
+      <Card className="bg-slate-800 border-slate-700 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
               <TableHead className="text-slate-300">{t('productCode')}</TableHead>
               <TableHead className="text-slate-300">{t('productName')}</TableHead>
+              <TableHead className="text-slate-300">{t('category')}</TableHead>
               <TableHead className="text-slate-300">{t('costPrice')}</TableHead>
               <TableHead className="text-slate-300">{t('margin')}1%</TableHead>
               <TableHead className="text-slate-300">{t('price1')}</TableHead>
@@ -566,20 +582,37 @@ const ProductsPage = () => {
               <TableHead className="text-slate-300">{t('margin')}3%</TableHead>
               <TableHead className="text-slate-300">{t('price3Box')}</TableHead>
               <TableHead className="text-slate-300">{t('status')}</TableHead>
+              <TableHead className="text-slate-300">{t('actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {products.map((product) => (
+            {products.map((product) => {
+              const catRate = getCategoryRate(product.category_id);
+              const cat = categories.find(c => c.id === product.category_id);
+              return (
               <TableRow key={product.id} className="border-slate-700">
                 <TableCell className="text-slate-300">{product.code}</TableCell>
                 <TableCell className="text-white font-medium">{product.name}</TableCell>
-                <TableCell className="text-slate-400">${(product.cost_price || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-slate-400 text-xs">{cat?.name || '-'}</TableCell>
+                <TableCell className="text-slate-400">
+                  <div>${(product.cost_price || 0).toFixed(2)}</div>
+                  <div className="text-cyan-400 text-xs">{localSymbol}{((product.cost_price || 0) * catRate).toFixed(2)}</div>
+                </TableCell>
                 <TableCell className="text-orange-400">{(product.margin1 || 0).toFixed(1)}%</TableCell>
-                <TableCell className="text-emerald-400">${(product.price1 || product.retail_price || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-emerald-400">
+                  <div>${(product.price1 || product.retail_price || 0).toFixed(2)}</div>
+                  <div className="text-cyan-400 text-xs">{localSymbol}{((product.price1 || product.retail_price || 0) * catRate).toFixed(2)}</div>
+                </TableCell>
                 <TableCell className="text-orange-400">{(product.margin2 || 0).toFixed(1)}%</TableCell>
-                <TableCell className="text-yellow-400">${(product.price2 || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-yellow-400">
+                  <div>${(product.price2 || 0).toFixed(2)}</div>
+                  <div className="text-cyan-400 text-xs">{localSymbol}{((product.price2 || 0) * catRate).toFixed(2)}</div>
+                </TableCell>
                 <TableCell className="text-orange-400">{(product.margin3 || 0).toFixed(1)}%</TableCell>
-                <TableCell className="text-blue-400">${(product.price3 || product.wholesale_price || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-blue-400">
+                  <div>${(product.price3 || product.wholesale_price || 0).toFixed(2)}</div>
+                  <div className="text-cyan-400 text-xs">{localSymbol}{((product.price3 || product.wholesale_price || 0) * catRate).toFixed(2)}</div>
+                </TableCell>
                 <TableCell>
                   <Badge variant={product.status === 'active' ? 'default' : 'secondary'}>
                     {product.status === 'active' ? t('active') : t('inactive')}
@@ -596,17 +629,19 @@ const ProductsPage = () => {
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl">
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingProduct ? t('editProduct') : t('addProduct')}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
+            {/* Basic Info */}
             <div>
               <label className="text-sm text-slate-300">{t('productCode')}</label>
               <Input value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="product-code" />
@@ -619,6 +654,8 @@ const ProductsPage = () => {
               <label className="text-sm text-slate-300">{t('productName')}</label>
               <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="product-name" />
             </div>
+
+            {/* Category with Exchange Rate */}
             <div>
               <label className="text-sm text-slate-300">{t('category')}</label>
               <Select value={formData.category_id} onValueChange={(v) => setFormData({...formData, category_id: v})}>
@@ -627,15 +664,24 @@ const ProductsPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name} {cat.exchange_rate > 1 ? `(${localSymbol}${cat.exchange_rate})` : ''}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {formData.category_id && (
+                <p className="text-xs text-cyan-400 mt-1" data-testid="category-rate-display">
+                  {t('exchangeRates')}: $1 = {localSymbol}{selectedCatRate}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm text-slate-300">{t('unit')}</label>
               <Input value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
+
+            {/* Price Settings */}
             <div className="col-span-2 bg-slate-900 rounded-lg p-4 space-y-3">
               <h4 className="text-sm font-semibold text-emerald-400">{t('priceSettings')} ({t('marginFormula')})</h4>
               <div className="grid grid-cols-4 gap-3">
@@ -652,6 +698,9 @@ const ProductsPage = () => {
                       price3: m3 > 0 ? Math.round(cost * (1 + m3/100) * 100) / 100 : formData.price3
                     });
                   }} className="bg-slate-700 border-slate-600" data-testid="product-cost" />
+                  {formData.cost_price > 0 && formData.category_id && (
+                    <p className="text-xs text-cyan-400 mt-0.5">{localSymbol}{toBs(formData.cost_price)}</p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -662,7 +711,10 @@ const ProductsPage = () => {
                     const cost = formData.cost_price || 0;
                     setFormData({...formData, margin1: m, price1: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price1});
                   }} className="bg-slate-700 border-slate-600" data-testid="product-margin1" />
-                  <div className="text-xs text-emerald-400 font-medium">{t('price1')}: ${(formData.price1 || 0).toFixed(2)}</div>
+                  <div className="text-xs text-emerald-400 font-medium">
+                    {t('price1')}: ${(formData.price1 || 0).toFixed(2)}
+                    {formData.category_id && <span className="text-cyan-400 ml-1">({localSymbol}{toBs(formData.price1 || 0)})</span>}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400">{t('margin')}2 (%)</label>
@@ -671,7 +723,10 @@ const ProductsPage = () => {
                     const cost = formData.cost_price || 0;
                     setFormData({...formData, margin2: m, price2: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price2});
                   }} className="bg-slate-700 border-slate-600" data-testid="product-margin2" />
-                  <div className="text-xs text-yellow-400 font-medium">{t('price2')}: ${(formData.price2 || 0).toFixed(2)}</div>
+                  <div className="text-xs text-yellow-400 font-medium">
+                    {t('price2')}: ${(formData.price2 || 0).toFixed(2)}
+                    {formData.category_id && <span className="text-cyan-400 ml-1">({localSymbol}{toBs(formData.price2 || 0)})</span>}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400">{t('margin')}3 (%) {t('box')}</label>
@@ -680,13 +735,29 @@ const ProductsPage = () => {
                     const cost = formData.cost_price || 0;
                     setFormData({...formData, margin3: m, price3: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price3});
                   }} className="bg-slate-700 border-slate-600" data-testid="product-margin3" />
-                  <div className="text-xs text-blue-400 font-medium">{t('price3Box')}: ${(formData.price3 || 0).toFixed(2)}</div>
+                  <div className="text-xs text-blue-400 font-medium">
+                    {t('price3Box')}: ${(formData.price3 || 0).toFixed(2)}
+                    {formData.category_id && <span className="text-cyan-400 ml-1">({localSymbol}{toBs(formData.price3 || 0)})</span>}
+                  </div>
                 </div>
               </div>
+            </div>
+
+            {/* Additional Fields */}
+            <div>
+              <label className="text-sm text-slate-300">{t('wholesale')} ($)</label>
+              <Input type="number" step="0.01" value={formData.wholesale_price} onChange={(e) => setFormData({...formData, wholesale_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
+              {formData.wholesale_price > 0 && formData.category_id && (
+                <p className="text-xs text-cyan-400 mt-0.5">{localSymbol}{toBs(formData.wholesale_price)}</p>
+              )}
             </div>
             <div>
               <label className="text-sm text-slate-300">{t('boxQuantity')}</label>
               <Input type="number" value={formData.box_quantity} onChange={(e) => setFormData({...formData, box_quantity: parseInt(e.target.value) || 1})} className="bg-slate-700 border-slate-600" />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">{t('stockAlerts')} ({t('quantity')})</label>
+              <Input type="number" value={formData.min_stock} onChange={(e) => setFormData({...formData, min_stock: parseInt(e.target.value) || 0})} className="bg-slate-700 border-slate-600" placeholder="0" />
             </div>
             <div>
               <label className="text-sm text-slate-300">{t('status')}</label>
@@ -699,6 +770,10 @@ const ProductsPage = () => {
                   <SelectItem value="inactive">{t('inactive')}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm text-slate-300">{t('notes')}</label>
+              <Input value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="bg-slate-700 border-slate-600" placeholder="" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
