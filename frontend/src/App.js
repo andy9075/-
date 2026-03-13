@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from "react-router-dom";
 import axios from "axios";
@@ -1004,9 +1004,11 @@ const WarehousesPage = () => {
 
 // Online Orders Management
 const OnlineOrdersPage = () => {
+  const { t } = useLang();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [expandedOrder, setExpandedOrder] = useState(null);
 
   useEffect(() => {
     fetchOrders();
@@ -1068,17 +1070,17 @@ const OnlineOrdersPage = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Pedidos Online / 网店订单</h1>
+        <h1 className="text-2xl font-bold text-white">{t('onlineOrders')}</h1>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40 bg-slate-800 border-slate-700 text-white">
-            <SelectValue placeholder="Todos" />
+            <SelectValue placeholder={t('all')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos / 全部</SelectItem>
-            <SelectItem value="pending">Pendiente</SelectItem>
-            <SelectItem value="processing">Procesando</SelectItem>
-            <SelectItem value="shipped">Enviado</SelectItem>
-            <SelectItem value="completed">Completado</SelectItem>
+            <SelectItem value="all">{t('all')}</SelectItem>
+            <SelectItem value="pending">{t('pending')}</SelectItem>
+            <SelectItem value="processing">{t('processing')}</SelectItem>
+            <SelectItem value="shipped">{t('shipped')}</SelectItem>
+            <SelectItem value="completed">{t('completed')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1087,57 +1089,98 @@ const OnlineOrdersPage = () => {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-300">Pedido #</TableHead>
-              <TableHead className="text-slate-300">Cliente</TableHead>
-              <TableHead className="text-slate-300">Método</TableHead>
-              <TableHead className="text-slate-300">Referencia</TableHead>
-              <TableHead className="text-slate-300">Total</TableHead>
-              <TableHead className="text-slate-300">Pago</TableHead>
-              <TableHead className="text-slate-300">Estado</TableHead>
-              <TableHead className="text-slate-300">Fecha</TableHead>
-              <TableHead className="text-slate-300">Acciones</TableHead>
+              <TableHead className="text-slate-300">#</TableHead>
+              <TableHead className="text-slate-300">{t('customer')}</TableHead>
+              <TableHead className="text-slate-300">{t('paymentMethod')}</TableHead>
+              <TableHead className="text-slate-300">Ref</TableHead>
+              <TableHead className="text-slate-300">{t('total')}</TableHead>
+              <TableHead className="text-slate-300">{t('status')}</TableHead>
+              <TableHead className="text-slate-300">{t('date')}</TableHead>
+              <TableHead className="text-slate-300">{t('status')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {orders.map((order) => (
-              <TableRow key={order.id} className="border-slate-700">
-                <TableCell className="text-white font-mono text-xs">{order.order_no}</TableCell>
-                <TableCell>
-                  <div>
+              <React.Fragment key={order.id}>
+                <TableRow className="border-slate-700 cursor-pointer hover:bg-slate-700/50" onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}>
+                  <TableCell className="text-white font-mono text-xs">{order.order_no}</TableCell>
+                  <TableCell>
                     <p className="text-white text-sm">{order.shipping_name}</p>
                     <p className="text-slate-400 text-xs">{order.shipping_phone}</p>
-                  </div>
-                </TableCell>
-                <TableCell className="text-slate-300 text-sm">{paymentMethodLabels[order.payment_method] || order.payment_method}</TableCell>
-                <TableCell className="text-yellow-400 font-mono text-sm">{order.payment_reference || '-'}</TableCell>
-                <TableCell className="text-emerald-400 font-medium">${(order.total_amount + order.shipping_fee).toFixed(2)}</TableCell>
-                <TableCell>
-                  <Badge className={order.payment_status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}>
-                    {order.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge className={statusColors[order.order_status]}>
-                    {statusLabels[order.order_status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-slate-400 text-xs">{new Date(order.created_at).toLocaleString()}</TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    {order.payment_status === 'pending' && (
-                      <Button size="sm" onClick={() => handleConfirmPayment(order.id)} className="bg-emerald-500 hover:bg-emerald-600 text-xs" data-testid={`confirm-payment-${order.id}`}>
-                        Confirmar Pago
-                      </Button>
-                    )}
-                    {order.payment_status === 'paid' && order.order_status === 'processing' && (
-                      <Button size="sm" onClick={() => handleShip(order.id)} className="bg-purple-500 hover:bg-purple-600 text-xs" data-testid={`ship-order-${order.id}`}>
-                        Enviar
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
+                    <p className="text-slate-500 text-xs">{order.shipping_address}</p>
+                  </TableCell>
+                  <TableCell className="text-slate-300 text-sm">{paymentMethodLabels[order.payment_method] || order.payment_method}</TableCell>
+                  <TableCell className="text-yellow-400 font-mono text-sm">{order.payment_reference || '-'}</TableCell>
+                  <TableCell className="text-emerald-400 font-medium">${(order.total_amount + order.shipping_fee).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Badge className={order.payment_status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}>
+                      {order.payment_status === 'paid' ? t('paid') : t('pending')}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-slate-400 text-xs">{new Date(order.created_at).toLocaleString()}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      {order.payment_status === 'pending' && (
+                        <Button size="sm" onClick={(e) => { e.stopPropagation(); handleConfirmPayment(order.id); }} className="bg-emerald-500 hover:bg-emerald-600 text-xs" data-testid={`confirm-payment-${order.id}`}>
+                          {t('confirm')}
+                        </Button>
+                      )}
+                      {order.payment_status === 'paid' && order.order_status === 'processing' && (
+                        <Button size="sm" onClick={(e) => { e.stopPropagation(); handleShip(order.id); }} className="bg-purple-500 hover:bg-purple-600 text-xs" data-testid={`ship-order-${order.id}`}>
+                          {t('shipped')}
+                        </Button>
+                      )}
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedOrder === order.id ? 'rotate-180' : ''}`} />
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {/* Expanded Order Items Detail */}
+                {expandedOrder === order.id && (
+                  <TableRow className="border-slate-700 bg-slate-900/50">
+                    <TableCell colSpan={8} className="p-4">
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-emerald-400 mb-2">{t('orderDetail')}</h4>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-slate-400 text-xs border-b border-slate-700">
+                              <th className="text-left py-1 px-2">{t('productName')}</th>
+                              <th className="text-right py-1 px-2">{t('unitPrice')}</th>
+                              <th className="text-center py-1 px-2">{t('quantity')}</th>
+                              <th className="text-right py-1 px-2">{t('amount')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(order.items || []).map((item, idx) => (
+                              <tr key={idx} className="border-b border-slate-700/30">
+                                <td className="py-1.5 px-2 text-white">{item.product_name || item.product_id}</td>
+                                <td className="py-1.5 px-2 text-right text-slate-300">${(item.unit_price || 0).toFixed(2)}</td>
+                                <td className="py-1.5 px-2 text-center text-slate-300">{item.quantity}</td>
+                                <td className="py-1.5 px-2 text-right text-emerald-400">${(item.amount || item.unit_price * item.quantity).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="border-t border-slate-600">
+                              <td colSpan={3} className="py-1.5 px-2 text-right text-slate-400">{t('total')}:</td>
+                              <td className="py-1.5 px-2 text-right text-emerald-400 font-bold">${order.total_amount?.toFixed(2)}</td>
+                            </tr>
+                            {order.shipping_fee > 0 && (
+                              <tr>
+                                <td colSpan={3} className="py-1 px-2 text-right text-slate-500 text-xs">{t('shipping')}:</td>
+                                <td className="py-1 px-2 text-right text-slate-400 text-xs">${order.shipping_fee?.toFixed(2)}</td>
+                              </tr>
+                            )}
+                          </tfoot>
+                        </table>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </React.Fragment>
             ))}
+            {orders.length === 0 && (
+              <TableRow><TableCell colSpan={8} className="text-center text-slate-400 py-8">{t('noData')}</TableCell></TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -2650,7 +2693,7 @@ const PaymentSettingsPage = () => {
 
 // Online Shop (Public)
 const ShopPage = () => {
-  const { t } = useLang();
+  const { t, lang, changeLang } = useLang();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [cart, setCart] = useState([]);
@@ -2771,6 +2814,15 @@ const ShopPage = () => {
             <h1 className="text-xl font-bold text-white">{t('shopTitle')}</h1>
           </div>
           <div className="flex items-center gap-4">
+            {/* Language Switcher */}
+            <div className="flex gap-0.5">
+              {[{k:'zh',l:'中'},{k:'en',l:'EN'},{k:'es',l:'ES'}].map(({k,l}) => (
+                <button key={k} onClick={() => changeLang(k)}
+                  className={`px-1.5 py-0.5 text-xs rounded ${lang === k ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                  data-testid={`shop-lang-${k}`}
+                >{l}</button>
+              ))}
+            </div>
             <Link to="/shop/orders" className="text-slate-400 hover:text-white text-sm">
               {t('myOrders')}
             </Link>
@@ -3346,6 +3398,7 @@ const POSPage = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [receivedAmount, setReceivedAmount] = useState("");
+  const [discountPercent, setDiscountPercent] = useState(0);
   const [shift, setShift] = useState(null);
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [priceMode, setPriceMode] = useState("price1"); // global display: price1, bs
@@ -3404,18 +3457,25 @@ const POSPage = () => {
     }
   }, []);
 
-  // Keyboard shortcuts: F1=search, F2=checkout, F3=clear, ESC=close
+  // Keyboard shortcuts: F1=search, F3=clear, F9=pay, F5=cash, F6=card, F7=biopago, F8=transfer, ESC=close
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (showLogin || !selectedStore) return;
       if (e.key === 'F1') { e.preventDefault(); setShowProductSearch(true); }
-      if (e.key === 'F2') { e.preventDefault(); if (cart.length > 0 && shift) setShowPayment(true); }
       if (e.key === 'F3') { e.preventDefault(); clearCart(); }
+      if (e.key === 'F9') { e.preventDefault(); if (cart.length > 0 && shift) setShowPayment(true); }
       if (e.key === 'Escape') { setShowProductSearch(false); setShowPayment(false); setShowShiftModal(false); }
+      // Payment method shortcuts (only when payment modal is open)
+      if (showPayment) {
+        if (e.key === 'F5') { e.preventDefault(); setPaymentMethod('cash'); }
+        if (e.key === 'F6') { e.preventDefault(); setPaymentMethod('card'); }
+        if (e.key === 'F7') { e.preventDefault(); setPaymentMethod('biopago'); }
+        if (e.key === 'F8') { e.preventDefault(); setPaymentMethod('transfer'); }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showLogin, selectedStore, cart, shift]);
+  }, [showLogin, selectedStore, cart, shift, showPayment]);
 
   const fetchData = async (token) => {
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -3607,6 +3667,16 @@ const POSPage = () => {
 
   const cartTotal = cart.reduce((sum, i) => sum + i.amount, 0);
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+  // Discount: max discount = total - total_cost (can't sell below cost)
+  const cartCost = cart.reduce((sum, i) => {
+    const cost = i.product.cost_price || 0;
+    const qty = i.price_mode === "box" ? i.quantity * (i.product.box_quantity || 1) : i.quantity;
+    return sum + cost * qty;
+  }, 0);
+  const maxDiscountPercent = cartTotal > 0 ? Math.floor((1 - cartCost / cartTotal) * 100) : 0;
+  const safeDiscount = Math.min(discountPercent, maxDiscountPercent);
+  const discountAmount = cartTotal * safeDiscount / 100;
+  const finalTotal = cartTotal - discountAmount;
 
   const handlePayment = async () => {
     if (!shift) {
@@ -3621,12 +3691,12 @@ const POSPage = () => {
         product_id: i.product_id,
         quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity,
         unit_price: i.unit_price,
-        discount: 0,
-        amount: i.amount
+        discount: safeDiscount,
+        amount: i.amount * (1 - safeDiscount / 100)
       })),
       payment_method: paymentMethod,
-      paid_amount: parseFloat(receivedAmount) || cartTotal,
-      notes: ""
+      paid_amount: parseFloat(receivedAmount) || finalTotal,
+      notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : ""
     };
 
     try {
@@ -3642,9 +3712,9 @@ const POSPage = () => {
       // Update shift stats
       const updatedShift = {
         ...shift,
-        sales: [...shift.sales, { amount: cartTotal, method: paymentMethod, time: new Date().toISOString() }],
-        total_sales: shift.total_sales + cartTotal,
-        total_cash: paymentMethod === 'cash' ? shift.total_cash + cartTotal : shift.total_cash
+        sales: [...shift.sales, { amount: finalTotal, method: paymentMethod, time: new Date().toISOString() }],
+        total_sales: shift.total_sales + finalTotal,
+        total_cash: paymentMethod === 'cash' ? shift.total_cash + finalTotal : shift.total_cash
       };
       setShift(updatedShift);
       localStorage.setItem("pos_shift", JSON.stringify(updatedShift));
@@ -3674,7 +3744,7 @@ const POSPage = () => {
     return matchSearch && matchCategory && p.status === 'active';
   });
 
-  const change = parseFloat(receivedAmount) - cartTotal;
+  const change = parseFloat(receivedAmount) - finalTotal;
 
   // Login Screen
   if (showLogin) {
@@ -4020,11 +4090,13 @@ const POSPage = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-300 text-sm">
-                          {getPriceSymbol()}{displayUnitPrice.toFixed(2)}
+                        <td className="px-4 py-3 text-right text-sm">
+                          <span className={showBs ? 'text-orange-300' : 'text-slate-300'}>{getPriceSymbol()}{displayUnitPrice.toFixed(2)}</span>
+                          {showBs && <p className="text-slate-500 text-xs">${getItemPriceByMode(item.product, item.price_mode).toFixed(2)}</p>}
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-white">
-                          {getPriceSymbol()}{displayAmount.toFixed(2)}
+                        <td className="px-4 py-3 text-right font-bold">
+                          <span className={showBs ? 'text-orange-300' : 'text-white'}>{getPriceSymbol()}{displayAmount.toFixed(2)}</span>
+                          {showBs && <p className="text-slate-500 text-xs">${item.amount.toFixed(2)}</p>}
                         </td>
                         <td className="px-2 py-3 text-center">
                           <button onClick={() => removeFromCart(item.product_id)} className="text-red-400 hover:text-red-300">
@@ -4043,13 +4115,29 @@ const POSPage = () => {
           <div className="border-t border-slate-700 px-4 py-3 flex items-center justify-between bg-slate-800">
             <div className="text-slate-400 text-sm">
               {cart.length} {t('products')}, {cartCount} {t('items')}
+              {safeDiscount > 0 && <span className="text-red-400 ml-2">-{safeDiscount}%</span>}
             </div>
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <span className="text-slate-400 text-sm mr-3">{t('total')}:</span>
-                <span className="text-2xl font-bold text-white">
-                  {getPriceSymbol()}{(showBs ? cartTotal * (exchangeRates.usd_to_ves || 1) : cartTotal).toFixed(2)}
-                </span>
+                {showBs ? (
+                  <>
+                    <div>
+                      <span className="text-slate-400 text-xs mr-1">Bs.</span>
+                      <span className="text-xl font-bold text-orange-400">
+                        {(finalTotal * (exchangeRates.usd_to_ves || 1)).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-xs mr-1">$</span>
+                      <span className="text-sm text-slate-400">{finalTotal.toFixed(2)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <span className="text-slate-400 text-sm mr-2">{t('total')}:</span>
+                    <span className="text-2xl font-bold text-white">${finalTotal.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
               <Button 
                 onClick={() => setShowPayment(true)} 
@@ -4057,51 +4145,95 @@ const POSPage = () => {
                 disabled={cart.length === 0 || !shift}
                 data-testid="pos-pay-btn"
               >
-                {t('checkout')}
+                F9 {t('checkout')}
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Payment Modal */}
-      <Dialog open={showPayment} onOpenChange={setShowPayment}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+      {/* Payment Modal - F9 */}
+      <Dialog open={showPayment} onOpenChange={(open) => { setShowPayment(open); if (!open) { setDiscountPercent(0); setReceivedAmount(""); } }}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-xl">{t('checkout')}</DialogTitle>
+            <DialogTitle className="text-xl">{t('checkout')} (F9)</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Total Display - Dual Currency when Bs */}
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
-              <p className="text-slate-400 text-sm">{t('total')} ({showBs ? 'Bs.' : 'USD'})</p>
-              <p className="text-4xl font-bold text-white">
-                {getPriceSymbol()}{(showBs ? cartTotal * (exchangeRates.usd_to_ves || 1) : cartTotal).toFixed(2)}
-              </p>
+              {showBs ? (
+                <>
+                  <p className="text-slate-400 text-xs">Bs.</p>
+                  <p className="text-3xl font-bold text-orange-400">Bs.{(finalTotal * (exchangeRates.usd_to_ves || 1)).toFixed(2)}</p>
+                  <p className="text-slate-400 text-sm mt-1">${finalTotal.toFixed(2)} USD</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400 text-xs">USD</p>
+                  <p className="text-3xl font-bold text-white">${finalTotal.toFixed(2)}</p>
+                </>
+              )}
+              {safeDiscount > 0 && (
+                <p className="text-red-400 text-sm mt-1">-{safeDiscount}% ({t('discount')}: ${discountAmount.toFixed(2)})</p>
+              )}
             </div>
 
+            {/* Discount */}
+            <div className="flex items-center gap-3 bg-slate-900 rounded-lg p-3">
+              <label className="text-sm text-slate-300 whitespace-nowrap">{t('discount')} %</label>
+              <Input
+                type="number"
+                min="0"
+                max={maxDiscountPercent}
+                value={discountPercent}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value) || 0;
+                  if (v > maxDiscountPercent) {
+                    toast.error(`${t('discount')} max ${maxDiscountPercent}% (${t('costPrice')})`);
+                    setDiscountPercent(maxDiscountPercent);
+                  } else {
+                    setDiscountPercent(Math.max(0, v));
+                  }
+                }}
+                className="bg-slate-700 border-slate-600 w-24 text-center"
+                data-testid="discount-input"
+              />
+              <span className="text-xs text-slate-500">max {maxDiscountPercent}%</span>
+              {discountPercent > 0 && (
+                <span className="text-red-400 text-sm">-${discountAmount.toFixed(2)}</span>
+              )}
+            </div>
+
+            {/* Payment Methods Table */}
             <div className="space-y-2">
               <label className="text-sm text-slate-300">{t('paymentMethod')}</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: 'cash', label: t('cash'), icon: '💵' },
-                  { id: 'card', label: t('card'), icon: '💳' },
-                  { id: 'transfer', label: 'Transfer', icon: '📱' }
+                  { id: 'cash', label: t('cash'), key: 'F5', active: 'border-emerald-500 bg-emerald-500/10' },
+                  { id: 'card', label: t('card'), key: 'F6', active: 'border-blue-500 bg-blue-500/10' },
+                  { id: 'biopago', label: 'Biopago', key: 'F7', active: 'border-purple-500 bg-purple-500/10' },
+                  { id: 'transfer', label: 'Transfer', key: 'F8', active: 'border-yellow-500 bg-yellow-500/10' }
                 ].map(method => (
                   <div
                     key={method.id}
                     onClick={() => setPaymentMethod(method.id)}
-                    className={`p-3 rounded-lg border cursor-pointer text-center transition-colors ${
+                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                       paymentMethod === method.id 
-                        ? 'border-green-500 bg-green-500/10' 
+                        ? method.active
                         : 'border-slate-600 hover:border-slate-500'
                     }`}
+                    data-testid={`pay-method-${method.id}`}
                   >
-                    <span className="text-2xl">{method.icon}</span>
-                    <p className="text-sm mt-1">{method.label}</p>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-medium ${paymentMethod === method.id ? 'text-white' : 'text-slate-300'}`}>{method.label}</span>
+                      <kbd className="px-1.5 py-0.5 text-xs bg-slate-700 text-slate-400 rounded">{method.key}</kbd>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* Cash: received + change */}
             {paymentMethod === 'cash' && (
               <div className="space-y-2">
                 <label className="text-sm text-slate-300">{t('received')}</label>
@@ -4112,11 +4244,14 @@ const POSPage = () => {
                   className="bg-slate-700 border-slate-600 text-2xl text-center"
                   placeholder="0.00"
                   data-testid="pos-received-amount"
+                  autoFocus
                 />
                 {receivedAmount && change >= 0 && (
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
                     <p className="text-sm text-slate-400">{t('change')}</p>
-                    <p className="text-2xl font-bold text-green-400">{getPriceSymbol()}{change.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-green-400">
+                      {showBs ? `Bs.${(change * (exchangeRates.usd_to_ves || 1)).toFixed(2)} / $${change.toFixed(2)}` : `$${change.toFixed(2)}`}
+                    </p>
                   </div>
                 )}
               </div>
@@ -4124,7 +4259,7 @@ const POSPage = () => {
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <Button variant="outline" onClick={() => setShowPayment(false)} className="border-slate-600">
-                {t('cancel')}
+                ESC {t('cancel')}
               </Button>
               <Button 
                 onClick={handlePayment} 

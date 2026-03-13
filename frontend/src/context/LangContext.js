@@ -67,6 +67,10 @@ const translations = {
     received_status: "已入库", pending: "待处理",
     // Language
     language: "语言", chinese: "中文", english: "English", spanish: "Español",
+    // Extra
+    discount: "折扣", orderDetail: "订单明细", shipping: "运费",
+    paid: "已付", processing: "处理中", shipped: "已发货", completed: "已完成",
+    customer: "客户", date: "日期", stock: "库存",
   },
   en: {
     save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add",
@@ -120,6 +124,9 @@ const translations = {
     purchaseOrder: "Purchase Order", supplier: "Supplier", totalAmount: "Total",
     received_status: "Received", pending: "Pending",
     language: "Language", chinese: "中文", english: "English", spanish: "Español",
+    discount: "Discount", orderDetail: "Order Detail", shipping: "Shipping",
+    paid: "Paid", processing: "Processing", shipped: "Shipped", completed: "Completed",
+    customer: "Customer", date: "Date", stock: "Stock",
   },
   es: {
     save: "Guardar", cancel: "Cancelar", delete: "Eliminar", edit: "Editar", add: "Agregar",
@@ -173,6 +180,9 @@ const translations = {
     purchaseOrder: "Orden de Compra", supplier: "Proveedor", totalAmount: "Total",
     received_status: "Recibido", pending: "Pendiente",
     language: "Idioma", chinese: "中文", english: "English", spanish: "Español",
+    discount: "Descuento", orderDetail: "Detalle del Pedido", shipping: "Envío",
+    paid: "Pagado", processing: "Procesando", shipped: "Enviado", completed: "Completado",
+    customer: "Cliente", date: "Fecha", stock: "Stock",
   }
 };
 
