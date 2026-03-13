@@ -2855,7 +2855,7 @@ const POSPage = () => {
   const getPriceSymbol = () => {
     switch (priceMode) {
       case "price2": return "Bs.";
-      case "wholesale": return "$ Mayor";
+      case "wholesale": return "$";
       default: return "$";
     }
   };
@@ -2863,8 +2863,8 @@ const POSPage = () => {
   const handlePriceModeChange = (mode) => {
     setPriceMode(mode);
     localStorage.setItem("pos_price_mode", mode);
-    // Update cart prices
-    setCart(cart.map(item => {
+    // Update cart prices using functional update to avoid stale closure
+    setCart(prevCart => prevCart.map(item => {
       const newPrice = getProductPriceByMode(item.product, mode);
       return { ...item, unit_price: newPrice, amount: item.quantity * newPrice };
     }));
@@ -3275,7 +3275,7 @@ const POSPage = () => {
                       <span className="text-white w-8 text-center">{item.quantity}</span>
                       <Button size="sm" variant="outline" className="w-8 h-8 p-0 border-slate-600" onClick={() => updateQuantity(item.product_id, 1)}>+</Button>
                     </div>
-                    <p className="text-blue-400 font-bold">${item.amount?.toFixed(2)}</p>
+                    <p className="text-blue-400 font-bold">{getPriceSymbol()}{item.amount?.toFixed(2)}</p>
                   </div>
                 </div>
               ))
@@ -3359,7 +3359,7 @@ const POSPage = () => {
                 {receivedAmount && change >= 0 && (
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
                     <p className="text-sm text-slate-400">Cambio / 找零</p>
-                    <p className="text-2xl font-bold text-green-400">${change.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-green-400">{getPriceSymbol()}{change.toFixed(2)}</p>
                   </div>
                 )}
               </div>
