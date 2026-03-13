@@ -48,19 +48,26 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 - [x] **A4 Invoice** (2026-03-13): Print from POS or Sales management
 - [x] **Price Labels** (2026-03-13): Select products → print labels (3-col grid, triple price)
 
+- [x] **12-Point Enhancement Plan** (2026-03-13): All 12 items completed
+  - New pages: Customers, Suppliers, Categories, Daily Settlement, Marketing
+  - Reports page with bar charts and pie chart (payment method distribution)
+  - Sales page search/filter, POS customer selection, ShopPage Bs. currency
+  - Reports pie chart fix: added by_payment_method to backend sales-summary API
+  - Added topProducts translation key (zh/en/es)
+
 ## P1 - Next Tasks
-- Verify POS pricing logic correctness (user previously reported issues)
+- Offline Mode sync logic (queue sales offline, auto-sync on reconnection)
 - Wholesale Module
 - Backend server.py refactoring into API routers
 
 ## P2 - Future Tasks
-- Enhanced Reporting with charts
-- UI/UX polish
+- UI/UX polish across the app
 - Product images upload
+- Enhanced reporting (complex filters, exports)
 
 ## Test Credentials
 - Username: admin / Password: admin123
 
 ## Test Reports
-- /app/test_reports/iteration_11.json (refactoring - 100% pass)
-- /app/test_reports/iteration_12.json (print features - 95% pass)
+- /app/test_reports/iteration_8.json, iteration_9.json, iteration_10.json (previous session)
+- /app/test_reports/iteration_14.json (reports pie chart fix - 100% pass)
