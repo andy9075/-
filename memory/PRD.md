@@ -5,12 +5,12 @@ Backend: FastAPI + MongoDB | Frontend: React + TailwindCSS + Shadcn/UI | Auth: J
 
 ## Implemented Features
 
-### POS Cashier - Full Screen Layout (Updated 2026-03-13)
-- **Full-screen cart table**: columns #, 商品名称, 数量(±), 价格类型(↑↓), 单价, 金额
-- **Product search popup**: Search by barcode/name, category tabs (全部/分类), click to add
-- **Per-item price arrows**: ↑↓ cycle through 价格1→价格2→整箱
-- **Currency toggle**: Header ↑↓ arrows switch $/Bs., converts all prices
-- **Box calculation**: Shows detail e.g., "3×$12.00=$36.00"
+### POS Cashier - Full Screen Layout
+- Full-screen cart table: #, 商品名称, 数量(±), 价格类型(↑↓), 单价, 金额
+- Product search popup: TABLE format (编码/商品名称/成本/价格1/价格2/价格3/操作+), category tabs
+- Per-item price arrows: ↑↓ cycle through 价格1→价格2→整箱
+- Currency toggle: Header ↑↓ arrows switch $/Bs.
+- Box calculation: Shows `12×$12.00=$144.00` format, works in both $ and Bs. modes
 
 ### Multi-Price System
 - Cost + Margin: cost × (1+margin%) = auto-calculated price
@@ -18,20 +18,19 @@ Backend: FastAPI + MongoDB | Frontend: React + TailwindCSS + Shadcn/UI | Auth: J
 - Admin form: input cost + 3 margins with real-time calculation
 
 ### Warehouse Transfer
-- /admin/transfers: source→destination warehouse transfer
+- /admin/transfers: searchable product dropdown for transfers
 - Inventory overview: product × warehouse stock matrix
 - Transfer history logs
 
 ### Online Store
 - Product catalog, cart, checkout (Bank Transfer, Pago Móvil)
-- Order tracking: /shop/orders with full item details (product name, qty, price)
-- WhatsApp click-to-chat
+- Order tracking with full item details
 
 ### Admin Panel
 - Dashboard, store/warehouse/product/category/customer/supplier CRUD
 - Exchange rates, payment settings, online order management
+- Fixed: toast spam from auth errors (removed StrictMode + auth error filtering)
 
-## Testing: iteration_5.json - 57/57 backend + full frontend passed
 ## Credentials: admin / admin123
 
 ## Backlog

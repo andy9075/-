@@ -1811,6 +1811,7 @@ const TransferPage = () => {
   const [inventory, setInventory] = useState([]);
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [productSearch, setProductSearch] = useState("");
   const [formData, setFormData] = useState({
     from_warehouse_id: "", to_warehouse_id: "", product_id: "", quantity: 1
   });
@@ -1908,16 +1909,31 @@ const TransferPage = () => {
                   <span className="text-yellow-400 ml-1">(库存: {getStock(formData.product_id, formData.from_warehouse_id)})</span>
                 )}
               </label>
-              <Select value={formData.product_id} onValueChange={(v) => setFormData({...formData, product_id: v})}>
-                <SelectTrigger className="bg-slate-700 border-slate-600" data-testid="transfer-product">
-                  <SelectValue placeholder="选择商品" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.name} ({p.code})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Input
+                  placeholder="搜索商品名称/编码..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-white" data-testid="transfer-product-search"
+                />
+                {productSearch && (
+                  <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-slate-700 border border-slate-600 rounded-lg max-h-48 overflow-y-auto shadow-xl">
+                    {products.filter(p => 
+                      p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+                      p.code.toLowerCase().includes(productSearch.toLowerCase())
+                    ).map(p => (
+                      <div key={p.id} onClick={() => { setFormData({...formData, product_id: p.id}); setProductSearch(p.name); }}
+                        className="px-3 py-2 hover:bg-slate-600 cursor-pointer flex justify-between">
+                        <span className="text-white text-sm">{p.name}</span>
+                        <span className="text-slate-400 text-xs">{p.code}</span>
+                      </div>
+                    ))}
+                    {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()) || p.code.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                      <p className="text-slate-400 text-sm text-center py-2">无结果</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-sm text-slate-300 block mb-1">数量</label>
@@ -3500,26 +3516,50 @@ const POSPage = () => {
                 </Button>
               ))}
             </div>
-            {/* Product List */}
-            <div className="overflow-y-auto p-2 flex-1">
-              <div className="grid grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
-                {filteredProducts.map(product => (
-                  <div key={product.id}
-                    onClick={() => { addToCart(product); setSearchTerm(''); setShowProductSearch(false); }}
-                    className="bg-slate-700/50 border border-slate-600 rounded-lg p-2 cursor-pointer hover:bg-slate-600 hover:border-blue-500 transition-all text-center"
-                    data-testid={`pos-product-${product.id}`}
-                  >
-                    <p className="text-white text-xs font-medium truncate">{product.name}</p>
-                    <p className="text-slate-400 text-[10px]">{product.code}</p>
-                    <p className="text-emerald-400 text-xs font-bold mt-1">
-                      {getPriceSymbol()}{getProductPrice(product).toFixed(2)}
-                    </p>
-                  </div>
-                ))}
-                {filteredProducts.length === 0 && (
-                  <p className="text-slate-400 text-sm col-span-full text-center py-4">没有找到商品</p>
-                )}
-              </div>
+            {/* Product Table */}
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full">
+                <thead className="bg-slate-700/50 sticky top-0">
+                  <tr className="text-slate-400 text-xs">
+                    <th className="text-left px-3 py-2">编码</th>
+                    <th className="text-left px-3 py-2">商品名称</th>
+                    <th className="text-right px-3 py-2">成本</th>
+                    <th className="text-right px-3 py-2">价格1</th>
+                    <th className="text-right px-3 py-2">价格2</th>
+                    <th className="text-right px-3 py-2">价格3(整箱)</th>
+                    <th className="text-center px-3 py-2 w-16">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.map(product => {
+                    const p1 = product.price1 || product.retail_price || 0;
+                    const p2 = product.price2 || p1;
+                    const p3 = product.price3 || product.wholesale_price || p1;
+                    return (
+                      <tr key={product.id}
+                        className="border-b border-slate-700/50 hover:bg-slate-700/50 cursor-pointer"
+                        onClick={() => { addToCart(product); setSearchTerm(''); setShowProductSearch(false); }}
+                        data-testid={`pos-product-${product.id}`}
+                      >
+                        <td className="px-3 py-2 text-slate-400 text-xs">{product.code}</td>
+                        <td className="px-3 py-2 text-white text-sm font-medium">{product.name}</td>
+                        <td className="px-3 py-2 text-right text-slate-500 text-xs">${(product.cost_price || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-emerald-400 text-xs font-medium">${p1.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-yellow-400 text-xs font-medium">${p2.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-blue-400 text-xs font-medium">${p3.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-center">
+                          <Button size="sm" className="h-6 w-6 p-0 bg-blue-500 hover:bg-blue-600" onClick={(e) => { e.stopPropagation(); addToCart(product); }}>
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredProducts.length === 0 && (
+                    <tr><td colSpan="7" className="text-slate-400 text-sm text-center py-4">没有找到商品</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
             {/* Close button */}
             <div className="p-2 border-t border-slate-700 text-right">
@@ -3588,19 +3628,28 @@ const POSPage = () => {
                         <td className="px-4 py-3">
                           <p className="text-white text-sm font-medium">{item.product.name}</p>
                           <p className="text-slate-500 text-xs">{item.product.code}</p>
-                          {/* Box detail line */}
-                          {isBoxMode && boxQty > 1 && (
-                            <p className="text-blue-300 text-xs mt-0.5">
-                              {boxes > 0 && <span>{boxes}箱×{getPriceSymbol()}{(showBs ? (item.product.price3||item.product.wholesale_price||0)*(exchangeRates.usd_to_ves||1) : (item.product.price3||item.product.wholesale_price||0)).toFixed(2)}={getPriceSymbol()}{(showBs ? boxes*(item.product.price3||item.product.wholesale_price||0)*(exchangeRates.usd_to_ves||1) : boxes*(item.product.price3||item.product.wholesale_price||0)).toFixed(2)}</span>}
-                              {boxes > 0 && remainder > 0 && " + "}
-                              {remainder > 0 && <span>{remainder}件×{getPriceSymbol()}{(showBs ? (item.product.price2||item.product.price1||item.product.retail_price||0)*(exchangeRates.usd_to_ves||1) : (item.product.price2||item.product.price1||item.product.retail_price||0)).toFixed(2)}={getPriceSymbol()}{(showBs ? remainder*(item.product.price2||item.product.price1||item.product.retail_price||0)*(exchangeRates.usd_to_ves||1) : remainder*(item.product.price2||item.product.price1||item.product.retail_price||0)).toFixed(2)}</span>}
-                            </p>
-                          )}
-                          {isBoxMode && boxQty <= 1 && (
-                            <p className="text-blue-300 text-xs mt-0.5">
-                              {item.quantity}×{getPriceSymbol()}{(showBs ? (item.product.price3||item.product.wholesale_price||0)*(exchangeRates.usd_to_ves||1) : (item.product.price3||item.product.wholesale_price||0)).toFixed(2)}={getPriceSymbol()}{displayAmount.toFixed(2)}
-                            </p>
-                          )}
+                          {/* Box calculation: 数量×单价=金额 */}
+                          {isBoxMode && (() => {
+                            const rate = exchangeRates.usd_to_ves || 1;
+                            const p3 = item.product.price3 || item.product.wholesale_price || 0;
+                            const p2 = item.product.price2 || item.product.price1 || item.product.retail_price || 0;
+                            if (boxQty > 1) {
+                              const boxAmt = boxes * p3;
+                              const remAmt = remainder * p2;
+                              return (
+                                <p className="text-blue-300 text-xs mt-0.5">
+                                  {boxes > 0 && <span>{boxes}箱×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{(showBs ? boxAmt*rate : boxAmt).toFixed(2)}</span>}
+                                  {boxes > 0 && remainder > 0 && " + "}
+                                  {remainder > 0 && <span>{remainder}件×{getPriceSymbol()}{(showBs ? p2*rate : p2).toFixed(2)}={getPriceSymbol()}{(showBs ? remAmt*rate : remAmt).toFixed(2)}</span>}
+                                </p>
+                              );
+                            }
+                            return (
+                              <p className="text-blue-300 text-xs mt-0.5">
+                                {item.quantity}×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{displayAmount.toFixed(2)}
+                              </p>
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-3">
                           <div className="flex items-center justify-center gap-1">
