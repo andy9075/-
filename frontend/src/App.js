@@ -95,6 +95,7 @@ const LoginPage = () => {
   const [password, setPassword] = useState("admin123");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const { t } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -105,9 +106,9 @@ const LoginPage = () => {
       await login(username, password);
       const from = location.state?.from || "/admin";
       navigate(from);
-      toast.success("登录成功");
+      toast.success(t('login') + " OK");
     } catch (error) {
-      toast.error(error.response?.data?.detail || "登录失败");
+      toast.error(error.response?.data?.detail || t('login') + " failed");
     } finally {
       setIsLoading(false);
     }
@@ -120,28 +121,28 @@ const LoginPage = () => {
           <div className="mx-auto w-16 h-16 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mb-4">
             <Store className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl text-white">POS管理系统</CardTitle>
-          <p className="text-slate-400 text-sm">多店铺·多仓库·网店管理</p>
+          <CardTitle className="text-2xl text-white">POS</CardTitle>
+          <p className="text-slate-400 text-sm">{t('storeManagement')} · {t('warehouseManagement')}</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-sm text-slate-300 mb-1 block">用户名</label>
+              <label className="text-sm text-slate-300 mb-1 block">{t('username')}</label>
               <Input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="请输入用户名"
+                placeholder={t('username')}
                 className="bg-slate-700/50 border-slate-600 text-white"
                 data-testid="login-username"
               />
             </div>
             <div>
-              <label className="text-sm text-slate-300 mb-1 block">密码</label>
+              <label className="text-sm text-slate-300 mb-1 block">{t('password')}</label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="请输入密码"
+                placeholder={t('password')}
                 className="bg-slate-700/50 border-slate-600 text-white"
                 data-testid="login-password"
               />
@@ -152,10 +153,10 @@ const LoginPage = () => {
               disabled={isLoading}
               data-testid="login-submit"
             >
-              {isLoading ? "登录中..." : "登录"}
+              {isLoading ? t('loading') : t('login')}
             </Button>
             <p className="text-center text-slate-400 text-xs mt-4">
-              管理员: admin / admin123
+              admin / admin123
             </p>
           </form>
         </CardContent>
@@ -269,6 +270,7 @@ const AdminLayout = ({ children }) => {
 
 // Dashboard
 const Dashboard = () => {
+  const { t } = useLang();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -287,20 +289,20 @@ const Dashboard = () => {
     }
   };
 
-  if (loading) return <div className="text-white">加载中...</div>;
+  if (loading) return <div className="text-white">{t('loading')}</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">仪表盘</h1>
+      <h1 className="text-2xl font-bold text-white">{t('dashboard')}</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border-emerald-500/30">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-emerald-300 text-sm">今日销售额</p>
+                <p className="text-emerald-300 text-sm">{t('todaySales')}</p>
                 <p className="text-2xl font-bold text-white mt-1">${stats?.today_sales_amount?.toFixed(2) || '0.00'}</p>
-                <p className="text-emerald-400 text-xs mt-1">{stats?.today_sales_count || 0} 笔订单</p>
+                <p className="text-emerald-400 text-xs mt-1">{stats?.today_sales_count || 0} {t('items')}</p>
               </div>
               <DollarSign className="w-12 h-12 text-emerald-400" />
             </div>
@@ -311,9 +313,9 @@ const Dashboard = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-300 text-sm">网店订单</p>
+                <p className="text-blue-300 text-sm">{t('onlineOrderTotal')}</p>
                 <p className="text-2xl font-bold text-white mt-1">${stats?.today_online_amount?.toFixed(2) || '0.00'}</p>
-                <p className="text-blue-400 text-xs mt-1">{stats?.today_online_count || 0} 笔订单</p>
+                <p className="text-blue-400 text-xs mt-1">{stats?.today_online_count || 0} {t('items')}</p>
               </div>
               <Globe className="w-12 h-12 text-blue-400" />
             </div>
@@ -324,9 +326,9 @@ const Dashboard = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-purple-300 text-sm">商品总数</p>
+                <p className="text-purple-300 text-sm">{t('totalProducts')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{stats?.products_count || 0}</p>
-                <p className="text-purple-400 text-xs mt-1">在售商品</p>
+                <p className="text-purple-400 text-xs mt-1">{t('active')}</p>
               </div>
               <Package className="w-12 h-12 text-purple-400" />
             </div>
@@ -337,9 +339,9 @@ const Dashboard = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-orange-300 text-sm">待处理订单</p>
+                <p className="text-orange-300 text-sm">{t('pendingOrders')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{stats?.pending_online_orders || 0}</p>
-                <p className="text-orange-400 text-xs mt-1">网店待发货</p>
+                <p className="text-orange-400 text-xs mt-1">{t('onlineOrders')}</p>
               </div>
               <AlertCircle className="w-12 h-12 text-orange-400" />
             </div>
@@ -350,27 +352,27 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">快捷操作</CardTitle>
+            <CardTitle className="text-white">{t('quickActions')}</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             <Link to="/admin/products">
               <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white">
-                <Package className="w-4 h-4 mr-2" /> 商品管理
+                <Package className="w-4 h-4 mr-2" /> {t('productManagement')}
               </Button>
             </Link>
             <Link to="/admin/online-orders">
               <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white">
-                <Globe className="w-4 h-4 mr-2" /> 网店订单
+                <Globe className="w-4 h-4 mr-2" /> {t('onlineOrders')}
               </Button>
             </Link>
             <Link to="/admin/warehouses">
               <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white">
-                <Warehouse className="w-4 h-4 mr-2" /> 库存管理
+                <Warehouse className="w-4 h-4 mr-2" /> {t('warehouseManagement')}
               </Button>
             </Link>
             <Link to="/admin/reports">
               <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white">
-                <BarChart3 className="w-4 h-4 mr-2" /> 查看报表
+                <BarChart3 className="w-4 h-4 mr-2" /> {t('reports')}
               </Button>
             </Link>
           </CardContent>
@@ -378,19 +380,19 @@ const Dashboard = () => {
 
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">系统信息</CardTitle>
+            <CardTitle className="text-white">{t('reports')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between text-slate-300">
-              <span>门店数量</span>
+              <span>{t('storeManagement')}</span>
               <span className="text-white font-medium">{stats?.stores_count || 0}</span>
             </div>
             <div className="flex justify-between text-slate-300">
-              <span>客户数量</span>
+              <span>{t('customerManagement')}</span>
               <span className="text-white font-medium">{stats?.customers_count || 0}</span>
             </div>
             <div className="flex justify-between text-slate-300">
-              <span>商品数量</span>
+              <span>{t('productManagement')}</span>
               <span className="text-white font-medium">{stats?.products_count || 0}</span>
             </div>
           </CardContent>
@@ -402,6 +404,7 @@ const Dashboard = () => {
 
 // Products Management
 const ProductsPage = () => {
+  const { t } = useLang();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -487,9 +490,9 @@ const ProductsPage = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">商品管理</h1>
+        <h1 className="text-2xl font-bold text-white">{t('productManagement')}</h1>
         <Button onClick={() => { resetForm(); setEditingProduct(null); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-product-btn">
-          <Plus className="w-4 h-4 mr-2" /> 添加商品
+          <Plus className="w-4 h-4 mr-2" /> {t('addProduct')}
         </Button>
       </div>
 
@@ -497,7 +500,7 @@ const ProductsPage = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
-            placeholder="搜索商品名称、编码..."
+            placeholder={t('searchProduct')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && fetchProducts()}
@@ -511,16 +514,16 @@ const ProductsPage = () => {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-300">编码</TableHead>
-              <TableHead className="text-slate-300">商品名称</TableHead>
-              <TableHead className="text-slate-300">成本价</TableHead>
-              <TableHead className="text-slate-300">利率1%</TableHead>
-              <TableHead className="text-slate-300">价格1</TableHead>
-              <TableHead className="text-slate-300">利率2%</TableHead>
-              <TableHead className="text-slate-300">价格2</TableHead>
-              <TableHead className="text-slate-300">利率3%</TableHead>
-              <TableHead className="text-slate-300">价格3(整箱)</TableHead>
-              <TableHead className="text-slate-300">操作</TableHead>
+              <TableHead className="text-slate-300">{t('productCode')}</TableHead>
+              <TableHead className="text-slate-300">{t('productName')}</TableHead>
+              <TableHead className="text-slate-300">{t('costPrice')}</TableHead>
+              <TableHead className="text-slate-300">{t('margin')}1%</TableHead>
+              <TableHead className="text-slate-300">{t('price1')}</TableHead>
+              <TableHead className="text-slate-300">{t('margin')}2%</TableHead>
+              <TableHead className="text-slate-300">{t('price2')}</TableHead>
+              <TableHead className="text-slate-300">{t('margin')}3%</TableHead>
+              <TableHead className="text-slate-300">{t('price3Box')}</TableHead>
+              <TableHead className="text-slate-300">{t('status')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -537,7 +540,7 @@ const ProductsPage = () => {
                 <TableCell className="text-blue-400">${(product.price3 || product.wholesale_price || 0).toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge variant={product.status === 'active' ? 'default' : 'secondary'}>
-                    {product.status === 'active' ? '在售' : '下架'}
+                    {product.status === 'active' ? t('active') : t('inactive')}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -559,26 +562,26 @@ const ProductsPage = () => {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingProduct ? '编辑商品' : '添加商品'}</DialogTitle>
+            <DialogTitle>{editingProduct ? t('editProduct') : t('addProduct')}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-slate-300">商品编码</label>
+              <label className="text-sm text-slate-300">{t('productCode')}</label>
               <Input value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="product-code" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">条码</label>
+              <label className="text-sm text-slate-300">Barcode</label>
               <Input value={formData.barcode} onChange={(e) => setFormData({...formData, barcode: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
             <div className="col-span-2">
-              <label className="text-sm text-slate-300">商品名称</label>
+              <label className="text-sm text-slate-300">{t('productName')}</label>
               <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="product-name" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">分类</label>
+              <label className="text-sm text-slate-300">{t('category')}</label>
               <Select value={formData.category_id} onValueChange={(v) => setFormData({...formData, category_id: v})}>
                 <SelectTrigger className="bg-slate-700 border-slate-600">
-                  <SelectValue placeholder="选择分类" />
+                  <SelectValue placeholder={t('category')} />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map(cat => (
@@ -588,14 +591,14 @@ const ProductsPage = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-slate-300">单位</label>
+              <label className="text-sm text-slate-300">{t('unit')}</label>
               <Input value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
             <div className="col-span-2 bg-slate-900 rounded-lg p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-emerald-400">价格设置 (成本 × (1 + 利率%))</h4>
+              <h4 className="text-sm font-semibold text-emerald-400">{t('priceSettings')} ({t('marginFormula')})</h4>
               <div className="grid grid-cols-4 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400">成本价 ($)</label>
+                  <label className="text-xs text-slate-400">{t('costPrice')} ($)</label>
                   <Input type="number" step="0.01" value={formData.cost_price} onChange={(e) => {
                     const cost = parseFloat(e.target.value) || 0;
                     const m1 = formData.margin1 || 0;
@@ -611,54 +614,54 @@ const ProductsPage = () => {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">利率1 (%)</label>
+                  <label className="text-xs text-slate-400">{t('margin')}1 (%)</label>
                   <Input type="number" step="0.1" value={formData.margin1} onChange={(e) => {
                     const m = parseFloat(e.target.value) || 0;
                     const cost = formData.cost_price || 0;
                     setFormData({...formData, margin1: m, price1: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price1});
                   }} className="bg-slate-700 border-slate-600" data-testid="product-margin1" />
-                  <div className="text-xs text-emerald-400 font-medium">价格1: ${(formData.price1 || 0).toFixed(2)}</div>
+                  <div className="text-xs text-emerald-400 font-medium">{t('price1')}: ${(formData.price1 || 0).toFixed(2)}</div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">利率2 (%)</label>
+                  <label className="text-xs text-slate-400">{t('margin')}2 (%)</label>
                   <Input type="number" step="0.1" value={formData.margin2} onChange={(e) => {
                     const m = parseFloat(e.target.value) || 0;
                     const cost = formData.cost_price || 0;
                     setFormData({...formData, margin2: m, price2: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price2});
                   }} className="bg-slate-700 border-slate-600" data-testid="product-margin2" />
-                  <div className="text-xs text-yellow-400 font-medium">价格2: ${(formData.price2 || 0).toFixed(2)}</div>
+                  <div className="text-xs text-yellow-400 font-medium">{t('price2')}: ${(formData.price2 || 0).toFixed(2)}</div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">利率3 (%) 整箱价</label>
+                  <label className="text-xs text-slate-400">{t('margin')}3 (%) {t('box')}</label>
                   <Input type="number" step="0.1" value={formData.margin3} onChange={(e) => {
                     const m = parseFloat(e.target.value) || 0;
                     const cost = formData.cost_price || 0;
                     setFormData({...formData, margin3: m, price3: cost > 0 && m > 0 ? Math.round(cost * (1 + m/100) * 100) / 100 : formData.price3});
                   }} className="bg-slate-700 border-slate-600" data-testid="product-margin3" />
-                  <div className="text-xs text-blue-400 font-medium">价格3(整箱): ${(formData.price3 || 0).toFixed(2)}</div>
+                  <div className="text-xs text-blue-400 font-medium">{t('price3Box')}: ${(formData.price3 || 0).toFixed(2)}</div>
                 </div>
               </div>
             </div>
             <div>
-              <label className="text-sm text-slate-300">每箱数量</label>
+              <label className="text-sm text-slate-300">{t('boxQuantity')}</label>
               <Input type="number" value={formData.box_quantity} onChange={(e) => setFormData({...formData, box_quantity: parseInt(e.target.value) || 1})} className="bg-slate-700 border-slate-600" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">状态</label>
+              <label className="text-sm text-slate-300">{t('status')}</label>
               <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}>
                 <SelectTrigger className="bg-slate-700 border-slate-600">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">在售</SelectItem>
-                  <SelectItem value="inactive">下架</SelectItem>
+                  <SelectItem value="active">{t('active')}</SelectItem>
+                  <SelectItem value="inactive">{t('inactive')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">取消</Button>
-            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600" data-testid="product-submit">保存</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button>
+            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600" data-testid="product-submit">{t('save')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -3070,11 +3073,11 @@ function AppContent() {
           <Route path="/admin/online-orders" element={
             <ProtectedRoute>
               <AdminLayout><OnlineOrdersPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
           <Route path="/admin/sales-report" element={
             <ProtectedRoute>
               <AdminLayout><SalesReportPage /></AdminLayout>
-            </ProtectedRoute>
-          } />
             </ProtectedRoute>
           } />
           <Route path="/admin/reports" element={
@@ -3433,7 +3436,7 @@ const POSPage = () => {
       await fetchData(res.data.token);
       setShowLogin(false);
     } catch (e) {
-      toast.error("Usuario o contraseña incorrectos");
+      toast.error(t('login') + " failed");
     }
   };
 
@@ -3454,7 +3457,7 @@ const POSPage = () => {
     };
     setShift(newShift);
     localStorage.setItem("pos_shift", JSON.stringify(newShift));
-    toast.success("Turno iniciado / 已当班");
+    toast.success(t('startShift'));
   };
 
   const handleEndShift = () => {
@@ -3465,7 +3468,7 @@ const POSPage = () => {
     localStorage.removeItem("pos_shift");
     setShift(null);
     setShowShiftModal(false);
-    toast.success("Turno finalizado / 已交班");
+    toast.success(t('endShift'));
   };
 
   const handleLogout = () => {
@@ -3618,38 +3621,38 @@ const POSPage = () => {
             <div className="mx-auto w-20 h-20 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mb-4">
               <CreditCard className="w-10 h-10 text-white" />
             </div>
-            <CardTitle className="text-2xl text-white">POS - Caja</CardTitle>
-            <p className="text-slate-400">Sistema de Punto de Venta</p>
+            <CardTitle className="text-2xl text-white">POS</CardTitle>
+            <p className="text-slate-400">{t('posTitle')}</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="text-sm text-slate-300">Usuario / 用户名</label>
+              <label className="text-sm text-slate-300">{t('username')}</label>
               <Input
                 value={loginForm.username}
                 onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
                 className="bg-slate-700 border-slate-600 text-white"
-                placeholder="Ingrese usuario"
+                placeholder={t('username')}
                 data-testid="pos-username"
               />
             </div>
             <div>
-              <label className="text-sm text-slate-300">Contraseña / 密码</label>
+              <label className="text-sm text-slate-300">{t('password')}</label>
               <Input
                 type="password"
                 value={loginForm.password}
                 onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
                 className="bg-slate-700 border-slate-600 text-white"
-                placeholder="Ingrese contraseña"
+                placeholder={t('password')}
                 data-testid="pos-password"
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               />
             </div>
             <Button onClick={handleLogin} className="w-full bg-blue-500 hover:bg-blue-600" data-testid="pos-login-btn">
-              Iniciar Sesión / 登录
+              {t('login')}
             </Button>
             <div className="text-center">
               <Link to="/admin" className="text-slate-400 hover:text-white text-sm">
-                Ir al Panel Admin →
+                Admin →
               </Link>
             </div>
           </CardContent>
@@ -3664,7 +3667,7 @@ const POSPage = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-lg bg-slate-800/80 border-slate-700 backdrop-blur">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl text-white">Seleccionar Tienda / 选择门店</CardTitle>
+            <CardTitle className="text-xl text-white">{t('storeManagement')}</CardTitle>
             <p className="text-slate-400">{user?.name || user?.username}</p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -3675,14 +3678,14 @@ const POSPage = () => {
                 className="p-4 bg-slate-700/50 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors border border-slate-600"
               >
                 <p className="text-white font-medium">{store.name}</p>
-                <p className="text-slate-400 text-sm">{store.code} - {store.address || 'Sin dirección'}</p>
+                <p className="text-slate-400 text-sm">{store.code} - {store.address || ''}</p>
               </div>
             ))}
             {stores.length === 0 && (
-              <p className="text-slate-400 text-center py-4">No hay tiendas configuradas</p>
+              <p className="text-slate-400 text-center py-4">{t('noData')}</p>
             )}
             <Button variant="outline" onClick={handleLogout} className="w-full mt-4 border-slate-600 text-slate-300">
-              Cerrar Sesión / 退出
+              {t('logout')}
             </Button>
           </CardContent>
         </Card>
@@ -3705,9 +3708,24 @@ const POSPage = () => {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          {/* Language Switcher */}
+          <div className="flex gap-0.5">
+            {[{k:'zh',l:'中'},{k:'en',l:'EN'},{k:'es',l:'ES'}].map(({k,l}) => (
+              <button key={k} onClick={() => changeLang(k)}
+                className={`px-1.5 py-0.5 text-xs rounded ${lang === k ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                data-testid={`pos-lang-${k}`}
+              >{l}</button>
+            ))}
+          </div>
+          {/* Online/Offline Indicator */}
+          <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`} data-testid="online-status">
+            {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+            {isOnline ? t('online') : t('offline')}
+            {pendingOrders.length > 0 && <Badge className="ml-1 bg-orange-500 text-white text-xs px-1 py-0">{pendingOrders.length}</Badge>}
+          </div>
           {/* Currency Toggle - Up/Down */}
           <div className="flex items-center gap-1 bg-slate-700 rounded-lg px-2 py-1">
-            <span className="text-xs text-slate-400 mr-1">币种</span>
+            <span className="text-xs text-slate-400 mr-1">{t('currency')}</span>
             <span className={`text-sm font-bold min-w-[36px] text-center ${showBs ? 'text-orange-400' : 'text-emerald-400'}`}>
               {showBs ? 'Bs.' : '$'}
             </span>
@@ -3722,18 +3740,18 @@ const POSPage = () => {
           </div>
           {shift ? (
             <Badge className="bg-green-500/20 text-green-400 text-xs">
-              Turno desde {new Date(shift.start_time).toLocaleTimeString()}
+              {t('shiftSince')} {new Date(shift.start_time).toLocaleTimeString()}
             </Badge>
           ) : (
-            <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">Sin Turno</Badge>
+            <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">{t('noShift')}</Badge>
           )}
           {!shift ? (
             <Button size="sm" onClick={handleStartShift} className="bg-green-600 hover:bg-green-700 h-7 text-xs" data-testid="start-shift-btn">
-              当班
+              {t('startShift')}
             </Button>
           ) : (
             <Button size="sm" onClick={handleEndShift} className="bg-orange-600 hover:bg-orange-700 h-7 text-xs" data-testid="end-shift-btn">
-              交班
+              {t('endShift')}
             </Button>
           )}
           <Button size="sm" variant="outline" onClick={handleLogout} className="border-slate-600 text-slate-300 h-7">
@@ -3749,7 +3767,7 @@ const POSPage = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
-              placeholder="扫描条码 / 搜索商品名称..."
+              placeholder={t('scanOrSearch')}
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); if(e.target.value) setShowProductSearch(true); }}
               onFocus={() => setShowProductSearch(true)}
@@ -3766,7 +3784,7 @@ const POSPage = () => {
             />
           </div>
           <Button onClick={() => setShowProductSearch(!showProductSearch)} className="bg-blue-500 hover:bg-blue-600 h-10 px-4" data-testid="open-products-btn">
-            <Package className="w-4 h-4 mr-2" /> 商品
+            <Package className="w-4 h-4 mr-2" /> {t('products')}
           </Button>
         </div>
 
@@ -3779,7 +3797,7 @@ const POSPage = () => {
                 onClick={() => setSelectedCategory("all")}
                 className={`h-7 text-xs ${selectedCategory === "all" ? "bg-blue-500" : "border-slate-600 text-slate-300"}`}
               >
-                全部
+                {t('all')}
               </Button>
               {categories.map(cat => (
                 <Button key={cat.id} size="sm" variant={selectedCategory === cat.id ? "default" : "outline"}
@@ -3795,13 +3813,13 @@ const POSPage = () => {
               <table className="w-full">
                 <thead className="bg-slate-700/50 sticky top-0">
                   <tr className="text-slate-400 text-xs">
-                    <th className="text-left px-3 py-2">编码</th>
-                    <th className="text-left px-3 py-2">商品名称</th>
-                    <th className="text-right px-3 py-2">成本</th>
-                    <th className="text-right px-3 py-2">价格1</th>
-                    <th className="text-right px-3 py-2">价格2</th>
-                    <th className="text-right px-3 py-2">价格3(整箱)</th>
-                    <th className="text-center px-3 py-2 w-16">操作</th>
+                    <th className="text-left px-3 py-2">{t('productCode')}</th>
+                    <th className="text-left px-3 py-2">{t('productName')}</th>
+                    <th className="text-right px-3 py-2">{t('costPrice')}</th>
+                    <th className="text-right px-3 py-2">{t('price1')}</th>
+                    <th className="text-right px-3 py-2">{t('price2')}</th>
+                    <th className="text-right px-3 py-2">{t('price3Box')}</th>
+                    <th className="text-center px-3 py-2 w-16">{t('add')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3830,7 +3848,7 @@ const POSPage = () => {
                     );
                   })}
                   {filteredProducts.length === 0 && (
-                    <tr><td colSpan="7" className="text-slate-400 text-sm text-center py-4">没有找到商品</td></tr>
+                    <tr><td colSpan="7" className="text-slate-400 text-sm text-center py-4">{t('noData')}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -3838,7 +3856,7 @@ const POSPage = () => {
             {/* Close button */}
             <div className="p-2 border-t border-slate-700 text-right">
               <Button size="sm" variant="outline" onClick={() => setShowProductSearch(false)} className="border-slate-600 text-slate-300 h-7 text-xs">
-                关闭
+                {t('close')}
               </Button>
             </div>
           </div>
@@ -3854,11 +3872,11 @@ const POSPage = () => {
           {/* Cart Header */}
           <div className="bg-slate-750 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-white font-bold">销售单</h2>
-              <Badge className="bg-slate-600 text-xs">{cartCount} 件</Badge>
+              <h2 className="text-white font-bold">{t('salesOrder')}</h2>
+              <Badge className="bg-slate-600 text-xs">{cartCount} {t('items')}</Badge>
             </div>
             <Button size="sm" variant="outline" onClick={clearCart} className="border-slate-600 text-slate-300 h-7 text-xs" disabled={cart.length === 0}>
-              清空
+              {t('clear')}
             </Button>
           </div>
 
@@ -3868,11 +3886,11 @@ const POSPage = () => {
               <thead className="bg-slate-700/50 sticky top-0">
                 <tr className="text-slate-400 text-xs">
                   <th className="text-left px-4 py-2 w-8">#</th>
-                  <th className="text-left px-4 py-2">商品名称</th>
-                  <th className="text-center px-2 py-2 w-32">数量</th>
-                  <th className="text-center px-2 py-2 w-28">价格类型</th>
-                  <th className="text-right px-4 py-2 w-28">单价</th>
-                  <th className="text-right px-4 py-2 w-36">金额</th>
+                  <th className="text-left px-4 py-2">{t('productName')}</th>
+                  <th className="text-center px-2 py-2 w-32">{t('quantity')}</th>
+                  <th className="text-center px-2 py-2 w-28">{t('priceType')}</th>
+                  <th className="text-right px-4 py-2 w-28">{t('unitPrice')}</th>
+                  <th className="text-right px-4 py-2 w-36">{t('amount')}</th>
                   <th className="text-center px-2 py-2 w-10"></th>
                 </tr>
               </thead>
@@ -3881,7 +3899,7 @@ const POSPage = () => {
                   <tr>
                     <td colSpan="7" className="text-center text-slate-500 py-16">
                       <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">搜索或扫描条码添加商品</p>
+                      <p className="text-sm">{t('scanOrSearch')}</p>
                     </td>
                   </tr>
                 ) : (
@@ -3893,7 +3911,7 @@ const POSPage = () => {
                     const displayUnitPrice = showBs ? getItemPriceByMode(item.product, item.price_mode) * (exchangeRates.usd_to_ves || 1) : getItemPriceByMode(item.product, item.price_mode);
                     const priceModes = ["price1", "price2", "box"];
                     const currentIdx = priceModes.indexOf(item.price_mode);
-                    const modeLabels = { price1: "价格1", price2: "价格2", box: "整箱" };
+                    const modeLabels = { price1: t('price1'), price2: t('price2'), box: t('box') };
                     const modeColors = { price1: "text-emerald-400", price2: "text-yellow-400", box: "text-blue-400" };
                     return (
                       <tr key={item.product_id} className="border-b border-slate-700/50 hover:bg-slate-700/30" data-testid={`cart-row-${item.product_id}`}>
@@ -3959,11 +3977,11 @@ const POSPage = () => {
           {/* Cart Footer - Total & Pay */}
           <div className="border-t border-slate-700 px-4 py-3 flex items-center justify-between bg-slate-800">
             <div className="text-slate-400 text-sm">
-              {cart.length} 种商品, {cartCount} 件
+              {cart.length} {t('products')}, {cartCount} {t('items')}
             </div>
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <span className="text-slate-400 text-sm mr-3">合计:</span>
+                <span className="text-slate-400 text-sm mr-3">{t('total')}:</span>
                 <span className="text-2xl font-bold text-white">
                   {getPriceSymbol()}{(showBs ? cartTotal * (exchangeRates.usd_to_ves || 1) : cartTotal).toFixed(2)}
                 </span>
@@ -3974,7 +3992,7 @@ const POSPage = () => {
                 disabled={cart.length === 0 || !shift}
                 data-testid="pos-pay-btn"
               >
-                收款
+                {t('checkout')}
               </Button>
             </div>
           </div>
@@ -3985,22 +4003,22 @@ const POSPage = () => {
       <Dialog open={showPayment} onOpenChange={setShowPayment}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl">Cobrar / 收款</DialogTitle>
+            <DialogTitle className="text-xl">{t('checkout')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
-              <p className="text-slate-400 text-sm">Total a Cobrar ({showBs ? 'Bs.' : 'USD'})</p>
+              <p className="text-slate-400 text-sm">{t('total')} ({showBs ? 'Bs.' : 'USD'})</p>
               <p className="text-4xl font-bold text-white">
                 {getPriceSymbol()}{(showBs ? cartTotal * (exchangeRates.usd_to_ves || 1) : cartTotal).toFixed(2)}
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Método de Pago</label>
+              <label className="text-sm text-slate-300">{t('paymentMethod')}</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'cash', label: 'Efectivo', icon: '💵' },
-                  { id: 'card', label: 'Tarjeta', icon: '💳' },
+                  { id: 'cash', label: t('cash'), icon: '💵' },
+                  { id: 'card', label: t('card'), icon: '💳' },
                   { id: 'transfer', label: 'Transfer', icon: '📱' }
                 ].map(method => (
                   <div
@@ -4021,7 +4039,7 @@ const POSPage = () => {
 
             {paymentMethod === 'cash' && (
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">Monto Recibido</label>
+                <label className="text-sm text-slate-300">{t('received')}</label>
                 <Input
                   type="number"
                   value={receivedAmount}
@@ -4032,7 +4050,7 @@ const POSPage = () => {
                 />
                 {receivedAmount && change >= 0 && (
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
-                    <p className="text-sm text-slate-400">Cambio / 找零</p>
+                    <p className="text-sm text-slate-400">{t('change')}</p>
                     <p className="text-2xl font-bold text-green-400">{getPriceSymbol()}{change.toFixed(2)}</p>
                   </div>
                 )}
@@ -4041,7 +4059,7 @@ const POSPage = () => {
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <Button variant="outline" onClick={() => setShowPayment(false)} className="border-slate-600">
-                Cancelar
+                {t('cancel')}
               </Button>
               <Button 
                 onClick={handlePayment} 
@@ -4049,7 +4067,7 @@ const POSPage = () => {
                 disabled={paymentMethod === 'cash' && (!receivedAmount || change < 0)}
                 data-testid="pos-confirm-payment"
               >
-                Confirmar
+                {t('confirmPayment')}
               </Button>
             </div>
           </div>
@@ -4060,42 +4078,42 @@ const POSPage = () => {
       <Dialog open={showShiftModal} onOpenChange={setShowShiftModal}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>Cerrar Turno / 交班</DialogTitle>
+            <DialogTitle>{t('endShift')}</DialogTitle>
           </DialogHeader>
           {shift && (
             <div className="space-y-4">
               <div className="bg-slate-700/50 rounded-lg p-4 space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Cajero:</span>
+                  <span className="text-slate-400">{t('username')}:</span>
                   <span className="text-white">{shift.user}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Tienda:</span>
+                  <span className="text-slate-400">{t('storeManagement')}:</span>
                   <span className="text-white">{shift.store}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Inicio:</span>
+                  <span className="text-slate-400">{t('shiftSince')}:</span>
                   <span className="text-white">{new Date(shift.start_time).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Ventas:</span>
-                  <span className="text-white">{shift.sales?.length || 0} transacciones</span>
+                  <span className="text-slate-400">{t('salesManagement')}:</span>
+                  <span className="text-white">{shift.sales?.length || 0}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-600">
-                  <span className="text-slate-300">Total Ventas:</span>
+                  <span className="text-slate-300">{t('totalSales')}:</span>
                   <span className="text-green-400">${shift.total_sales?.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Efectivo:</span>
+                  <span className="text-slate-400">{t('cash')}:</span>
                   <span className="text-white">${shift.total_cash?.toFixed(2)}</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Button variant="outline" onClick={() => setShowShiftModal(false)} className="border-slate-600">
-                  Cancelar
+                  {t('cancel')}
                 </Button>
                 <Button onClick={confirmEndShift} className="bg-orange-600 hover:bg-orange-700" data-testid="confirm-end-shift">
-                  Confirmar Cierre
+                  {t('confirm')}
                 </Button>
               </div>
             </div>
