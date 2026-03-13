@@ -263,6 +263,18 @@ class SalesOrderResponse(BaseModel):
     created_by: str
     created_at: str
 
+# Payment Settings Models
+class PaymentSettingsUpdate(BaseModel):
+    transfer_enabled: bool = True
+    transfer_bank_name: str = ""
+    transfer_account_number: str = ""
+    transfer_account_holder: str = ""
+    transfer_rif: str = ""
+    pago_movil_enabled: bool = True
+    pago_movil_phone: str = ""
+    pago_movil_bank_code: str = ""
+    pago_movil_cedula: str = ""
+
 # Online Shop Order Models
 class OnlineOrderCreate(BaseModel):
     customer_id: str
@@ -270,7 +282,8 @@ class OnlineOrderCreate(BaseModel):
     shipping_address: str
     shipping_phone: str
     shipping_name: str
-    payment_method: str = "online"
+    payment_method: str = "transfer"  # transfer, pago_movil
+    payment_reference: str = ""
     notes: str = ""
 
 class OnlineOrderResponse(BaseModel):
@@ -284,6 +297,7 @@ class OnlineOrderResponse(BaseModel):
     shipping_phone: str
     shipping_name: str
     payment_method: str
+    payment_reference: Optional[str] = ""
     payment_status: str
     order_status: str
     warehouse_id: Optional[str]
@@ -972,6 +986,7 @@ async def create_online_order(order: OnlineOrderCreate):
         "shipping_phone": order.shipping_phone,
         "shipping_name": order.shipping_name,
         "payment_method": order.payment_method,
+        "payment_reference": order.payment_reference,
         "payment_status": "pending",
         "order_status": "pending",
         "warehouse_id": main_warehouse["id"],
@@ -1167,6 +1182,62 @@ async def get_top_products(
             })
     
     return result
+
+# ==================== Payment Settings Routes ====================
+
+@api_router.get("/payment-settings")
+async def get_payment_settings():
+    """Get payment settings - public endpoint for shop"""
+    settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
+    if not settings:
+        # Default settings for Venezuela
+        settings = {
+            "type": "payment",
+            "transfer_enabled": True,
+            "transfer_bank_name": "Banco de Venezuela",
+            "transfer_account_number": "",
+            "transfer_account_holder": "",
+            "transfer_rif": "",
+            "pago_movil_enabled": True,
+            "pago_movil_phone": "",
+            "pago_movil_bank_code": "0102",
+            "pago_movil_cedula": ""
+        }
+    return settings
+
+@api_router.put("/payment-settings")
+async def update_payment_settings(settings: PaymentSettingsUpdate, current_user: dict = Depends(get_current_user)):
+    """Update payment settings - admin only"""
+    settings_doc = {
+        "type": "payment",
+        **settings.model_dump(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.settings.update_one(
+        {"type": "payment"},
+        {"$set": settings_doc},
+        upsert=True
+    )
+    return {"message": "支付设置已更新"}
+
+@api_router.put("/shop/orders/{order_id}/confirm-payment")
+async def confirm_order_payment(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Admin confirms payment received"""
+    order = await db.online_orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    
+    await db.online_orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "payment_status": "paid",
+            "order_status": "processing",
+            "payment_confirmed_at": datetime.now(timezone.utc).isoformat(),
+            "payment_confirmed_by": current_user["user_id"]
+        }}
+    )
+    
+    return {"message": "支付已确认"}
 
 # ==================== Dashboard Routes ====================
 

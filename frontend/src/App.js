@@ -168,6 +168,7 @@ const AdminLayout = ({ children }) => {
     { icon: CreditCard, label: "销售管理", path: "/admin/sales" },
     { icon: Globe, label: "网店订单", path: "/admin/online-orders" },
     { icon: BarChart3, label: "报表统计", path: "/admin/reports" },
+    { icon: Settings, label: "支付设置", path: "/admin/payment-settings" },
   ];
 
   const handleLogout = () => {
@@ -945,10 +946,20 @@ const OnlineOrdersPage = () => {
     }
   };
 
+  const handleConfirmPayment = async (orderId) => {
+    try {
+      await axios.put(`${API}/shop/orders/${orderId}/confirm-payment`);
+      toast.success("Pago confirmado / 支付已确认");
+      fetchOrders();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "确认失败");
+    }
+  };
+
   const handleShip = async (orderId) => {
     try {
       await axios.put(`${API}/shop/orders/${orderId}/ship`);
-      toast.success("发货成功");
+      toast.success("Enviado / 已发货");
       fetchOrders();
     } catch (e) {
       toast.error(e.response?.data?.detail || "发货失败");
@@ -964,27 +975,32 @@ const OnlineOrdersPage = () => {
   };
 
   const statusLabels = {
-    pending: "待处理",
-    processing: "处理中",
-    shipped: "已发货",
-    completed: "已完成",
-    cancelled: "已取消"
+    pending: "Pendiente",
+    processing: "Procesando",
+    shipped: "Enviado",
+    completed: "Completado",
+    cancelled: "Cancelado"
+  };
+
+  const paymentMethodLabels = {
+    transfer: "Transferencia",
+    pago_movil: "Pago Móvil"
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">网店订单</h1>
+        <h1 className="text-2xl font-bold text-white">Pedidos Online / 网店订单</h1>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40 bg-slate-800 border-slate-700 text-white">
-            <SelectValue placeholder="全部状态" />
+            <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全部状态</SelectItem>
-            <SelectItem value="pending">待处理</SelectItem>
-            <SelectItem value="processing">处理中</SelectItem>
-            <SelectItem value="shipped">已发货</SelectItem>
-            <SelectItem value="completed">已完成</SelectItem>
+            <SelectItem value="all">Todos / 全部</SelectItem>
+            <SelectItem value="pending">Pendiente</SelectItem>
+            <SelectItem value="processing">Procesando</SelectItem>
+            <SelectItem value="shipped">Enviado</SelectItem>
+            <SelectItem value="completed">Completado</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -993,26 +1009,33 @@ const OnlineOrdersPage = () => {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-300">订单号</TableHead>
-              <TableHead className="text-slate-300">收货人</TableHead>
-              <TableHead className="text-slate-300">商品数</TableHead>
-              <TableHead className="text-slate-300">订单金额</TableHead>
-              <TableHead className="text-slate-300">支付状态</TableHead>
-              <TableHead className="text-slate-300">订单状态</TableHead>
-              <TableHead className="text-slate-300">下单时间</TableHead>
-              <TableHead className="text-slate-300">操作</TableHead>
+              <TableHead className="text-slate-300">Pedido #</TableHead>
+              <TableHead className="text-slate-300">Cliente</TableHead>
+              <TableHead className="text-slate-300">Método</TableHead>
+              <TableHead className="text-slate-300">Referencia</TableHead>
+              <TableHead className="text-slate-300">Total</TableHead>
+              <TableHead className="text-slate-300">Pago</TableHead>
+              <TableHead className="text-slate-300">Estado</TableHead>
+              <TableHead className="text-slate-300">Fecha</TableHead>
+              <TableHead className="text-slate-300">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {orders.map((order) => (
               <TableRow key={order.id} className="border-slate-700">
-                <TableCell className="text-white font-mono">{order.order_no}</TableCell>
-                <TableCell className="text-slate-300">{order.shipping_name}</TableCell>
-                <TableCell className="text-slate-300">{order.items?.length || 0}</TableCell>
-                <TableCell className="text-emerald-400">¥{(order.total_amount + order.shipping_fee).toFixed(2)}</TableCell>
+                <TableCell className="text-white font-mono text-xs">{order.order_no}</TableCell>
+                <TableCell>
+                  <div>
+                    <p className="text-white text-sm">{order.shipping_name}</p>
+                    <p className="text-slate-400 text-xs">{order.shipping_phone}</p>
+                  </div>
+                </TableCell>
+                <TableCell className="text-slate-300 text-sm">{paymentMethodLabels[order.payment_method] || order.payment_method}</TableCell>
+                <TableCell className="text-yellow-400 font-mono text-sm">{order.payment_reference || '-'}</TableCell>
+                <TableCell className="text-emerald-400 font-medium">${(order.total_amount + order.shipping_fee).toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge className={order.payment_status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}>
-                    {order.payment_status === 'paid' ? '已支付' : '待支付'}
+                    {order.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -1020,13 +1043,20 @@ const OnlineOrdersPage = () => {
                     {statusLabels[order.order_status]}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-slate-400 text-sm">{new Date(order.created_at).toLocaleString()}</TableCell>
+                <TableCell className="text-slate-400 text-xs">{new Date(order.created_at).toLocaleString()}</TableCell>
                 <TableCell>
-                  {order.payment_status === 'paid' && order.order_status === 'processing' && (
-                    <Button size="sm" onClick={() => handleShip(order.id)} className="bg-purple-500 hover:bg-purple-600" data-testid={`ship-order-${order.id}`}>
-                      发货
-                    </Button>
-                  )}
+                  <div className="flex gap-2">
+                    {order.payment_status === 'pending' && (
+                      <Button size="sm" onClick={() => handleConfirmPayment(order.id)} className="bg-emerald-500 hover:bg-emerald-600 text-xs" data-testid={`confirm-payment-${order.id}`}>
+                        Confirmar Pago
+                      </Button>
+                    )}
+                    {order.payment_status === 'paid' && order.order_status === 'processing' && (
+                      <Button size="sm" onClick={() => handleShip(order.id)} className="bg-purple-500 hover:bg-purple-600 text-xs" data-testid={`ship-order-${order.id}`}>
+                        Enviar
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -1706,6 +1736,223 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Payment Settings Page
+const PaymentSettingsPage = () => {
+  const [settings, setSettings] = useState({
+    transfer_enabled: true,
+    transfer_bank_name: "",
+    transfer_account_number: "",
+    transfer_account_holder: "",
+    transfer_rif: "",
+    pago_movil_enabled: true,
+    pago_movil_phone: "",
+    pago_movil_bank_code: "",
+    pago_movil_cedula: ""
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/payment-settings`);
+      setSettings(prev => ({ ...prev, ...res.data }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/payment-settings`, settings);
+      toast.success("Configuración guardada / 设置已保存");
+    } catch (e) {
+      toast.error("Error al guardar / 保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const venezuelaBanks = [
+    { code: "0102", name: "Banco de Venezuela" },
+    { code: "0104", name: "Venezolano de Crédito" },
+    { code: "0105", name: "Mercantil" },
+    { code: "0108", name: "Provincial" },
+    { code: "0114", name: "Bancaribe" },
+    { code: "0115", name: "Exterior" },
+    { code: "0128", name: "Banco Caroní" },
+    { code: "0134", name: "Banesco" },
+    { code: "0137", name: "Sofitasa" },
+    { code: "0138", name: "Banco Plaza" },
+    { code: "0151", name: "BFC Banco Fondo Común" },
+    { code: "0156", name: "100% Banco" },
+    { code: "0157", name: "Del Sur" },
+    { code: "0163", name: "Banco del Tesoro" },
+    { code: "0166", name: "Banco Agrícola" },
+    { code: "0168", name: "Bancrecer" },
+    { code: "0169", name: "Mi Banco" },
+    { code: "0171", name: "Banco Activo" },
+    { code: "0172", name: "Bancamiga" },
+    { code: "0174", name: "Banplus" },
+    { code: "0175", name: "Bicentenario" },
+    { code: "0177", name: "Banfanb" },
+  ];
+
+  if (loading) return <div className="text-white">Cargando...</div>;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">Configuración de Pagos / 支付设置</h1>
+      <p className="text-slate-400">Configure los métodos de pago para la tienda en línea (Venezuela)</p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Bank Transfer Settings */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-white">Transferencia Bancaria / 银行转账</CardTitle>
+              <input 
+                type="checkbox" 
+                checked={settings.transfer_enabled} 
+                onChange={(e) => setSettings({...settings, transfer_enabled: e.target.checked})}
+                className="w-5 h-5 rounded"
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm text-slate-300">Banco / 银行名称</label>
+              <Select value={settings.transfer_bank_name} onValueChange={(v) => setSettings({...settings, transfer_bank_name: v})}>
+                <SelectTrigger className="bg-slate-700 border-slate-600">
+                  <SelectValue placeholder="Seleccione banco" />
+                </SelectTrigger>
+                <SelectContent>
+                  {venezuelaBanks.map(bank => (
+                    <SelectItem key={bank.code} value={bank.name}>{bank.code} - {bank.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">Número de Cuenta / 账户号码</label>
+              <Input 
+                value={settings.transfer_account_number} 
+                onChange={(e) => setSettings({...settings, transfer_account_number: e.target.value})}
+                className="bg-slate-700 border-slate-600"
+                placeholder="0102-0000-00-0000000000"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">Titular de la Cuenta / 账户持有人</label>
+              <Input 
+                value={settings.transfer_account_holder} 
+                onChange={(e) => setSettings({...settings, transfer_account_holder: e.target.value})}
+                className="bg-slate-700 border-slate-600"
+                placeholder="Nombre completo"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">RIF</label>
+              <Input 
+                value={settings.transfer_rif} 
+                onChange={(e) => setSettings({...settings, transfer_rif: e.target.value})}
+                className="bg-slate-700 border-slate-600"
+                placeholder="V-12345678-0"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Pago Movil Settings */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-white">Pago Móvil / 移动支付</CardTitle>
+              <input 
+                type="checkbox" 
+                checked={settings.pago_movil_enabled} 
+                onChange={(e) => setSettings({...settings, pago_movil_enabled: e.target.checked})}
+                className="w-5 h-5 rounded"
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm text-slate-300">Teléfono / 手机号码</label>
+              <Input 
+                value={settings.pago_movil_phone} 
+                onChange={(e) => setSettings({...settings, pago_movil_phone: e.target.value})}
+                className="bg-slate-700 border-slate-600"
+                placeholder="0412-1234567"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">Código de Banco / 银行代码</label>
+              <Select value={settings.pago_movil_bank_code} onValueChange={(v) => setSettings({...settings, pago_movil_bank_code: v})}>
+                <SelectTrigger className="bg-slate-700 border-slate-600">
+                  <SelectValue placeholder="Seleccione banco" />
+                </SelectTrigger>
+                <SelectContent>
+                  {venezuelaBanks.map(bank => (
+                    <SelectItem key={bank.code} value={bank.code}>{bank.code} - {bank.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">Cédula / 身份证号</label>
+              <Input 
+                value={settings.pago_movil_cedula} 
+                onChange={(e) => setSettings({...settings, pago_movil_cedula: e.target.value})}
+                className="bg-slate-700 border-slate-600"
+                placeholder="V-12345678"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600" disabled={saving} data-testid="save-payment-settings">
+          {saving ? 'Guardando...' : 'Guardar Configuración / 保存设置'}
+        </Button>
+      </div>
+
+      {/* Preview */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">Vista Previa / 预览</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {settings.transfer_enabled && (
+            <div className="bg-slate-700/50 p-4 rounded-lg">
+              <p className="text-sm font-medium text-yellow-400 mb-2">Datos para Transferencia:</p>
+              <p className="text-sm text-slate-300">Banco: {settings.transfer_bank_name || '-'}</p>
+              <p className="text-sm text-slate-300">Cuenta: {settings.transfer_account_number || '-'}</p>
+              <p className="text-sm text-slate-300">Titular: {settings.transfer_account_holder || '-'}</p>
+              <p className="text-sm text-slate-300">RIF: {settings.transfer_rif || '-'}</p>
+            </div>
+          )}
+          {settings.pago_movil_enabled && (
+            <div className="bg-slate-700/50 p-4 rounded-lg">
+              <p className="text-sm font-medium text-yellow-400 mb-2">Datos para Pago Móvil:</p>
+              <p className="text-sm text-slate-300">Teléfono: {settings.pago_movil_phone || '-'}</p>
+              <p className="text-sm text-slate-300">Banco: {settings.pago_movil_bank_code || '-'}</p>
+              <p className="text-sm text-slate-300">Cédula: {settings.pago_movil_cedula || '-'}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 // Online Shop (Public)
 const ShopPage = () => {
   const [products, setProducts] = useState([]);
@@ -1714,13 +1961,17 @@ const ShopPage = () => {
   const [loading, setLoading] = useState(true);
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [paymentSettings, setPaymentSettings] = useState(null);
   const [checkoutForm, setCheckoutForm] = useState({
-    customer_id: "", shipping_name: "", shipping_phone: "", shipping_address: ""
+    customer_id: "", shipping_name: "", shipping_phone: "", shipping_address: "",
+    payment_method: "transfer", payment_reference: ""
   });
+  const [orderSuccess, setOrderSuccess] = useState(null);
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchPaymentSettings();
   }, []);
 
   const fetchProducts = async () => {
@@ -1738,6 +1989,15 @@ const ShopPage = () => {
     try {
       const res = await axios.get(`${API}/shop/categories`);
       setCategories(res.data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchPaymentSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/payment-settings`);
+      setPaymentSettings(res.data);
     } catch (e) {
       console.error(e);
     }
@@ -1762,20 +2022,33 @@ const ShopPage = () => {
   };
 
   const cartTotal = cart.reduce((sum, i) => sum + i.amount, 0);
+  const shippingFee = cartTotal >= 100 ? 0 : 10;
+  const orderTotal = cartTotal + shippingFee;
 
   const handleCheckout = async () => {
+    if (!checkoutForm.shipping_name || !checkoutForm.shipping_phone || !checkoutForm.shipping_address) {
+      toast.error("请填写完整的收货信息");
+      return;
+    }
+    if (!checkoutForm.payment_reference) {
+      toast.error("请填写支付参考号");
+      return;
+    }
     try {
       const res = await axios.post(`${API}/shop/orders`, {
         customer_id: checkoutForm.customer_id || "guest",
-        items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, amount: i.amount })),
+        items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, discount: 0, amount: i.amount })),
         shipping_name: checkoutForm.shipping_name,
         shipping_phone: checkoutForm.shipping_phone,
-        shipping_address: checkoutForm.shipping_address
+        shipping_address: checkoutForm.shipping_address,
+        payment_method: checkoutForm.payment_method,
+        payment_reference: checkoutForm.payment_reference
       });
-      toast.success("订单创建成功!");
+      setOrderSuccess(res.data);
       setCart([]);
       setShowCheckout(false);
       setShowCart(false);
+      toast.success("¡Pedido creado exitosamente!");
     } catch (e) {
       toast.error(e.response?.data?.detail || "下单失败");
     }
@@ -1880,44 +2153,136 @@ const ShopPage = () => {
 
       {/* Checkout Dialog */}
       <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>收货信息</DialogTitle>
+            <DialogTitle>Información de Pago / 支付信息</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-300">收货人姓名</label>
-              <Input value={checkoutForm.shipping_name} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-name" />
+            {/* Shipping Info */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-emerald-400">Dirección de Entrega / 收货地址</h3>
+              <div>
+                <label className="text-sm text-slate-300">Nombre / 收货人</label>
+                <Input value={checkoutForm.shipping_name} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-name" placeholder="Nombre completo" />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300">Teléfono / 电话</label>
+                <Input value={checkoutForm.shipping_phone} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_phone: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-phone" placeholder="0412-1234567" />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300">Dirección / 地址</label>
+                <Input value={checkoutForm.shipping_address} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_address: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-address" placeholder="Dirección completa" />
+              </div>
             </div>
-            <div>
-              <label className="text-sm text-slate-300">联系电话</label>
-              <Input value={checkoutForm.shipping_phone} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_phone: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-phone" />
+
+            {/* Payment Method */}
+            <div className="space-y-3 border-t border-slate-700 pt-4">
+              <h3 className="text-sm font-medium text-emerald-400">Método de Pago / 支付方式</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {paymentSettings?.transfer_enabled && (
+                  <div 
+                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${checkoutForm.payment_method === 'transfer' ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-600 hover:border-slate-500'}`}
+                    onClick={() => setCheckoutForm({...checkoutForm, payment_method: 'transfer'})}
+                    data-testid="payment-transfer"
+                  >
+                    <p className="font-medium text-white">Transferencia</p>
+                    <p className="text-xs text-slate-400">银行转账</p>
+                  </div>
+                )}
+                {paymentSettings?.pago_movil_enabled && (
+                  <div 
+                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${checkoutForm.payment_method === 'pago_movil' ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-600 hover:border-slate-500'}`}
+                    onClick={() => setCheckoutForm({...checkoutForm, payment_method: 'pago_movil'})}
+                    data-testid="payment-pago-movil"
+                  >
+                    <p className="font-medium text-white">Pago Móvil</p>
+                    <p className="text-xs text-slate-400">移动支付</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Details */}
+              {checkoutForm.payment_method === 'transfer' && paymentSettings && (
+                <div className="bg-slate-700/50 p-4 rounded-lg space-y-2">
+                  <p className="text-sm font-medium text-yellow-400">Datos para Transferencia:</p>
+                  <p className="text-sm"><span className="text-slate-400">Banco:</span> {paymentSettings.transfer_bank_name || 'Por configurar'}</p>
+                  <p className="text-sm"><span className="text-slate-400">Cuenta:</span> {paymentSettings.transfer_account_number || 'Por configurar'}</p>
+                  <p className="text-sm"><span className="text-slate-400">Titular:</span> {paymentSettings.transfer_account_holder || 'Por configurar'}</p>
+                  <p className="text-sm"><span className="text-slate-400">RIF:</span> {paymentSettings.transfer_rif || 'Por configurar'}</p>
+                </div>
+              )}
+
+              {checkoutForm.payment_method === 'pago_movil' && paymentSettings && (
+                <div className="bg-slate-700/50 p-4 rounded-lg space-y-2">
+                  <p className="text-sm font-medium text-yellow-400">Datos para Pago Móvil:</p>
+                  <p className="text-sm"><span className="text-slate-400">Teléfono:</span> {paymentSettings.pago_movil_phone || 'Por configurar'}</p>
+                  <p className="text-sm"><span className="text-slate-400">Banco:</span> {paymentSettings.pago_movil_bank_code || 'Por configurar'}</p>
+                  <p className="text-sm"><span className="text-slate-400">Cédula:</span> {paymentSettings.pago_movil_cedula || 'Por configurar'}</p>
+                </div>
+              )}
+
+              {/* Payment Reference */}
+              <div>
+                <label className="text-sm text-slate-300">Número de Referencia / 参考号 *</label>
+                <Input 
+                  value={checkoutForm.payment_reference} 
+                  onChange={(e) => setCheckoutForm({...checkoutForm, payment_reference: e.target.value})} 
+                  className="bg-slate-700 border-slate-600" 
+                  placeholder="Ingrese el número de referencia del pago"
+                  data-testid="payment-reference"
+                />
+                <p className="text-xs text-slate-500 mt-1">Ingrese el número de referencia de su transferencia o pago móvil</p>
+              </div>
             </div>
-            <div>
-              <label className="text-sm text-slate-300">收货地址</label>
-              <Input value={checkoutForm.shipping_address} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_address: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-address" />
-            </div>
-            <div className="border-t border-slate-700 pt-4">
+
+            {/* Order Summary */}
+            <div className="border-t border-slate-700 pt-4 space-y-2">
               <div className="flex justify-between">
-                <span className="text-slate-300">商品金额:</span>
-                <span className="text-white">¥{cartTotal.toFixed(2)}</span>
+                <span className="text-slate-300">Subtotal / 商品金额:</span>
+                <span className="text-white">${cartTotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-slate-300">运费:</span>
-                <span className="text-white">{cartTotal >= 100 ? '免运费' : '¥10.00'}</span>
+              <div className="flex justify-between">
+                <span className="text-slate-300">Envío / 运费:</span>
+                <span className="text-white">{shippingFee === 0 ? 'Gratis' : `$${shippingFee.toFixed(2)}`}</span>
               </div>
-              <div className="flex justify-between mt-2 text-lg font-bold">
-                <span className="text-slate-300">应付:</span>
-                <span className="text-emerald-400">¥{(cartTotal + (cartTotal >= 100 ? 0 : 10)).toFixed(2)}</span>
+              <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700">
+                <span className="text-slate-300">Total:</span>
+                <span className="text-emerald-400">${orderTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowCheckout(false)} className="border-slate-600">取消</Button>
+            <Button variant="outline" onClick={() => setShowCheckout(false)} className="border-slate-600">Cancelar</Button>
             <Button onClick={handleCheckout} className="bg-emerald-500 hover:bg-emerald-600" data-testid="place-order-btn">
-              提交订单
+              Confirmar Pedido
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Success Dialog */}
+      <Dialog open={!!orderSuccess} onOpenChange={() => setOrderSuccess(null)}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-400">¡Pedido Exitoso! / 订单成功</DialogTitle>
+          </DialogHeader>
+          {orderSuccess && (
+            <div className="space-y-4">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 text-center">
+                <Check className="w-12 h-12 text-emerald-400 mx-auto mb-2" />
+                <p className="text-lg font-medium">Pedido #{orderSuccess.order_no}</p>
+                <p className="text-sm text-slate-400">Su pedido ha sido recibido</p>
+              </div>
+              <div className="space-y-2 text-sm">
+                <p><span className="text-slate-400">Total:</span> ${(orderSuccess.total_amount + orderSuccess.shipping_fee).toFixed(2)}</p>
+                <p><span className="text-slate-400">Estado:</span> Pendiente de confirmación de pago</p>
+                <p className="text-yellow-400 text-xs mt-2">* Una vez verificado su pago, procesaremos su pedido.</p>
+              </div>
+              <Button onClick={() => setOrderSuccess(null)} className="w-full bg-emerald-500 hover:bg-emerald-600">
+                Entendido / 确定
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -1986,6 +2351,11 @@ function App() {
           <Route path="/admin/reports" element={
             <ProtectedRoute>
               <AdminLayout><ReportsPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/payment-settings" element={
+            <ProtectedRoute>
+              <AdminLayout><PaymentSettingsPage /></AdminLayout>
             </ProtectedRoute>
           } />
           <Route path="/" element={<Navigate to="/shop" replace />} />
