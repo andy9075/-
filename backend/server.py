@@ -1034,6 +1034,36 @@ async def pay_online_order(order_id: str):
     
     return {"message": "支付成功"}
 
+@api_router.get("/shop/order-lookup")
+async def lookup_order(order_no: Optional[str] = None, phone: Optional[str] = None):
+    """Public endpoint - lookup order by order number or phone"""
+    if not order_no and not phone:
+        raise HTTPException(status_code=400, detail="请提供订单号或手机号")
+    
+    query = {}
+    if order_no:
+        query["order_no"] = order_no
+    if phone:
+        query["shipping_phone"] = phone
+    
+    orders = await db.online_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    # Get product details for each order
+    result = []
+    for order in orders:
+        items_with_details = []
+        for item in order.get("items", []):
+            product = await db.products.find_one({"id": item["product_id"]}, {"_id": 0})
+            items_with_details.append({
+                **item,
+                "product_name": product["name"] if product else "Unknown",
+                "product_code": product["code"] if product else ""
+            })
+        order["items"] = items_with_details
+        result.append(order)
+    
+    return result
+
 @api_router.put("/shop/orders/{order_id}/ship")
 async def ship_online_order(order_id: str, current_user: dict = Depends(get_current_user)):
     order = await db.online_orders.find_one({"id": order_id})
