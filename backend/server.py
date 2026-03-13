@@ -39,6 +39,7 @@ class UserCreate(BaseModel):
     store_id: Optional[str] = None
     name: str = ""
     phone: str = ""
+    permissions: Dict = {}  # {can_discount: bool, can_refund: bool, can_void: bool, max_discount: int}
 
 class UserLogin(BaseModel):
     username: str
@@ -51,6 +52,7 @@ class UserResponse(BaseModel):
     store_id: Optional[str]
     name: str
     phone: str
+    permissions: Dict = {}
     created_at: str
 
 # Store/Shop Models
@@ -251,7 +253,7 @@ class PurchaseOrderResponse(BaseModel):
 # Sales Order Models
 class SalesItemCreate(BaseModel):
     product_id: str
-    quantity: int
+    quantity: float  # Support decimal for weight-based items (kg, g)
     unit_price: float
     discount: float = 0.0
     amount: float
@@ -290,7 +292,36 @@ class PaymentSettingsUpdate(BaseModel):
     pago_movil_phone: str = ""
     pago_movil_bank_code: str = ""
     pago_movil_cedula: str = ""
-    whatsapp_number: str = ""  # WhatsApp contact number
+    whatsapp_number: str = ""
+
+# System Settings Model
+class SystemSettings(BaseModel):
+    # Invoice/Receipt
+    company_name: str = ""
+    company_tax_id: str = ""
+    company_address: str = ""
+    company_phone: str = ""
+    invoice_header: str = ""
+    invoice_footer: str = ""
+    # Print
+    default_print_format: str = "80mm"  # 80mm or A4
+    auto_print_receipt: bool = True
+    receipt_copies: int = 1
+    # Report
+    default_report_currency: str = "USD"
+    default_date_range: str = "today"
+    # Document numbering
+    sales_prefix: str = "SO"
+    transfer_prefix: str = "TR"
+    purchase_prefix: str = "PO"
+    next_sales_number: int = 1
+    # Scanner
+    barcode_scanner_enabled: bool = True
+    scanner_input_delay: int = 50  # ms between chars for scanner detection
+    # Wholesale
+    wholesale_enabled: bool = True
+    wholesale_min_quantity: int = 10
+    wholesale_discount_percent: float = 0.0  # WhatsApp contact number
 
 # Online Shop Order Models
 class OnlineOrderCreate(BaseModel):
@@ -392,6 +423,12 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     return user
+
+@api_router.get("/auth/cashiers")
+async def get_cashiers():
+    """List users for POS login selection (public, no passwords)"""
+    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(100)
+    return [{"id": u["id"], "username": u["username"], "name": u.get("name", ""), "role": u.get("role", "staff")} for u in users]
 
 # ==================== Store Routes ====================
 
@@ -1500,6 +1537,228 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         "stores_count": stores_count,
         "pending_online_orders": pending_orders
     }
+
+# ==================== System Settings ====================
+
+@api_router.get("/settings/system")
+async def get_system_settings(current_user: dict = Depends(get_current_user)):
+    settings = await db.system_settings.find_one({"key": "system"}, {"_id": 0})
+    if not settings:
+        return SystemSettings().model_dump()
+    return {k: v for k, v in settings.items() if k != "key"}
+
+@api_router.put("/settings/system")
+async def update_system_settings(settings: SystemSettings, current_user: dict = Depends(get_current_user)):
+    data = settings.model_dump()
+    data["key"] = "system"
+    await db.system_settings.update_one({"key": "system"}, {"$set": data}, upsert=True)
+    return {"message": "Settings updated"}
+
+# ==================== Employee Management ====================
+
+@api_router.get("/employees", response_model=List[UserResponse])
+async def get_employees(current_user: dict = Depends(get_current_user)):
+    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    return users
+
+@api_router.post("/employees")
+async def create_employee(user: UserCreate, current_user: dict = Depends(get_current_user)):
+    existing = await db.users.find_one({"username": user.username})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username exists")
+    user_id = generate_id()
+    user_doc = {
+        "id": user_id,
+        "username": user.username,
+        "password": hash_password(user.password),
+        "role": user.role,
+        "store_id": user.store_id,
+        "name": user.name,
+        "phone": user.phone,
+        "permissions": user.permissions,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(user_doc)
+    return {k: v for k, v in user_doc.items() if k not in ("password", "_id")}
+
+@api_router.put("/employees/{user_id}")
+async def update_employee(user_id: str, user: UserCreate, current_user: dict = Depends(get_current_user)):
+    update_data = {
+        "name": user.name, "phone": user.phone, "role": user.role,
+        "store_id": user.store_id, "permissions": user.permissions
+    }
+    if user.password:
+        update_data["password"] = hash_password(user.password)
+    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    return {"message": "Employee updated"}
+
+@api_router.delete("/employees/{user_id}")
+async def delete_employee(user_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("user_id", current_user.get("id")) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    await db.users.delete_one({"id": user_id})
+    return {"message": "Employee deleted"}
+
+# ==================== Refund/Return ====================
+
+@api_router.post("/refunds")
+async def create_refund(order_no: str = "", items: List[Dict] = [], reason: str = "", current_user: dict = Depends(get_current_user)):
+    order = await db.sales_orders.find_one({"order_no": order_no}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    refund_id = generate_id()
+    refund_amount = sum(item.get("amount", 0) for item in items)
+    
+    refund_doc = {
+        "id": refund_id,
+        "refund_no": generate_order_no("RF"),
+        "original_order_no": order_no,
+        "original_order_id": order["id"],
+        "store_id": order.get("store_id"),
+        "items": items,
+        "refund_amount": refund_amount,
+        "reason": reason,
+        "status": "completed",
+        "created_by": current_user.get("user_id", current_user.get("id")),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.refunds.insert_one(refund_doc)
+    
+    # Restore inventory
+    for item in items:
+        warehouse = await db.warehouses.find_one({"store_id": order.get("store_id")})
+        if warehouse:
+            await db.inventory.update_one(
+                {"product_id": item["product_id"], "warehouse_id": warehouse["id"]},
+                {"$inc": {"quantity": item.get("quantity", 0)}}
+            )
+    
+    return {k: v for k, v in refund_doc.items() if k != "_id"}
+
+@api_router.get("/refunds")
+async def get_refunds(current_user: dict = Depends(get_current_user)):
+    refunds = await db.refunds.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return refunds
+
+# ==================== Stock Alerts ====================
+
+@api_router.get("/stock-alerts")
+async def get_stock_alerts(current_user: dict = Depends(get_current_user)):
+    products = await db.products.find({"status": "active"}, {"_id": 0}).to_list(5000)
+    alerts = []
+    for p in products:
+        inv_docs = await db.inventory.find({"product_id": p["id"]}, {"_id": 0}).to_list(100)
+        total_stock = sum(i.get("quantity", 0) for i in inv_docs)
+        min_stock = p.get("min_stock", 0)
+        if min_stock > 0 and total_stock <= min_stock:
+            alerts.append({
+                "product_id": p["id"], "product_code": p["code"], "product_name": p["name"],
+                "current_stock": total_stock, "min_stock": min_stock,
+                "level": "critical" if total_stock == 0 else "warning"
+            })
+    return alerts
+
+# ==================== Reports: Top/Bottom Products ====================
+
+@api_router.get("/reports/bestsellers")
+async def get_bestsellers(days: int = 30, limit: int = 20, current_user: dict = Depends(get_current_user)):
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    orders = await db.sales_orders.find({"created_at": {"$gte": since}}, {"_id": 0}).to_list(10000)
+    
+    product_sales = {}
+    for o in orders:
+        for item in o.get("items", []):
+            pid = item.get("product_id", "")
+            if pid not in product_sales:
+                product_sales[pid] = {"quantity": 0, "amount": 0, "name": item.get("product_name", pid)}
+            product_sales[pid]["quantity"] += item.get("quantity", 0)
+            product_sales[pid]["amount"] += item.get("amount", 0)
+    
+    sorted_products = sorted(product_sales.items(), key=lambda x: x[1]["amount"], reverse=True)
+    bestsellers = [{"product_id": k, **v} for k, v in sorted_products[:limit]]
+    slowsellers = [{"product_id": k, **v} for k, v in sorted_products[-limit:] if v["amount"] > 0]
+    
+    return {"bestsellers": bestsellers, "slowsellers": slowsellers}
+
+# ==================== Stock Taking / Inventory Count ====================
+
+@api_router.post("/stock-taking")
+async def create_stock_taking(data: Dict, current_user: dict = Depends(get_current_user)):
+    taking_id = generate_id()
+    taking_doc = {
+        "id": taking_id,
+        "taking_no": generate_order_no("ST"),
+        "warehouse_id": data.get("warehouse_id"),
+        "items": data.get("items", []),  # [{product_id, system_qty, actual_qty, difference}]
+        "status": data.get("status", "draft"),
+        "notes": data.get("notes", ""),
+        "created_by": current_user.get("user_id", current_user.get("id")),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.stock_takings.insert_one(taking_doc)
+    
+    # If confirmed, adjust inventory
+    if data.get("status") == "confirmed":
+        for item in data.get("items", []):
+            diff = item.get("actual_qty", 0) - item.get("system_qty", 0)
+            if diff != 0:
+                await db.inventory.update_one(
+                    {"product_id": item["product_id"], "warehouse_id": data["warehouse_id"]},
+                    {"$inc": {"quantity": diff}}
+                )
+    
+    return {k: v for k, v in taking_doc.items() if k != "_id"}
+
+@api_router.get("/stock-takings")
+async def get_stock_takings(current_user: dict = Depends(get_current_user)):
+    takings = await db.stock_takings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return takings
+
+# ==================== Daily Settlement ====================
+
+@api_router.get("/reports/daily-settlement")
+async def daily_settlement(date: Optional[str] = None, store_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    start = f"{target_date}T00:00:00"
+    end = f"{target_date}T23:59:59"
+    
+    query = {"created_at": {"$gte": start, "$lte": end}}
+    if store_id:
+        query["store_id"] = store_id
+    
+    sales = await db.sales_orders.find(query, {"_id": 0}).to_list(10000)
+    refunds = await db.refunds.find({"created_at": {"$gte": start, "$lte": end}}, {"_id": 0}).to_list(1000)
+    
+    by_method = {}
+    for s in sales:
+        m = s.get("payment_method", "cash")
+        if m not in by_method:
+            by_method[m] = {"count": 0, "amount": 0}
+        by_method[m]["count"] += 1
+        by_method[m]["amount"] += s.get("total_amount", 0)
+    
+    total_sales = sum(s.get("total_amount", 0) for s in sales)
+    total_cost = 0
+    for s in sales:
+        for item in s.get("items", []):
+            product = await db.products.find_one({"id": item.get("product_id")})
+            if product:
+                total_cost += product.get("cost_price", 0) * item.get("quantity", 0)
+    
+    total_refunds = sum(r.get("refund_amount", 0) for r in refunds)
+    
+    return {
+        "date": target_date,
+        "total_sales": total_sales,
+        "total_orders": len(sales),
+        "total_refunds": total_refunds,
+        "refund_count": len(refunds),
+        "total_cost": total_cost,
+        "gross_profit": total_sales - total_cost - total_refunds,
+        "by_payment_method": by_method
+    }
+
 
 # ==================== Init Data ====================
 

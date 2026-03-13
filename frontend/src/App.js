@@ -8,7 +8,8 @@ import {
   Settings, LogOut, Menu, X, Plus, Search, Edit, Trash2, 
   Home, Building2, Truck, CreditCard, Globe, ChevronDown,
   ShoppingBag, DollarSign, TrendingUp, AlertCircle, Check,
-  ArrowLeftRight, Printer, Wifi, WifiOff, FileText, Calendar
+  ArrowLeftRight, Printer, Wifi, WifiOff, FileText, Calendar,
+  ClipboardList, RotateCcw, UserPlus, Shield, Weight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,6 +189,10 @@ const AdminLayout = ({ children }) => {
     { icon: BarChart3, label: t('reports'), path: "/admin/reports" },
     { icon: DollarSign, label: t('exchangeRates'), path: "/admin/exchange-rates" },
     { icon: Settings, label: t('paymentSettings'), path: "/admin/payment-settings" },
+    { icon: Settings, label: t('systemSettings'), path: "/admin/settings" },
+    { icon: Users, label: t('employees'), path: "/admin/employees" },
+    { icon: AlertCircle, label: t('stockAlerts'), path: "/admin/stock-alerts" },
+    { icon: ClipboardList, label: t('stockTaking'), path: "/admin/stock-taking" },
   ];
 
   const handleLogout = () => {
@@ -3197,6 +3202,26 @@ function AppContent() {
               <AdminLayout><PaymentSettingsPage /></AdminLayout>
             </ProtectedRoute>
           } />
+          <Route path="/admin/settings" element={
+            <ProtectedRoute>
+              <AdminLayout><SystemSettingsPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/employees" element={
+            <ProtectedRoute>
+              <AdminLayout><EmployeesPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/stock-alerts" element={
+            <ProtectedRoute>
+              <AdminLayout><StockAlertsPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/stock-taking" element={
+            <ProtectedRoute>
+              <AdminLayout><StockTakingPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
           <Route path="/pos" element={<POSPage />} />
           <Route path="/shop/orders" element={<ShopOrdersPage />} />
           <Route path="/" element={<Navigate to="/shop" replace />} />
@@ -3382,6 +3407,449 @@ const ShopOrdersPage = () => {
   );
 };
 
+
+// ==================== System Settings Page ====================
+const SystemSettingsPage = () => {
+  const { t } = useLang();
+  const [settings, setSettings] = useState({});
+  const [loading, setLoading] = useState(true);
+  const API = process.env.REACT_APP_BACKEND_URL;
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API}/api/settings/system`, { headers: { Authorization: `Bearer ${token}` } });
+        setSettings(res.data);
+      } catch (e) { console.error(e); }
+      setLoading(false);
+    };
+    fetchSettings();
+  }, [API]);
+
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(`${API}/api/settings/system`, settings, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('save') + " OK");
+    } catch (e) { toast.error("Error saving"); }
+  };
+
+  const updateField = (key, value) => setSettings(prev => ({...prev, [key]: value}));
+
+  if (loading) return <div className="text-white">{t('loading')}</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">{t('systemSettings')}</h1>
+        <Button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600" data-testid="save-settings">{t('save')}</Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Invoice/Company Info */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">{t('invoiceHeader')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div><label className="text-xs text-slate-400">{t('companyName')}</label><Input value={settings.company_name || ""} onChange={e => updateField("company_name", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">{t('taxId')}</label><Input value={settings.company_tax_id || ""} onChange={e => updateField("company_tax_id", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">{t('companyAddress')}</label><Input value={settings.company_address || ""} onChange={e => updateField("company_address", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">{t('companyPhone')}</label><Input value={settings.company_phone || ""} onChange={e => updateField("company_phone", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">{t('invoiceFooter')}</label><Input value={settings.invoice_footer || ""} onChange={e => updateField("invoice_footer", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+          </CardContent>
+        </Card>
+
+        {/* Print Settings */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">{t('printFormat')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div><label className="text-xs text-slate-400">{t('printFormat')}</label>
+              <Select value={settings.default_print_format || "80mm"} onValueChange={v => updateField("default_print_format", v)}>
+                <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="80mm">{t('receipt80mm')}</SelectItem>
+                  <SelectItem value="A4">{t('receiptA4')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between"><span className="text-sm text-slate-300">{t('autoPrint')}</span>
+              <button onClick={() => updateField("auto_print_receipt", !settings.auto_print_receipt)} className={`w-12 h-6 rounded-full transition-colors ${settings.auto_print_receipt ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${settings.auto_print_receipt ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            <div><label className="text-xs text-slate-400">{t('receiptCopies')}</label><Input type="number" value={settings.receipt_copies || 1} onChange={e => updateField("receipt_copies", parseInt(e.target.value) || 1)} className="bg-slate-700 border-slate-600" /></div>
+          </CardContent>
+        </Card>
+
+        {/* Scanner Settings */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">{t('scannerEnabled')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between"><span className="text-sm text-slate-300">{t('scannerEnabled')}</span>
+              <button onClick={() => updateField("barcode_scanner_enabled", !settings.barcode_scanner_enabled)} className={`w-12 h-6 rounded-full transition-colors ${settings.barcode_scanner_enabled !== false ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${settings.barcode_scanner_enabled !== false ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            <div><label className="text-xs text-slate-400">Scanner Delay (ms)</label><Input type="number" value={settings.scanner_input_delay || 50} onChange={e => updateField("scanner_input_delay", parseInt(e.target.value) || 50)} className="bg-slate-700 border-slate-600" /></div>
+          </CardContent>
+        </Card>
+
+        {/* Wholesale Settings */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">{t('wholesale')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between"><span className="text-sm text-slate-300">{t('wholesaleEnabled')}</span>
+              <button onClick={() => updateField("wholesale_enabled", !settings.wholesale_enabled)} className={`w-12 h-6 rounded-full transition-colors ${settings.wholesale_enabled !== false ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${settings.wholesale_enabled !== false ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            <div><label className="text-xs text-slate-400">{t('wholesaleMinQty')}</label><Input type="number" value={settings.wholesale_min_quantity || 10} onChange={e => updateField("wholesale_min_quantity", parseInt(e.target.value) || 10)} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">{t('wholesaleDiscount')} %</label><Input type="number" value={settings.wholesale_discount_percent || 0} onChange={e => updateField("wholesale_discount_percent", parseFloat(e.target.value) || 0)} className="bg-slate-700 border-slate-600" /></div>
+          </CardContent>
+        </Card>
+
+        {/* Document Numbering */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">Document Numbering</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div><label className="text-xs text-slate-400">Sales Prefix</label><Input value={settings.sales_prefix || "SO"} onChange={e => updateField("sales_prefix", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">Transfer Prefix</label><Input value={settings.transfer_prefix || "TR"} onChange={e => updateField("transfer_prefix", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">Purchase Prefix</label><Input value={settings.purchase_prefix || "PO"} onChange={e => updateField("purchase_prefix", e.target.value)} className="bg-slate-700 border-slate-600" /></div>
+          </CardContent>
+        </Card>
+
+        {/* Report Settings */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">{t('reports')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div><label className="text-xs text-slate-400">{t('currency')}</label>
+              <Select value={settings.default_report_currency || "USD"} onValueChange={v => updateField("default_report_currency", v)}>
+                <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD ($)</SelectItem>
+                  <SelectItem value="VES">VES (Bs.)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+// ==================== Employees Page ====================
+const EmployeesPage = () => {
+  const { t } = useLang();
+  const [employees, setEmployees] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ username: "", password: "", name: "", phone: "", role: "cashier", store_id: "", permissions: { can_discount: false, can_refund: false, max_discount: 10 } });
+  const [stores, setStores] = useState([]);
+  const API = process.env.REACT_APP_BACKEND_URL;
+
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const h = { Authorization: `Bearer ${token}` };
+      const [empRes, storesRes] = await Promise.all([
+        axios.get(`${API}/api/employees`, { headers: h }),
+        axios.get(`${API}/api/stores`, { headers: h })
+      ]);
+      setEmployees(empRes.data);
+      setStores(storesRes.data);
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const handleSubmit = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const h = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+      if (editing) {
+        await axios.put(`${API}/api/employees/${editing}`, form, { headers: h });
+      } else {
+        await axios.post(`${API}/api/employees`, form, { headers: h });
+      }
+      toast.success(t('save') + " OK");
+      setShowForm(false);
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(`${API}/api/employees/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("Deleted");
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
+  };
+
+  const roleColors = { admin: "bg-red-500/20 text-red-400", manager: "bg-purple-500/20 text-purple-400", cashier: "bg-blue-500/20 text-blue-400", staff: "bg-slate-500/20 text-slate-400" };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">{t('employees')}</h1>
+        <Button onClick={() => { setForm({ username: "", password: "", name: "", phone: "", role: "cashier", store_id: "", permissions: { can_discount: false, can_refund: false, max_discount: 10 } }); setEditing(null); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600">
+          <UserPlus className="w-4 h-4 mr-2" /> {t('add')}
+        </Button>
+      </div>
+
+      <Card className="bg-slate-800 border-slate-700">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-slate-700">
+              <TableHead className="text-slate-300">{t('username')}</TableHead>
+              <TableHead className="text-slate-300">{t('name')}</TableHead>
+              <TableHead className="text-slate-300">{t('phone')}</TableHead>
+              <TableHead className="text-slate-300">Role</TableHead>
+              <TableHead className="text-slate-300">{t('permission')}</TableHead>
+              <TableHead className="text-slate-300">{t('status')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {employees.map(emp => (
+              <TableRow key={emp.id} className="border-slate-700">
+                <TableCell className="text-white font-medium">{emp.username}</TableCell>
+                <TableCell className="text-slate-300">{emp.name}</TableCell>
+                <TableCell className="text-slate-400">{emp.phone}</TableCell>
+                <TableCell><Badge className={roleColors[emp.role] || roleColors.staff}>{emp.role}</Badge></TableCell>
+                <TableCell className="text-xs text-slate-400">
+                  {emp.permissions?.can_discount && <Badge className="bg-green-500/10 text-green-400 mr-1">{t('canDiscount')}</Badge>}
+                  {emp.permissions?.can_refund && <Badge className="bg-blue-500/10 text-blue-400 mr-1">{t('canRefund')}</Badge>}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => { setForm({...emp, password: ""}); setEditing(emp.id); setShowForm(true); }}><Edit className="w-4 h-4 text-slate-400" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDelete(emp.id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+          <DialogHeader><DialogTitle>{editing ? t('editProduct') : t('add')} {t('employees')}</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs text-slate-400">{t('username')}</label><Input value={form.username} onChange={e => setForm({...form, username: e.target.value})} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">{t('password')}</label><Input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="bg-slate-700 border-slate-600" placeholder={editing ? "Leave empty to keep" : ""} /></div>
+            <div><label className="text-xs text-slate-400">{t('name')}</label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">{t('phone')}</label><Input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-slate-700 border-slate-600" /></div>
+            <div><label className="text-xs text-slate-400">Role</label>
+              <Select value={form.role} onValueChange={v => setForm({...form, role: v})}>
+                <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="cashier">Cashier</SelectItem>
+                  <SelectItem value="staff">Staff</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div><label className="text-xs text-slate-400">{t('storeManagement')}</label>
+              <Select value={form.store_id || ""} onValueChange={v => setForm({...form, store_id: v})}>
+                <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue placeholder={t('all')} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">{t('all')}</SelectItem>
+                  {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 bg-slate-900 rounded-lg p-3 space-y-2">
+              <h4 className="text-sm font-medium text-emerald-400">{t('permission')}</h4>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input type="checkbox" checked={form.permissions?.can_discount} onChange={e => setForm({...form, permissions: {...form.permissions, can_discount: e.target.checked}})} /> {t('canDiscount')}
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input type="checkbox" checked={form.permissions?.can_refund} onChange={e => setForm({...form, permissions: {...form.permissions, can_refund: e.target.checked}})} /> {t('canRefund')}
+                </label>
+              </div>
+              <div><label className="text-xs text-slate-400">{t('maxDiscount')} %</label><Input type="number" value={form.permissions?.max_discount || 0} onChange={e => setForm({...form, permissions: {...form.permissions, max_discount: parseInt(e.target.value) || 0}})} className="bg-slate-700 border-slate-600 w-24" /></div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button><Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">{t('save')}</Button></div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// ==================== Stock Alerts Page ====================
+const StockAlertsPage = () => {
+  const { t } = useLang();
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const API = process.env.REACT_APP_BACKEND_URL;
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API}/api/stock-alerts`, { headers: { Authorization: `Bearer ${token}` } });
+        setAlerts(res.data);
+      } catch (e) { console.error(e); }
+      setLoading(false);
+    };
+    fetch();
+  }, [API]);
+
+  if (loading) return <div className="text-white">{t('loading')}</div>;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">{t('stockAlerts')}</h1>
+      {alerts.length === 0 ? (
+        <Card className="bg-slate-800 border-slate-700"><CardContent className="p-8 text-center text-slate-400"><Check className="w-12 h-12 mx-auto mb-3 text-emerald-400" /><p>{t('noData')}</p></CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {alerts.map((a, i) => (
+            <Card key={i} className={`border ${a.level === 'critical' ? 'bg-red-500/10 border-red-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`}>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">{a.product_name}</p>
+                  <p className="text-slate-400 text-sm">{a.product_code}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-lg font-bold ${a.level === 'critical' ? 'text-red-400' : 'text-yellow-400'}`}>{a.current_stock}</p>
+                  <p className="text-slate-400 text-xs">min: {a.min_stock}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== Stock Taking Page ====================
+const StockTakingPage = () => {
+  const { t } = useLang();
+  const [products, setProducts] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState("");
+  const [items, setItems] = useState([]);
+  const [history, setHistory] = useState([]);
+  const API = process.env.REACT_APP_BACKEND_URL;
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const h = { Authorization: `Bearer ${token}` };
+        const [prodRes, whRes, histRes] = await Promise.all([
+          axios.get(`${API}/api/products`, { headers: h }),
+          axios.get(`${API}/api/warehouses`, { headers: h }),
+          axios.get(`${API}/api/stock-takings`, { headers: h })
+        ]);
+        setProducts(prodRes.data);
+        setWarehouses(whRes.data);
+        setHistory(histRes.data);
+      } catch (e) { console.error(e); }
+    };
+    fetchData();
+  }, [API]);
+
+  const startTaking = async () => {
+    if (!selectedWarehouse) return;
+    const token = localStorage.getItem("token");
+    const invRes = await axios.get(`${API}/api/inventory?warehouse_id=${selectedWarehouse}`, { headers: { Authorization: `Bearer ${token}` } });
+    const inv = invRes.data;
+    setItems(products.map(p => {
+      const stock = inv.find(i => i.product_id === p.id);
+      return { product_id: p.id, product_name: p.name, product_code: p.code, system_qty: stock?.quantity || 0, actual_qty: stock?.quantity || 0, difference: 0 };
+    }));
+  };
+
+  const updateActualQty = (idx, qty) => {
+    setItems(prev => prev.map((item, i) => i === idx ? {...item, actual_qty: qty, difference: qty - item.system_qty} : item));
+  };
+
+  const submitTaking = async (status) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(`${API}/api/stock-taking`, { warehouse_id: selectedWarehouse, items, status, notes: "" }, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
+      toast.success(t('save') + " OK");
+      setItems([]);
+    } catch (e) { toast.error("Error"); }
+  };
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">{t('stockTaking')}</h1>
+      
+      {items.length === 0 ? (
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="p-6 space-y-4">
+            <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+              <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue placeholder={t('warehouseManagement')} /></SelectTrigger>
+              <SelectContent>{warehouses.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button onClick={startTaking} disabled={!selectedWarehouse} className="bg-emerald-500 hover:bg-emerald-600">{t('stockTaking')}</Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="p-4">
+            <div className="overflow-auto max-h-96">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-700">
+                    <TableHead className="text-slate-300">{t('productCode')}</TableHead>
+                    <TableHead className="text-slate-300">{t('productName')}</TableHead>
+                    <TableHead className="text-slate-300">{t('systemQty')}</TableHead>
+                    <TableHead className="text-slate-300">{t('actualQty')}</TableHead>
+                    <TableHead className="text-slate-300">{t('difference')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item, idx) => (
+                    <TableRow key={idx} className={`border-slate-700 ${item.difference !== 0 ? 'bg-red-500/5' : ''}`}>
+                      <TableCell className="text-slate-400">{item.product_code}</TableCell>
+                      <TableCell className="text-white">{item.product_name}</TableCell>
+                      <TableCell className="text-slate-300">{item.system_qty}</TableCell>
+                      <TableCell><Input type="number" value={item.actual_qty} onChange={e => updateActualQty(idx, parseFloat(e.target.value) || 0)} className="bg-slate-700 border-slate-600 w-20" /></TableCell>
+                      <TableCell className={`font-bold ${item.difference > 0 ? 'text-green-400' : item.difference < 0 ? 'text-red-400' : 'text-slate-400'}`}>{item.difference > 0 ? '+' : ''}{item.difference}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="outline" onClick={() => setItems([])} className="border-slate-600">{t('cancel')}</Button>
+              <Button onClick={() => submitTaking("draft")} className="bg-blue-500 hover:bg-blue-600">{t('save')} (Draft)</Button>
+              <Button onClick={() => submitTaking("confirmed")} className="bg-emerald-500 hover:bg-emerald-600">{t('confirm')}</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {history.length > 0 && (
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">History</CardTitle></CardHeader>
+          <CardContent>
+            {history.map(h => (
+              <div key={h.id} className="flex justify-between py-2 border-b border-slate-700 last:border-0">
+                <span className="text-white">{h.taking_no}</span>
+                <Badge className={h.status === 'confirmed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}>{h.status}</Badge>
+                <span className="text-slate-400 text-sm">{new Date(h.created_at).toLocaleString()}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+
 // POS Front Desk Page
 const POSPage = () => {
   const { t, lang, changeLang } = useLang();
@@ -3393,6 +3861,8 @@ const POSPage = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showLogin, setShowLogin] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [cashiers, setCashiers] = useState([]);
+  const [selectedCashier, setSelectedCashier] = useState(null);
   const [stores, setStores] = useState([]);
   const [selectedStore, setSelectedStore] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
@@ -3401,14 +3871,23 @@ const POSPage = () => {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [shift, setShift] = useState(null);
   const [showShiftModal, setShowShiftModal] = useState(false);
-  const [priceMode, setPriceMode] = useState("price1"); // global display: price1, bs
+  const [priceMode, setPriceMode] = useState("price1");
   const [exchangeRates, setExchangeRates] = useState({ usd_to_ves: 36.5 });
-  const [showBs, setShowBs] = useState(false); // Bs. display toggle
+  const [showBs, setShowBs] = useState(false);
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingOrders, setPendingOrders] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pos_pending_orders') || '[]'); } catch { return []; }
   });
+  const [heldOrders, setHeldOrders] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pos_held_orders') || '[]'); } catch { return []; }
+  });
+  const [showHeldOrders, setShowHeldOrders] = useState(false);
+  const [showRefund, setShowRefund] = useState(false);
+  const [refundOrderNo, setRefundOrderNo] = useState("");
+  const searchInputRef = React.useRef(null);
+  const lastKeyTime = React.useRef(0);
+  const scanBuffer = React.useRef("");
 
   // Network detection
   useEffect(() => {
@@ -3457,15 +3936,17 @@ const POSPage = () => {
     }
   }, []);
 
-  // Keyboard shortcuts: F1=search, F3=clear, F9=pay, F5=cash, F6=card, F7=biopago, F8=transfer, ESC=close
+  // Keyboard shortcuts: F1=search, F3=clear, F4=hold, F9=pay, F10=recall, F11=refund, ESC=close
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (showLogin || !selectedStore) return;
       if (e.key === 'F1') { e.preventDefault(); setShowProductSearch(true); }
       if (e.key === 'F3') { e.preventDefault(); clearCart(); }
+      if (e.key === 'F4') { e.preventDefault(); holdCurrentOrder(); }
       if (e.key === 'F9') { e.preventDefault(); if (cart.length > 0 && shift) setShowPayment(true); }
-      if (e.key === 'Escape') { setShowProductSearch(false); setShowPayment(false); setShowShiftModal(false); }
-      // Payment method shortcuts (only when payment modal is open)
+      if (e.key === 'F10') { e.preventDefault(); setShowHeldOrders(true); }
+      if (e.key === 'F11') { e.preventDefault(); setShowRefund(true); }
+      if (e.key === 'Escape') { setShowProductSearch(false); setShowPayment(false); setShowShiftModal(false); setShowHeldOrders(false); setShowRefund(false); }
       if (showPayment) {
         if (e.key === 'F5') { e.preventDefault(); setPaymentMethod('cash'); }
         if (e.key === 'F6') { e.preventDefault(); setPaymentMethod('card'); }
@@ -3476,6 +3957,46 @@ const POSPage = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showLogin, selectedStore, cart, shift, showPayment]);
+
+  // Barcode scanner: Enter in search box searches by barcode/code
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter' && searchTerm.trim()) {
+      const found = products.find(p => p.barcode === searchTerm.trim() || p.code === searchTerm.trim());
+      if (found) { addToCart(found); setSearchTerm(""); }
+    }
+  };
+
+  // Hold order (F4)
+  const holdCurrentOrder = () => {
+    if (cart.length === 0) return;
+    const held = { id: Date.now(), items: cart, total: finalTotal, time: new Date().toISOString() };
+    const newHeld = [...heldOrders, held];
+    setHeldOrders(newHeld);
+    localStorage.setItem('pos_held_orders', JSON.stringify(newHeld));
+    clearCart();
+    toast.success(t('holdOrder') + " OK");
+  };
+
+  // Recall order (F10)
+  const recallOrder = (heldId) => {
+    const held = heldOrders.find(h => h.id === heldId);
+    if (held) {
+      setCart(held.items);
+      setHeldOrders(prev => { const n = prev.filter(h => h.id !== heldId); localStorage.setItem('pos_held_orders', JSON.stringify(n)); return n; });
+      setShowHeldOrders(false);
+      toast.success(t('recallOrder') + " OK");
+    }
+  };
+
+  // Refund (F11)
+  const handleRefund = async () => {
+    try {
+      const token = localStorage.getItem("pos_token");
+      await axios.post(`${API}/api/refunds`, { order_no: refundOrderNo, items: [], reason: "POS refund" }, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
+      toast.success(t('refund') + " OK");
+      setShowRefund(false); setRefundOrderNo("");
+    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
+  };
 
   const fetchData = async (token) => {
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -3494,6 +4015,11 @@ const POSPage = () => {
       console.error(e);
     }
   };
+
+  // Fetch cashier list for login screen
+  useEffect(() => {
+    axios.get(`${API}/auth/cashiers`).then(res => setCashiers(res.data)).catch(() => {});
+  }, []);
 
   const getProductPrice = (product) => {
     const p1 = product.price1 || product.retail_price || 0;
@@ -3552,10 +4078,14 @@ const POSPage = () => {
 
   const handleLogin = async () => {
     try {
-      const res = await axios.post(`${API}/auth/login`, loginForm);
+      const loginData = selectedCashier 
+        ? { username: selectedCashier.username, password: loginForm.password }
+        : loginForm;
+      const res = await axios.post(`${API}/auth/login`, loginData);
       const userData = { ...res.data.user, token: res.data.token };
       setUser(userData);
       localStorage.setItem("pos_user", JSON.stringify(userData));
+      localStorage.setItem("pos_token", res.data.token);
       axios.defaults.headers.common["Authorization"] = `Bearer ${res.data.token}`;
       await fetchData(res.data.token);
       setShowLogin(false);
@@ -3759,8 +4289,55 @@ const POSPage = () => {
             <p className="text-slate-400">{t('posTitle')}</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-300">{t('username')}</label>
+            {/* Cashier Selection */}
+            {cashiers.length > 0 && !selectedCashier && (
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300">{t('employees')}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {cashiers.map(c => (
+                    <div key={c.id} onClick={() => { setSelectedCashier(c); setLoginForm({...loginForm, username: c.username}); }}
+                      className="p-3 rounded-lg border border-slate-600 hover:border-emerald-500 cursor-pointer text-center transition-colors" data-testid={`cashier-${c.username}`}>
+                      <div className="w-10 h-10 bg-slate-600 rounded-full mx-auto mb-2 flex items-center justify-center text-white font-bold">
+                        {(c.name || c.username).charAt(0).toUpperCase()}
+                      </div>
+                      <p className="text-white text-sm font-medium">{c.name || c.username}</p>
+                      <p className="text-slate-500 text-xs">{c.role}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Password input after cashier selected */}
+            {selectedCashier && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 bg-slate-700/50 rounded-lg p-3">
+                  <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold">
+                    {(selectedCashier.name || selectedCashier.username).charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-white font-medium">{selectedCashier.name || selectedCashier.username}</p>
+                    <p className="text-slate-400 text-xs">{selectedCashier.role}</p>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedCashier(null)} className="ml-auto text-slate-400">
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div>
+                  <label className="text-sm text-slate-300">{t('password')}</label>
+                  <Input type="password" value={loginForm.password}
+                    onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    className="bg-slate-700 border-slate-600 text-white"
+                    placeholder={t('password')} autoFocus data-testid="pos-password" />
+                </div>
+                <Button onClick={handleLogin} className="w-full bg-blue-500 hover:bg-blue-600" data-testid="pos-login-btn">{t('login')}</Button>
+              </div>
+            )}
+            {/* Manual login fallback */}
+            {cashiers.length === 0 && (
+              <>
+                <div>
+                  <label className="text-sm text-slate-300">{t('username')}</label>
               <Input
                 value={loginForm.username}
                 onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
@@ -3781,9 +4358,11 @@ const POSPage = () => {
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               />
             </div>
-            <Button onClick={handleLogin} className="w-full bg-blue-500 hover:bg-blue-600" data-testid="pos-login-btn">
+            <Button onClick={handleLogin} className="w-full bg-blue-500 hover:bg-blue-600" data-testid="pos-login-btn-manual">
               {t('login')}
             </Button>
+              </>
+            )}
             <div className="text-center">
               <Link to="/admin" className="text-slate-400 hover:text-white text-sm">
                 Admin →
@@ -3857,6 +4436,19 @@ const POSPage = () => {
             {isOnline ? t('online') : t('offline')}
             {pendingOrders.length > 0 && <Badge className="ml-1 bg-orange-500 text-white text-xs px-1 py-0">{pendingOrders.length}</Badge>}
           </div>
+          {/* Quick action buttons */}
+          <div className="flex gap-1.5">
+            <Button size="sm" variant="outline" onClick={holdCurrentOrder} className="border-slate-600 text-slate-300 h-7 text-xs" disabled={cart.length === 0} data-testid="hold-btn">
+              F4 {t('holdOrder')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowHeldOrders(true)} className="border-slate-600 text-slate-300 h-7 text-xs relative" data-testid="recall-btn">
+              F10 {t('recallOrder')}
+              {heldOrders.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-orange-500 rounded-full text-xs flex items-center justify-center">{heldOrders.length}</span>}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowRefund(true)} className="border-slate-600 text-slate-300 h-7 text-xs" data-testid="refund-btn">
+              F11 {t('refund')}
+            </Button>
+          </div>
           {/* Currency Toggle - Up/Down */}
           <div className="flex items-center gap-1 bg-slate-700 rounded-lg px-2 py-1">
             <span className="text-xs text-slate-400 mr-1">{t('currency')}</span>
@@ -3904,6 +4496,7 @@ const POSPage = () => {
               placeholder={t('scanOrSearch')}
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); if(e.target.value) setShowProductSearch(true); }}
+              onKeyDown={handleSearchKeyDown}
               onFocus={() => setShowProductSearch(true)}
               className="pl-10 bg-slate-800 border-slate-700 text-white h-10"
               data-testid="pos-search"
@@ -4069,7 +4662,18 @@ const POSPage = () => {
                         <td className="px-2 py-3">
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => updateQuantity(item.product_id, -1)} className="w-7 h-7 rounded bg-slate-700 text-white hover:bg-slate-600 flex items-center justify-center text-sm">-</button>
-                            <span className="text-white w-10 text-center font-medium">{item.quantity}</span>
+                            <input type="number" step="0.1" min="0.1" value={item.quantity}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (val > 0) {
+                                  setCart(prev => prev.map(i => i.product_id === item.product_id
+                                    ? {...i, quantity: val, amount: calcCartItemAmount(i.product, val, i.price_mode)}
+                                    : i));
+                                }
+                              }}
+                              className="w-14 text-center bg-slate-700 border border-slate-600 rounded text-white text-sm py-1"
+                              data-testid={`qty-input-${item.product_id}`}
+                            />
                             <button onClick={() => updateQuantity(item.product_id, 1)} className="w-7 h-7 rounded bg-slate-700 text-white hover:bg-slate-600 flex items-center justify-center text-sm">+</button>
                           </div>
                         </td>
@@ -4320,6 +4924,46 @@ const POSPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Held Orders Modal (F10) */}
+      <Dialog open={showHeldOrders} onOpenChange={setShowHeldOrders}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+          <DialogHeader><DialogTitle>{t('recallOrder')} (F10)</DialogTitle></DialogHeader>
+          {heldOrders.length === 0 ? (
+            <p className="text-slate-400 text-center py-4">{t('noData')}</p>
+          ) : (
+            <div className="space-y-2">
+              {heldOrders.map(held => (
+                <div key={held.id} className="flex items-center justify-between bg-slate-700/50 rounded-lg p-3 hover:bg-slate-700 cursor-pointer" onClick={() => recallOrder(held.id)} data-testid={`recall-${held.id}`}>
+                  <div>
+                    <p className="text-white font-medium">{held.items.length} {t('products')}</p>
+                    <p className="text-slate-400 text-xs">{new Date(held.time).toLocaleTimeString()}</p>
+                  </div>
+                  <span className="text-emerald-400 font-bold">${held.total?.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Refund Modal (F11) */}
+      <Dialog open={showRefund} onOpenChange={setShowRefund}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+          <DialogHeader><DialogTitle>{t('refund')} (F11)</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-slate-300">{t('salesOrder')} #</label>
+              <Input value={refundOrderNo} onChange={e => setRefundOrderNo(e.target.value)} placeholder="SO20260313..." className="bg-slate-700 border-slate-600" data-testid="refund-order-no" />
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowRefund(false)} className="border-slate-600">{t('cancel')}</Button>
+              <Button onClick={handleRefund} disabled={!refundOrderNo} className="bg-red-500 hover:bg-red-600" data-testid="confirm-refund">{t('refund')}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };
