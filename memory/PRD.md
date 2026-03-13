@@ -21,7 +21,7 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 │   ├── components/ (AdminLayout, ProtectedRoute, Print components, ui/)
 │   └── pages/
 │       ├── LoginPage.js, PosPage.js, ShopPage.js, ShopOrdersPage.js
-│       └── admin/ (25+ pages)
+│       └── admin/ (30+ pages)
 ```
 
 ## Completed Features
@@ -32,24 +32,25 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 - [x] Product Import (CSV/Excel/JSON)
 - [x] i18n (Chinese/English/Spanish)
 - [x] Offline mode with auto-sync
-- [x] Frontend Refactoring: Monolithic → 25+ modular files
+- [x] Frontend Refactoring: Monolithic -> 30+ modular files
 - [x] Printing: 80mm receipt, A4 invoice, price labels
 - [x] 12-Point Enhancement Plan: All completed
 - [x] **Phase 2 Features (2026-03-13):** All 11 new features
-  - [x] Report Export: Sales & Inventory Excel download
-  - [x] Profit Analysis: Revenue/cost/profit per product with charts
-  - [x] Customer Purchase History: Order history in customer detail
-  - [x] Loyalty Points/Balance: Add/redeem points, top-up balance
-  - [x] Audit Log: Track all operations with filters
-  - [x] Promotions Engine: CRUD for discount/fullReduction/buyGet/flashSale
-  - [x] Accounts Receivable/Payable: Track credit sales & supplier debts
-  - [x] Data Backup Export: Full JSON database backup
-  - [x] Dashboard Sales Trends: 7-day/30-day area chart
-  - [x] Role Permissions: Admin/manager/cashier/staff permission system
-  - [x] Report Export Buttons: Added to Reports page UI
+  - Report Export (Excel), Profit Analysis, Customer Purchase History
+  - Loyalty Points/Balance management, Audit Log
+  - Promotions Engine, Accounts Receivable/Payable
+  - Data Backup Export, Dashboard Sales Trends
+  - Role Permissions, Report Export Buttons
+- [x] **POS Auto-Points System (2026-03-13):**
+  - Auto-earn points on purchase ($1 = 1pt, configurable)
+  - Points redemption at checkout (100pts = $1, configurable)
+  - Points badge in POS header when customer selected
+  - Points section in payment modal with "use all" button
+  - Points earned/used shown in receipt
+  - Points rate configuration in System Settings
+  - All transactions logged in points_log collection
 
 ## P1 - Next Tasks
-- Offline Mode sync logic enhancement
 - Wholesale Module (dedicated wholesale ordering flow)
 - Backend server.py refactoring into API routers
 
@@ -64,3 +65,4 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 ## Test Reports
 - /app/test_reports/iteration_14.json (pie chart fix - 100%)
 - /app/test_reports/iteration_15.json (11 new features - 100%)
+- /app/test_reports/iteration_16.json (POS auto-points - 100%)
