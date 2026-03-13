@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -12,6 +12,9 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
+import json
+import csv
+import io
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1795,6 +1798,147 @@ async def init_data():
     return {"message": "初始化完成"}
 
 # ==================== Main App Setup ====================
+
+# Product Import
+@api_router.post("/products/import")
+async def import_products(file: UploadFile = File(...), mode: str = Query("skip", regex="^(skip|overwrite)$")):
+    content = await file.read()
+    filename = file.filename.lower()
+    items = []
+
+    try:
+        if filename.endswith('.json'):
+            items = json.loads(content.decode('utf-8'))
+            if isinstance(items, dict):
+                items = items.get('products', items.get('data', [items]))
+        elif filename.endswith('.csv'):
+            text = content.decode('utf-8-sig')
+            reader = csv.DictReader(io.StringIO(text))
+            items = list(reader)
+        elif filename.endswith(('.xlsx', '.xls')):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(content))
+            ws = wb.active
+            headers = [cell.value for cell in ws[1] if cell.value]
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                row_dict = {}
+                for idx, header in enumerate(headers):
+                    if idx < len(row):
+                        row_dict[header] = row[idx]
+                if any(row_dict.values()):
+                    items.append(row_dict)
+        else:
+            raise HTTPException(400, "Unsupported file format. Use .json, .csv, .xlsx, or .xls")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse file: {str(e)}")
+
+    field_map = {
+        '编码': 'code', 'codigo': 'code', 'sku': 'code',
+        '名称': 'name', 'nombre': 'name', 'product_name': 'name', '商品名称': 'name',
+        '分类': 'category', 'categoria': 'category',
+        '单位': 'unit', 'unidad': 'unit',
+        '成本价': 'cost_price', 'costo': 'cost_price', 'cost': 'cost_price',
+        '利率1': 'margin1', 'margen1': 'margin1',
+        '利率2': 'margin2', 'margen2': 'margin2',
+        '利率3': 'margin3', 'margen3': 'margin3',
+        '价格1': 'price1', 'precio1': 'price1',
+        '价格2': 'price2', 'precio2': 'price2',
+        '价格3': 'price3', 'precio3': 'price3',
+        '每箱数量': 'items_per_box', 'cantidad_caja': 'items_per_box', 'box_qty': 'items_per_box',
+        '条码': 'barcode', 'codigo_barra': 'barcode',
+        '最低库存': 'min_stock', 'stock_minimo': 'min_stock',
+        '批发价': 'wholesale_price', 'precio_mayoreo': 'wholesale_price',
+        '状态': 'status', 'estado': 'status',
+    }
+
+    created = 0
+    updated = 0
+    skipped = 0
+    failed = 0
+    errors = []
+
+    for idx, raw in enumerate(items):
+        try:
+            item = {}
+            for k, v in raw.items():
+                if k is None:
+                    continue
+                mapped = field_map.get(str(k).strip().lower(), str(k).strip().lower())
+                item[mapped] = v
+
+            if not item.get('code') and not item.get('name'):
+                skipped += 1
+                continue
+
+            for num_field in ['cost_price', 'margin1', 'margin2', 'margin3', 'price1', 'price2', 'price3', 'items_per_box', 'min_stock', 'wholesale_price']:
+                if num_field in item and item[num_field] is not None:
+                    try:
+                        item[num_field] = float(str(item[num_field]).replace(',', ''))
+                    except (ValueError, TypeError):
+                        item[num_field] = 0
+
+            code = item.get('code', '')
+            existing = await db.products.find_one({"code": code}, {"_id": 0}) if code else None
+
+            product_data = {
+                "code": item.get('code', ''),
+                "name": item.get('name', ''),
+                "category": item.get('category', ''),
+                "unit": item.get('unit', 'pcs'),
+                "cost_price": item.get('cost_price', 0),
+                "margin1": item.get('margin1', 30),
+                "margin2": item.get('margin2', 20),
+                "margin3": item.get('margin3', 10),
+                "price1": item.get('price1', 0),
+                "price2": item.get('price2', 0),
+                "price3": item.get('price3', 0),
+                "items_per_box": int(item.get('items_per_box', 1) or 1),
+                "barcode": item.get('barcode', ''),
+                "min_stock": int(item.get('min_stock', 0) or 0),
+                "wholesale_price": item.get('wholesale_price', 0),
+                "status": item.get('status', 'active'),
+            }
+
+            for m_key in ['margin1', 'margin2', 'margin3']:
+                p_key = m_key.replace('margin', 'price')
+                if product_data[p_key] == 0 and product_data['cost_price'] > 0 and product_data[m_key] > 0:
+                    product_data[p_key] = round(product_data['cost_price'] * (1 + product_data[m_key] / 100), 2)
+
+            if existing:
+                if mode == 'overwrite':
+                    await db.products.update_one({"code": code}, {"$set": {**product_data, "updated_at": datetime.now(timezone.utc).isoformat()}})
+                    updated += 1
+                else:
+                    skipped += 1
+            else:
+                product_data["id"] = str(uuid.uuid4())
+                product_data["stock"] = 0
+                product_data["created_at"] = datetime.now(timezone.utc).isoformat()
+                product_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+                await db.products.insert_one(product_data)
+                created += 1
+        except Exception as e:
+            failed += 1
+            errors.append(f"Row {idx + 1}: {str(e)}")
+
+    return {"created": created, "updated": updated, "skipped": skipped, "failed": failed, "errors": errors[:10]}
+
+# Product import template
+@api_router.get("/products/import/template")
+async def get_import_template():
+    from fastapi.responses import StreamingResponse
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['code', 'name', 'category', 'unit', 'cost_price', 'margin1', 'margin2', 'margin3', 'price1', 'price2', 'price3', 'items_per_box', 'barcode', 'min_stock', 'wholesale_price', 'status'])
+    writer.writerow(['P001', 'Sample Product', 'General', 'pcs', '10.00', '30', '20', '10', '13.00', '12.00', '11.00', '12', '7501234567890', '5', '11.50', 'active'])
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode('utf-8-sig')),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=product_import_template.csv"}
+    )
 
 @api_router.get("/")
 async def root():

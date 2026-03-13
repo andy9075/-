@@ -9,7 +9,8 @@ import {
   Home, Building2, Truck, CreditCard, Globe, ChevronDown,
   ShoppingBag, DollarSign, TrendingUp, AlertCircle, Check,
   ArrowLeftRight, Printer, Wifi, WifiOff, FileText, Calendar,
-  ClipboardList, RotateCcw, UserPlus, Shield, Weight
+  ClipboardList, RotateCcw, UserPlus, Shield, Weight,
+  Upload, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -433,7 +434,7 @@ const ProductsPage = () => {
       const res = await axios.get(`${API}/products`, { params: { search } });
       setProducts(res.data);
     } catch (e) {
-      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载商品失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error(t('loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -452,17 +453,17 @@ const ProductsPage = () => {
     try {
       if (editingProduct) {
         await axios.put(`${API}/products/${editingProduct.id}`, formData);
-        toast.success("更新成功");
+        toast.success(t('updateSuccess'));
       } else {
         await axios.post(`${API}/products`, formData);
-        toast.success("添加成功");
+        toast.success(t('addSuccess'));
       }
       setShowForm(false);
       setEditingProduct(null);
       resetForm();
       fetchProducts();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "操作失败");
+      toast.error(e.response?.data?.detail || t('operationFailed'));
     }
   };
 
@@ -473,13 +474,13 @@ const ProductsPage = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("确定删除此商品?")) return;
+    if (!window.confirm(t('deleteConfirm'))) return;
     try {
       await axios.delete(`${API}/products/${id}`);
-      toast.success("删除成功");
+      toast.success(t('deleteSuccess'));
       fetchProducts();
     } catch (e) {
-      toast.error("删除失败");
+      toast.error(t('deleteFailed'));
     }
   };
 
@@ -492,13 +493,49 @@ const ProductsPage = () => {
     });
   };
 
+  // Import functionality
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importMode, setImportMode] = useState("skip");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  const handleImport = async () => {
+    if (!importFile) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', importFile);
+      const res = await axios.post(`${API}/products/import?mode=${importMode}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setImportResult(res.data);
+      toast.success(t('importSuccess'));
+      fetchProducts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || t('importFailed'));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    window.open(`${API}/products/import/template`, '_blank');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">{t('productManagement')}</h1>
-        <Button onClick={() => { resetForm(); setEditingProduct(null); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-product-btn">
-          <Plus className="w-4 h-4 mr-2" /> {t('addProduct')}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => { setShowImport(true); setImportResult(null); setImportFile(null); }} variant="outline" className="border-slate-600 text-slate-300" data-testid="import-products-btn">
+            <Upload className="w-4 h-4 mr-2" /> {t('importProducts')}
+          </Button>
+          <Button onClick={() => { resetForm(); setEditingProduct(null); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-product-btn">
+            <Plus className="w-4 h-4 mr-2" /> {t('addProduct')}
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4">
@@ -670,12 +707,73 @@ const ProductsPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={showImport} onOpenChange={setShowImport}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle>{t('importProducts')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center">
+              <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls,.json"
+                onChange={(e) => setImportFile(e.target.files[0])}
+                className="block w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-emerald-500 file:text-white hover:file:bg-emerald-600 file:cursor-pointer"
+                data-testid="import-file-input"
+              />
+              <p className="text-xs text-slate-400 mt-2">{t('supportedFormats')}: Excel (.xlsx/.xls), CSV, JSON</p>
+            </div>
+
+            <div>
+              <label className="text-sm text-slate-300 block mb-1">{t('duplicateHandling')}</label>
+              <Select value={importMode} onValueChange={setImportMode}>
+                <SelectTrigger className="bg-slate-700 border-slate-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">{t('skipDuplicate')}</SelectItem>
+                  <SelectItem value="overwrite">{t('overwriteDuplicate')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button onClick={downloadTemplate} variant="outline" className="w-full border-slate-600 text-slate-300" data-testid="download-template-btn">
+              <Download className="w-4 h-4 mr-2" /> {t('downloadTemplate')}
+            </Button>
+
+            {importResult && (
+              <div className="bg-slate-700 rounded-lg p-4 space-y-1">
+                <h4 className="font-medium text-white mb-2">{t('importResult')}</h4>
+                <p className="text-emerald-400 text-sm">{t('created')}: {importResult.created}</p>
+                <p className="text-blue-400 text-sm">{t('updated')}: {importResult.updated}</p>
+                <p className="text-yellow-400 text-sm">{t('skipped')}: {importResult.skipped}</p>
+                <p className="text-red-400 text-sm">{t('failed')}: {importResult.failed}</p>
+                {importResult.errors?.length > 0 && (
+                  <div className="mt-2 text-xs text-red-300 space-y-1">
+                    {importResult.errors.map((err, i) => <p key={i}>{err}</p>)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setShowImport(false)} className="border-slate-600">{t('cancel')}</Button>
+            <Button onClick={handleImport} disabled={!importFile || importing} className="bg-emerald-500 hover:bg-emerald-600" data-testid="start-import-btn">
+              {importing ? t('importing') : t('startImport')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 // Stores Management
 const StoresPage = () => {
+  const { t } = useLang();
   const [stores, setStores] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -695,7 +793,7 @@ const StoresPage = () => {
       const res = await axios.get(`${API}/stores`);
       setStores(res.data);
     } catch (e) {
-      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载门店失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error(t('loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -714,16 +812,16 @@ const StoresPage = () => {
     try {
       if (editingStore) {
         await axios.put(`${API}/stores/${editingStore.id}`, formData);
-        toast.success("更新成功");
+        toast.success(t('updateSuccess'));
       } else {
         await axios.post(`${API}/stores`, formData);
-        toast.success("添加成功");
+        toast.success(t('addSuccess'));
       }
       setShowForm(false);
       setEditingStore(null);
       fetchStores();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "操作失败");
+      toast.error(e.response?.data?.detail || t('operationFailed'));
     }
   };
 
@@ -734,24 +832,24 @@ const StoresPage = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("确定删除此门店?")) return;
+    if (!window.confirm(t('deleteConfirm'))) return;
     try {
       await axios.delete(`${API}/stores/${id}`);
-      toast.success("删除成功");
+      toast.success(t('deleteSuccess'));
       fetchStores();
     } catch (e) {
-      toast.error("删除失败");
+      toast.error(t('deleteFailed'));
     }
   };
 
-  const storeTypes = { retail: "实体门店", online: "网店", warehouse: "仓库" };
+  const storeTypes = { retail: t('physicalStore'), online: t('onlineStore'), warehouse: t('warehouse') };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">门店管理</h1>
+        <h1 className="text-2xl font-bold text-white">{t('storeManagement')}</h1>
         <Button onClick={() => { setFormData({ code: "", name: "", type: "retail", address: "", phone: "", warehouse_id: "", is_headquarters: false, status: "active" }); setEditingStore(null); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-store-btn">
-          <Plus className="w-4 h-4 mr-2" /> 添加门店
+          <Plus className="w-4 h-4 mr-2" /> {t('addStore')}
         </Button>
       </div>
 
@@ -763,7 +861,7 @@ const StoresPage = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-white font-semibold">{store.name}</h3>
-                    {store.is_headquarters && <Badge className="bg-yellow-500/20 text-yellow-400">总部</Badge>}
+                    {store.is_headquarters && <Badge className="bg-yellow-500/20 text-yellow-400">{t('headquarters')}</Badge>}
                   </div>
                   <p className="text-slate-400 text-sm mt-1">{store.code}</p>
                 </div>
@@ -772,13 +870,13 @@ const StoresPage = () => {
                 </Badge>
               </div>
               <div className="mt-4 space-y-2 text-sm">
-                <p className="text-slate-300"><span className="text-slate-500">地址:</span> {store.address || '-'}</p>
-                <p className="text-slate-300"><span className="text-slate-500">电话:</span> {store.phone || '-'}</p>
-                <p className="text-slate-300"><span className="text-slate-500">关联仓库:</span> {warehouses.find(w => w.id === store.warehouse_id)?.name || '-'}</p>
+                <p className="text-slate-300"><span className="text-slate-500">{t('address')}:</span> {store.address || '-'}</p>
+                <p className="text-slate-300"><span className="text-slate-500">{t('phone')}:</span> {store.phone || '-'}</p>
+                <p className="text-slate-300"><span className="text-slate-500">{t('associatedWarehouse')}:</span> {warehouses.find(w => w.id === store.warehouse_id)?.name || '-'}</p>
               </div>
               <div className="flex gap-2 mt-4">
                 <Button size="sm" variant="outline" onClick={() => handleEdit(store)} className="flex-1 border-slate-600 text-slate-300">
-                  <Edit className="w-4 h-4 mr-1" /> 编辑
+                  <Edit className="w-4 h-4 mr-1" /> {t('edit')}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => handleDelete(store.id)} className="border-red-500/50 text-red-400 hover:bg-red-500/10">
                   <Trash2 className="w-4 h-4" />
@@ -792,38 +890,38 @@ const StoresPage = () => {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>{editingStore ? '编辑门店' : '添加门店'}</DialogTitle>
+            <DialogTitle>{editingStore ? t('editStore') : t('addStore')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-300">门店编码</label>
+                <label className="text-sm text-slate-300">{t('storeCode')}</label>
                 <Input value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="store-code" />
               </div>
               <div>
-                <label className="text-sm text-slate-300">门店名称</label>
+                <label className="text-sm text-slate-300">{t('storeName')}</label>
                 <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="store-name" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-300">类型</label>
+                <label className="text-sm text-slate-300">{t('type')}</label>
                 <Select value={formData.type} onValueChange={(v) => setFormData({...formData, type: v})}>
                   <SelectTrigger className="bg-slate-700 border-slate-600">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="retail">实体门店</SelectItem>
-                    <SelectItem value="online">网店</SelectItem>
-                    <SelectItem value="warehouse">仓库</SelectItem>
+                    <SelectItem value="retail">{t('physicalStore')}</SelectItem>
+                    <SelectItem value="online">{t('onlineStore')}</SelectItem>
+                    <SelectItem value="warehouse">{t('warehouse')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="text-sm text-slate-300">关联仓库</label>
+                <label className="text-sm text-slate-300">{t('associatedWarehouse')}</label>
                 <Select value={formData.warehouse_id} onValueChange={(v) => setFormData({...formData, warehouse_id: v})}>
                   <SelectTrigger className="bg-slate-700 border-slate-600">
-                    <SelectValue placeholder="选择仓库" />
+                    <SelectValue placeholder={t('selectWarehouse')} />
                   </SelectTrigger>
                   <SelectContent>
                     {warehouses.map(wh => (
@@ -834,17 +932,17 @@ const StoresPage = () => {
               </div>
             </div>
             <div>
-              <label className="text-sm text-slate-300">地址</label>
+              <label className="text-sm text-slate-300">{t('address')}</label>
               <Input value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">电话</label>
+              <label className="text-sm text-slate-300">{t('phone')}</label>
               <Input value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">取消</Button>
-            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600" data-testid="store-submit">保存</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button>
+            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600" data-testid="store-submit">{t('save')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -854,6 +952,7 @@ const StoresPage = () => {
 
 // Warehouses Management
 const WarehousesPage = () => {
+  const { t } = useLang();
   const [warehouses, setWarehouses] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -879,7 +978,7 @@ const WarehousesPage = () => {
         setSelectedWarehouse(res.data[0].id);
       }
     } catch (e) {
-      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载仓库失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error(t('loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -897,20 +996,20 @@ const WarehousesPage = () => {
   const handleSubmit = async () => {
     try {
       await axios.post(`${API}/warehouses`, formData);
-      toast.success("添加成功");
+      toast.success(t('addSuccess'));
       setShowForm(false);
       fetchWarehouses();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "操作失败");
+      toast.error(e.response?.data?.detail || t('operationFailed'));
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">仓库管理</h1>
+        <h1 className="text-2xl font-bold text-white">{t('warehouseManagement')}</h1>
         <Button onClick={() => { setFormData({ code: "", name: "", address: "", is_main: false, store_id: "" }); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-warehouse-btn">
-          <Plus className="w-4 h-4 mr-2" /> 添加仓库
+          <Plus className="w-4 h-4 mr-2" /> {t('addWarehouse')}
         </Button>
       </div>
 
@@ -931,7 +1030,7 @@ const WarehousesPage = () => {
                   <p className="text-slate-400 text-xs">{wh.code}</p>
                 </div>
               </div>
-              {wh.is_main && <Badge className="mt-2 bg-yellow-500/20 text-yellow-400">总部仓库</Badge>}
+              {wh.is_main && <Badge className="mt-2 bg-yellow-500/20 text-yellow-400">{t('mainWarehouse')}</Badge>}
             </CardContent>
           </Card>
         ))}
@@ -940,17 +1039,17 @@ const WarehousesPage = () => {
       {selectedWarehouse && (
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">库存列表 - {warehouses.find(w => w.id === selectedWarehouse)?.name}</CardTitle>
+            <CardTitle className="text-white">{t('inventoryList')} - {warehouses.find(w => w.id === selectedWarehouse)?.name}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow className="border-slate-700">
-                  <TableHead className="text-slate-300">商品编码</TableHead>
-                  <TableHead className="text-slate-300">商品名称</TableHead>
-                  <TableHead className="text-slate-300">库存数量</TableHead>
-                  <TableHead className="text-slate-300">预留数量</TableHead>
-                  <TableHead className="text-slate-300">可用数量</TableHead>
+                  <TableHead className="text-slate-300">{t('productCode')}</TableHead>
+                  <TableHead className="text-slate-300">{t('productName')}</TableHead>
+                  <TableHead className="text-slate-300">{t('inventoryQty')}</TableHead>
+                  <TableHead className="text-slate-300">{t('reservedQty')}</TableHead>
+                  <TableHead className="text-slate-300">{t('availableQty')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -965,7 +1064,7 @@ const WarehousesPage = () => {
                 ))}
                 {inventory.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-slate-400">暂无库存数据</TableCell>
+                    <TableCell colSpan={5} className="text-center text-slate-400">{t('noInventoryData')}</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -977,29 +1076,29 @@ const WarehousesPage = () => {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>添加仓库</DialogTitle>
+            <DialogTitle>{t('addWarehouse')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-slate-300">仓库编码</label>
+              <label className="text-sm text-slate-300">{t('warehouseCode')}</label>
               <Input value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="warehouse-code" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">仓库名称</label>
+              <label className="text-sm text-slate-300">{t('warehouseName')}</label>
               <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="warehouse-name" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">地址</label>
+              <label className="text-sm text-slate-300">{t('address')}</label>
               <Input value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={formData.is_main} onChange={(e) => setFormData({...formData, is_main: e.target.checked})} className="rounded" />
-              <label className="text-sm text-slate-300">设为总部仓库</label>
+              <label className="text-sm text-slate-300">{t('setMainWarehouse')}</label>
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">取消</Button>
-            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600" data-testid="warehouse-submit">保存</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button>
+            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600" data-testid="warehouse-submit">{t('save')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1195,6 +1294,7 @@ const OnlineOrdersPage = () => {
 
 // Customers Management
 const CustomersPage = () => {
+  const { t } = useLang();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -1212,7 +1312,7 @@ const CustomersPage = () => {
       const res = await axios.get(`${API}/customers`, { params: { search: search || undefined } });
       setCustomers(res.data);
     } catch (e) {
-      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载客户失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error(t('loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -1221,20 +1321,20 @@ const CustomersPage = () => {
   const handleSubmit = async () => {
     try {
       await axios.post(`${API}/customers`, formData);
-      toast.success("添加成功");
+      toast.success(t('addSuccess'));
       setShowForm(false);
       fetchCustomers();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "操作失败");
+      toast.error(e.response?.data?.detail || t('operationFailed'));
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">客户管理</h1>
+        <h1 className="text-2xl font-bold text-white">{t('customerManagement')}</h1>
         <Button onClick={() => { setFormData({ code: "", name: "", phone: "", email: "", address: "", member_level: "normal", points: 0, balance: 0 }); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-customer-btn">
-          <Plus className="w-4 h-4 mr-2" /> 添加客户
+          <Plus className="w-4 h-4 mr-2" /> {t('addCustomer')}
         </Button>
       </div>
 
@@ -1242,7 +1342,7 @@ const CustomersPage = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
-            placeholder="搜索客户名称、电话..."
+            placeholder={t('searchCustomerPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && fetchCustomers()}
@@ -1255,12 +1355,12 @@ const CustomersPage = () => {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-300">编码</TableHead>
-              <TableHead className="text-slate-300">客户名称</TableHead>
-              <TableHead className="text-slate-300">电话</TableHead>
-              <TableHead className="text-slate-300">会员等级</TableHead>
-              <TableHead className="text-slate-300">积分</TableHead>
-              <TableHead className="text-slate-300">余额</TableHead>
+              <TableHead className="text-slate-300">{t('customerCode')}</TableHead>
+              <TableHead className="text-slate-300">{t('customerName')}</TableHead>
+              <TableHead className="text-slate-300">{t('phone')}</TableHead>
+              <TableHead className="text-slate-300">{t('memberLevel')}</TableHead>
+              <TableHead className="text-slate-300">{t('points')}</TableHead>
+              <TableHead className="text-slate-300">{t('balance')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1271,7 +1371,7 @@ const CustomersPage = () => {
                 <TableCell className="text-slate-300">{customer.phone || '-'}</TableCell>
                 <TableCell>
                   <Badge variant={customer.member_level === 'vip' ? 'default' : 'secondary'}>
-                    {customer.member_level === 'vip' ? 'VIP' : '普通'}
+                    {customer.member_level === 'vip' ? t('vip') : t('normal')}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-purple-400">{customer.points}</TableCell>
@@ -1285,37 +1385,37 @@ const CustomersPage = () => {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>添加客户</DialogTitle>
+            <DialogTitle>{t('addCustomer')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-300">客户编码</label>
+                <label className="text-sm text-slate-300">{t('customerCode')}</label>
                 <Input value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
               <div>
-                <label className="text-sm text-slate-300">客户名称</label>
+                <label className="text-sm text-slate-300">{t('customerName')}</label>
                 <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-300">电话</label>
+                <label className="text-sm text-slate-300">{t('phone')}</label>
                 <Input value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
               <div>
-                <label className="text-sm text-slate-300">邮箱</label>
+                <label className="text-sm text-slate-300">{t('email')}</label>
                 <Input value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
             </div>
             <div>
-              <label className="text-sm text-slate-300">地址</label>
+              <label className="text-sm text-slate-300">{t('address')}</label>
               <Input value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">取消</Button>
-            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">保存</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button>
+            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">{t('save')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1325,6 +1425,7 @@ const CustomersPage = () => {
 
 // Suppliers Management
 const SuppliersPage = () => {
+  const { t } = useLang();
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -1341,7 +1442,7 @@ const SuppliersPage = () => {
       const res = await axios.get(`${API}/suppliers`);
       setSuppliers(res.data);
     } catch (e) {
-      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载供应商失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error(t('loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -1350,31 +1451,31 @@ const SuppliersPage = () => {
   const handleSubmit = async () => {
     try {
       await axios.post(`${API}/suppliers`, formData);
-      toast.success("添加成功");
+      toast.success(t('addSuccess'));
       setShowForm(false);
       fetchSuppliers();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "操作失败");
+      toast.error(e.response?.data?.detail || t('operationFailed'));
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("确定删除此供应商?")) return;
+    if (!window.confirm(t('deleteConfirm'))) return;
     try {
       await axios.delete(`${API}/suppliers/${id}`);
-      toast.success("删除成功");
+      toast.success(t('deleteSuccess'));
       fetchSuppliers();
     } catch (e) {
-      toast.error("删除失败");
+      toast.error(t('deleteFailed'));
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">供应商管理</h1>
+        <h1 className="text-2xl font-bold text-white">{t('supplierManagement')}</h1>
         <Button onClick={() => { setFormData({ code: "", name: "", contact: "", phone: "", address: "", bank_account: "", tax_id: "" }); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-supplier-btn">
-          <Plus className="w-4 h-4 mr-2" /> 添加供应商
+          <Plus className="w-4 h-4 mr-2" /> {t('addSupplier')}
         </Button>
       </div>
 
@@ -1382,12 +1483,12 @@ const SuppliersPage = () => {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-300">编码</TableHead>
-              <TableHead className="text-slate-300">供应商名称</TableHead>
-              <TableHead className="text-slate-300">联系人</TableHead>
-              <TableHead className="text-slate-300">电话</TableHead>
-              <TableHead className="text-slate-300">地址</TableHead>
-              <TableHead className="text-slate-300">操作</TableHead>
+              <TableHead className="text-slate-300">{t('supplierCode')}</TableHead>
+              <TableHead className="text-slate-300">{t('supplierName')}</TableHead>
+              <TableHead className="text-slate-300">{t('contact')}</TableHead>
+              <TableHead className="text-slate-300">{t('phone')}</TableHead>
+              <TableHead className="text-slate-300">{t('address')}</TableHead>
+              <TableHead className="text-slate-300">{t('actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1412,37 +1513,37 @@ const SuppliersPage = () => {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>添加供应商</DialogTitle>
+            <DialogTitle>{t('addSupplier')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-300">供应商编码</label>
+                <label className="text-sm text-slate-300">{t('supplierCode')}</label>
                 <Input value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
               <div>
-                <label className="text-sm text-slate-300">供应商名称</label>
+                <label className="text-sm text-slate-300">{t('supplierName')}</label>
                 <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-300">联系人</label>
+                <label className="text-sm text-slate-300">{t('contact')}</label>
                 <Input value={formData.contact} onChange={(e) => setFormData({...formData, contact: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
               <div>
-                <label className="text-sm text-slate-300">电话</label>
+                <label className="text-sm text-slate-300">{t('phone')}</label>
                 <Input value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="bg-slate-700 border-slate-600" />
               </div>
             </div>
             <div>
-              <label className="text-sm text-slate-300">地址</label>
+              <label className="text-sm text-slate-300">{t('address')}</label>
               <Input value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">取消</Button>
-            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">保存</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button>
+            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">{t('save')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1452,6 +1553,7 @@ const SuppliersPage = () => {
 
 // Purchase Orders
 const PurchasesPage = () => {
+  const { t } = useLang();
   const [orders, setOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -1476,7 +1578,7 @@ const PurchasesPage = () => {
       setOrders(res.data);
     } catch (e) {
       if (e.response?.status !== 401 && e.response?.status !== 403) {
-        toast.error("加载采购单失败");
+        toast.error(t('loadFailed'));
       }
     } finally {
       setLoading(false);
@@ -1527,31 +1629,31 @@ const PurchasesPage = () => {
         ...formData,
         items: formData.items.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, amount: i.amount }))
       });
-      toast.success("创建成功");
+      toast.success(t('createSuccess'));
       setShowForm(false);
       setFormData({ supplier_id: "", warehouse_id: "", items: [], notes: "" });
       fetchOrders();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "操作失败");
+      toast.error(e.response?.data?.detail || t('operationFailed'));
     }
   };
 
   const handleReceive = async (orderId) => {
     try {
       await axios.put(`${API}/purchase-orders/${orderId}/receive`);
-      toast.success("入库成功");
+      toast.success(t('receivedStatus'));
       fetchOrders();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "入库失败");
+      toast.error(e.response?.data?.detail || t('operationFailed'));
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">采购管理</h1>
+        <h1 className="text-2xl font-bold text-white">{t('purchaseManagement')}</h1>
         <Button onClick={() => { setFormData({ supplier_id: "", warehouse_id: "", items: [], notes: "" }); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-purchase-btn">
-          <Plus className="w-4 h-4 mr-2" /> 新建采购单
+          <Plus className="w-4 h-4 mr-2" /> {t('createPurchaseOrder')}
         </Button>
       </div>
 
@@ -1559,14 +1661,14 @@ const PurchasesPage = () => {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-300">单号</TableHead>
-              <TableHead className="text-slate-300">供应商</TableHead>
-              <TableHead className="text-slate-300">入库仓库</TableHead>
-              <TableHead className="text-slate-300">商品数</TableHead>
-              <TableHead className="text-slate-300">总金额</TableHead>
-              <TableHead className="text-slate-300">状态</TableHead>
-              <TableHead className="text-slate-300">创建时间</TableHead>
-              <TableHead className="text-slate-300">操作</TableHead>
+              <TableHead className="text-slate-300">{t('orderNo')}</TableHead>
+              <TableHead className="text-slate-300">{t('supplier')}</TableHead>
+              <TableHead className="text-slate-300">{t('receiveWarehouse')}</TableHead>
+              <TableHead className="text-slate-300">{t('itemCount')}</TableHead>
+              <TableHead className="text-slate-300">{t('totalAmount')}</TableHead>
+              <TableHead className="text-slate-300">{t('status')}</TableHead>
+              <TableHead className="text-slate-300">{t('createTime')}</TableHead>
+              <TableHead className="text-slate-300">{t('actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1579,14 +1681,14 @@ const PurchasesPage = () => {
                 <TableCell className="text-emerald-400">${order.total_amount?.toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge className={order.status === 'received' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}>
-                    {order.status === 'received' ? '已入库' : '待入库'}
+                    {order.status === 'received' ? t('receivedStatus') : t('pendingReceive')}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-slate-400 text-sm">{new Date(order.created_at).toLocaleString()}</TableCell>
                 <TableCell>
                   {order.status === 'pending' && (
                     <Button size="sm" onClick={() => handleReceive(order.id)} className="bg-emerald-500 hover:bg-emerald-600">
-                      入库
+                      {t('receiveGoods')}
                     </Button>
                   )}
                 </TableCell>
@@ -1599,15 +1701,15 @@ const PurchasesPage = () => {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-3xl">
           <DialogHeader>
-            <DialogTitle>新建采购单</DialogTitle>
+            <DialogTitle>{t('createPurchaseOrder')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-300">供应商</label>
+                <label className="text-sm text-slate-300">{t('supplier')}</label>
                 <Select value={formData.supplier_id} onValueChange={(v) => setFormData({...formData, supplier_id: v})}>
                   <SelectTrigger className="bg-slate-700 border-slate-600">
-                    <SelectValue placeholder="选择供应商" />
+                    <SelectValue placeholder={t('selectSupplier')} />
                   </SelectTrigger>
                   <SelectContent>
                     {suppliers.map(s => (
@@ -1617,10 +1719,10 @@ const PurchasesPage = () => {
                 </Select>
               </div>
               <div>
-                <label className="text-sm text-slate-300">入库仓库</label>
+                <label className="text-sm text-slate-300">{t('receiveWarehouse')}</label>
                 <Select value={formData.warehouse_id} onValueChange={(v) => setFormData({...formData, warehouse_id: v})}>
                   <SelectTrigger className="bg-slate-700 border-slate-600">
-                    <SelectValue placeholder="选择仓库" />
+                    <SelectValue placeholder={t('selectWarehouse')} />
                   </SelectTrigger>
                   <SelectContent>
                     {warehouses.map(w => (
@@ -1632,14 +1734,14 @@ const PurchasesPage = () => {
             </div>
 
             <div className="border border-slate-700 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-slate-300 mb-3">添加商品</h4>
+              <h4 className="text-sm font-medium text-slate-300 mb-3">{t('addItems')}</h4>
               <div className="grid grid-cols-4 gap-3">
                 <Select value={newItem.product_id} onValueChange={(v) => {
                   const p = products.find(x => x.id === v);
                   setNewItem({...newItem, product_id: v, unit_price: p?.cost_price || 0});
                 }}>
                   <SelectTrigger className="bg-slate-700 border-slate-600">
-                    <SelectValue placeholder="选择商品" />
+                    <SelectValue placeholder={t('selectProduct')} />
                   </SelectTrigger>
                   <SelectContent>
                     {products.map(p => (
@@ -1647,9 +1749,9 @@ const PurchasesPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="number" placeholder="数量" value={newItem.quantity} onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
-                <Input type="number" placeholder="单价" value={newItem.unit_price} onChange={(e) => setNewItem({...newItem, unit_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
-                <Button onClick={addItem} className="bg-blue-500 hover:bg-blue-600">添加</Button>
+                <Input type="number" placeholder={t('quantity')} value={newItem.quantity} onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
+                <Input type="number" placeholder={t('unitPrice')} value={newItem.unit_price} onChange={(e) => setNewItem({...newItem, unit_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
+                <Button onClick={addItem} className="bg-blue-500 hover:bg-blue-600">{t('add')}</Button>
               </div>
             </div>
 
@@ -1657,10 +1759,10 @@ const PurchasesPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="border-slate-700">
-                    <TableHead className="text-slate-300">商品</TableHead>
-                    <TableHead className="text-slate-300">数量</TableHead>
-                    <TableHead className="text-slate-300">单价</TableHead>
-                    <TableHead className="text-slate-300">金额</TableHead>
+                    <TableHead className="text-slate-300">{t('product')}</TableHead>
+                    <TableHead className="text-slate-300">{t('quantity')}</TableHead>
+                    <TableHead className="text-slate-300">{t('unitPrice')}</TableHead>
+                    <TableHead className="text-slate-300">{t('amount')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1677,9 +1779,9 @@ const PurchasesPage = () => {
             )}
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">取消</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button>
             <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600" disabled={formData.items.length === 0}>
-              创建采购单
+              {t('createPurchaseOrder')}
             </Button>
           </div>
         </DialogContent>
@@ -1690,6 +1792,7 @@ const PurchasesPage = () => {
 
 // Sales Orders
 const SalesPage = () => {
+  const { t } = useLang();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -1703,7 +1806,7 @@ const SalesPage = () => {
       setOrders(res.data);
     } catch (e) {
       if (e.response?.status !== 401 && e.response?.status !== 403) {
-        toast.error("加载销售单失败");
+        toast.error(t('loadFailed'));
       }
     } finally {
       setLoading(false);
@@ -1713,19 +1816,19 @@ const SalesPage = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">销售管理</h1>
+        <h1 className="text-2xl font-bold text-white">{t('salesManagement')}</h1>
       </div>
 
       <Card className="bg-slate-800 border-slate-700">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
-              <TableHead className="text-slate-300">单号</TableHead>
-              <TableHead className="text-slate-300">商品数</TableHead>
-              <TableHead className="text-slate-300">总金额</TableHead>
-              <TableHead className="text-slate-300">支付方式</TableHead>
-              <TableHead className="text-slate-300">状态</TableHead>
-              <TableHead className="text-slate-300">创建时间</TableHead>
+              <TableHead className="text-slate-300">{t('orderNo')}</TableHead>
+              <TableHead className="text-slate-300">{t('itemCount')}</TableHead>
+              <TableHead className="text-slate-300">{t('totalAmount')}</TableHead>
+              <TableHead className="text-slate-300">{t('paymentMethod')}</TableHead>
+              <TableHead className="text-slate-300">{t('status')}</TableHead>
+              <TableHead className="text-slate-300">{t('createTime')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1734,10 +1837,10 @@ const SalesPage = () => {
                 <TableCell className="text-white font-mono">{order.order_no}</TableCell>
                 <TableCell className="text-slate-300">{order.items?.length || 0}</TableCell>
                 <TableCell className="text-emerald-400">${order.total_amount?.toFixed(2)}</TableCell>
-                <TableCell className="text-slate-300">{order.payment_method === 'cash' ? '现金' : '其他'}</TableCell>
+                <TableCell className="text-slate-300">{order.payment_method === 'cash' ? t('cash') : t('otherPayment')}</TableCell>
                 <TableCell>
                   <Badge className={order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}>
-                    {order.status === 'completed' ? '已完成' : '待处理'}
+                    {order.status === 'completed' ? t('completedStatus') : t('pendingStatus')}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-slate-400 text-sm">{new Date(order.created_at).toLocaleString()}</TableCell>
@@ -2061,6 +2164,7 @@ const ProtectedRoute = ({ children }) => {
 
 // Transfer Management Page - 调货管理
 const TransferPage = () => {
+  const { t } = useLang();
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -2086,7 +2190,7 @@ const TransferPage = () => {
       setInventory(iRes.data);
       setTransfers(tRes.data);
     } catch (e) {
-      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载数据失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error(t('loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -2099,44 +2203,44 @@ const TransferPage = () => {
 
   const handleTransfer = async () => {
     if (!formData.from_warehouse_id || !formData.to_warehouse_id || !formData.product_id) {
-      toast.error("请填写完整信息"); return;
+      toast.error(t('fillCompleteInfo')); return;
     }
     if (formData.from_warehouse_id === formData.to_warehouse_id) {
-      toast.error("来源和目标仓库不能相同"); return;
+      toast.error(t('sameWarehouseError')); return;
     }
     try {
       await axios.post(`${API}/inventory/transfer`, null, {
         params: formData
       });
-      toast.success("调货成功");
+      toast.success(t('transferSuccess'));
       setFormData({...formData, quantity: 1});
       fetchAll();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "调货失败");
+      toast.error(e.response?.data?.detail || t('transferFailed'));
     }
   };
 
   const getWarehouseName = (id) => warehouses.find(w => w.id === id)?.name || id;
   const getProductName = (id) => products.find(p => p.id === id)?.name || id;
 
-  if (loading) return <div className="text-white text-center py-12">加载中...</div>;
+  if (loading) return <div className="text-white text-center py-12">{t('loading')}</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">调货管理</h1>
+      <h1 className="text-2xl font-bold text-white">{t('transferManagement')}</h1>
 
       {/* Transfer Form */}
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">新建调货单</CardTitle>
+          <CardTitle className="text-white">{t('newTransfer')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div>
-              <label className="text-sm text-slate-300 block mb-1">来源仓库</label>
+              <label className="text-sm text-slate-300 block mb-1">{t('sourceWarehouse')}</label>
               <Select value={formData.from_warehouse_id} onValueChange={(v) => setFormData({...formData, from_warehouse_id: v})}>
                 <SelectTrigger className="bg-slate-700 border-slate-600" data-testid="transfer-from">
-                  <SelectValue placeholder="选择来源" />
+                  <SelectValue placeholder={t('source')} />
                 </SelectTrigger>
                 <SelectContent>
                   {warehouses.map(w => (
@@ -2146,10 +2250,10 @@ const TransferPage = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-slate-300 block mb-1">目标仓库</label>
+              <label className="text-sm text-slate-300 block mb-1">{t('targetWarehouse')}</label>
               <Select value={formData.to_warehouse_id} onValueChange={(v) => setFormData({...formData, to_warehouse_id: v})}>
                 <SelectTrigger className="bg-slate-700 border-slate-600" data-testid="transfer-to">
-                  <SelectValue placeholder="选择目标" />
+                  <SelectValue placeholder={t('target')} />
                 </SelectTrigger>
                 <SelectContent>
                   {warehouses.filter(w => w.id !== formData.from_warehouse_id).map(w => (
@@ -2159,14 +2263,14 @@ const TransferPage = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-slate-300 block mb-1">商品
+              <label className="text-sm text-slate-300 block mb-1">{t('product')}
                 {formData.product_id && formData.from_warehouse_id && (
-                  <span className="text-yellow-400 ml-1">(库存: {getStock(formData.product_id, formData.from_warehouse_id)})</span>
+                  <span className="text-yellow-400 ml-1">({t('stock')}: {getStock(formData.product_id, formData.from_warehouse_id)})</span>
                 )}
               </label>
               <div className="relative">
                 <Input
-                  placeholder="搜索商品名称/编码..."
+                  placeholder={t('searchProduct')}
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                   className="bg-slate-700 border-slate-600 text-white" data-testid="transfer-product-search"
@@ -2184,21 +2288,21 @@ const TransferPage = () => {
                       </div>
                     ))}
                     {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()) || p.code.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
-                      <p className="text-slate-400 text-sm text-center py-2">无结果</p>
+                      <p className="text-slate-400 text-sm text-center py-2">{t('noResults')}</p>
                     )}
                   </div>
                 )}
               </div>
             </div>
             <div>
-              <label className="text-sm text-slate-300 block mb-1">数量</label>
+              <label className="text-sm text-slate-300 block mb-1">{t('quantity')}</label>
               <Input type="number" min="1" value={formData.quantity}
                 onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 1})}
                 className="bg-slate-700 border-slate-600" data-testid="transfer-qty" />
             </div>
             <div>
               <Button onClick={handleTransfer} className="bg-blue-500 hover:bg-blue-600 w-full" data-testid="transfer-submit">
-                <ArrowLeftRight className="w-4 h-4 mr-2" /> 确认调货
+                <ArrowLeftRight className="w-4 h-4 mr-2" /> {t('transferConfirm')}
               </Button>
             </div>
           </div>
@@ -2208,13 +2312,13 @@ const TransferPage = () => {
       {/* Inventory Overview */}
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">各仓库库存概览</CardTitle>
+          <CardTitle className="text-white">{t('inventoryOverview')}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow className="border-slate-700">
-                <TableHead className="text-slate-300">商品</TableHead>
+                <TableHead className="text-slate-300">{t('product')}</TableHead>
                 {warehouses.map(w => (
                   <TableHead key={w.id} className="text-slate-300 text-center">{w.name}</TableHead>
                 ))}
@@ -2243,17 +2347,17 @@ const TransferPage = () => {
       {transfers.length > 0 && (
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">调货记录</CardTitle>
+            <CardTitle className="text-white">{t('transferHistory')}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow className="border-slate-700">
-                  <TableHead className="text-slate-300">时间</TableHead>
-                  <TableHead className="text-slate-300">商品</TableHead>
-                  <TableHead className="text-slate-300">来源</TableHead>
-                  <TableHead className="text-slate-300">目标</TableHead>
-                  <TableHead className="text-slate-300">数量</TableHead>
+                  <TableHead className="text-slate-300">{t('time')}</TableHead>
+                  <TableHead className="text-slate-300">{t('product')}</TableHead>
+                  <TableHead className="text-slate-300">{t('source')}</TableHead>
+                  <TableHead className="text-slate-300">{t('target')}</TableHead>
+                  <TableHead className="text-slate-300">{t('quantity')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2277,6 +2381,7 @@ const TransferPage = () => {
 
 
 const ExchangeRatesPage = () => {
+  const { t } = useLang();
   const [rates, setRates] = useState({
     usd_to_ves: 36.5,
     usd_to_cop: 4000,
@@ -2311,9 +2416,9 @@ const ExchangeRatesPage = () => {
     setSaving(true);
     try {
       await axios.put(`${API}/exchange-rates?usd_to_ves=${rates.usd_to_ves}&usd_to_cop=${rates.usd_to_cop}&default_currency=${rates.default_currency}&local_currency=${rates.local_currency}&local_currency_symbol=${encodeURIComponent(rates.local_currency_symbol)}`);
-      toast.success("Tasas actualizadas / 汇率已更新");
+      toast.success(t('ratesUpdated'));
     } catch (e) {
-      toast.error("Error al guardar");
+      toast.error(t('saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -2330,16 +2435,16 @@ const ExchangeRatesPage = () => {
     }
   };
 
-  if (loading) return <div className="text-white">Cargando...</div>;
+  if (loading) return <div className="text-white">{t('loading')}</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Tasas de Cambio / 汇率设置</h1>
+      <h1 className="text-2xl font-bold text-white">{t('exchangeRates')}</h1>
 
       {/* System Exchange Rates */}
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">Tasas del Sistema / 系统汇率</CardTitle>
+          <CardTitle className="text-white">{t('systemRates')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2375,7 +2480,7 @@ const ExchangeRatesPage = () => {
             </div>
           </div>
           <Button onClick={handleSaveRates} className="bg-emerald-500 hover:bg-emerald-600" disabled={saving}>
-            {saving ? 'Guardando...' : 'Guardar Tasas / 保存汇率'}
+            {saving ? t('saving') : t('saveRates')}
           </Button>
         </CardContent>
       </Card>
@@ -2383,17 +2488,17 @@ const ExchangeRatesPage = () => {
       {/* Category Exchange Rates */}
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">Tasas por Categoría / 部门汇率</CardTitle>
-          <p className="text-slate-400 text-sm">Configurar tasa de cambio específica para cada departamento</p>
+          <CardTitle className="text-white">{t('categoryRates')}</CardTitle>
+          <p className="text-slate-400 text-sm">{t('categoryRateDesc')}</p>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow className="border-slate-700">
-                <TableHead className="text-slate-300">Código</TableHead>
-                <TableHead className="text-slate-300">Categoría / 部门</TableHead>
-                <TableHead className="text-slate-300">Tasa de Cambio / 汇率</TableHead>
-                <TableHead className="text-slate-300">Ejemplo (USD → Local)</TableHead>
+                <TableHead className="text-slate-300">{t('productCode')}</TableHead>
+                <TableHead className="text-slate-300">{t('category')}</TableHead>
+                <TableHead className="text-slate-300">{t('exchangeRates')}</TableHead>
+                <TableHead className="text-slate-300">{t('example')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2423,7 +2528,7 @@ const ExchangeRatesPage = () => {
       {/* Quick Converter */}
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">Convertidor Rápido / 快速换算</CardTitle>
+          <CardTitle className="text-white">{t('quickConverter')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4 text-center">
@@ -2451,6 +2556,7 @@ const ExchangeRatesPage = () => {
 
 // Payment Settings Page
 const PaymentSettingsPage = () => {
+  const { t } = useLang();
   const [settings, setSettings] = useState({
     transfer_enabled: true,
     transfer_bank_name: "",
@@ -2485,9 +2591,9 @@ const PaymentSettingsPage = () => {
     setSaving(true);
     try {
       await axios.put(`${API}/payment-settings`, settings);
-      toast.success("Configuración guardada / 设置已保存");
+      toast.success(t('settingsSaved'));
     } catch (e) {
-      toast.error("Error al guardar / 保存失败");
+      toast.error(t('saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -2518,19 +2624,19 @@ const PaymentSettingsPage = () => {
     { code: "0177", name: "Banfanb" },
   ];
 
-  if (loading) return <div className="text-white">Cargando...</div>;
+  if (loading) return <div className="text-white">{t('loading')}</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Configuración de Pagos / 支付设置</h1>
-      <p className="text-slate-400">Configure los métodos de pago para la tienda en línea (Venezuela)</p>
+      <h1 className="text-2xl font-bold text-white">{t('paymentSettings')}</h1>
+      <p className="text-slate-400">{t('paymentSettings')}</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Bank Transfer Settings */}
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white">Transferencia Bancaria / 银行转账</CardTitle>
+              <CardTitle className="text-white">{t('bankTransfer')}</CardTitle>
               <input 
                 type="checkbox" 
                 checked={settings.transfer_enabled} 
@@ -2541,7 +2647,7 @@ const PaymentSettingsPage = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="text-sm text-slate-300">Banco / 银行名称</label>
+              <label className="text-sm text-slate-300">{t('bankName')}</label>
               <Select value={settings.transfer_bank_name} onValueChange={(v) => setSettings({...settings, transfer_bank_name: v})}>
                 <SelectTrigger className="bg-slate-700 border-slate-600">
                   <SelectValue placeholder="Seleccione banco" />
@@ -2554,7 +2660,7 @@ const PaymentSettingsPage = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-slate-300">Número de Cuenta / 账户号码</label>
+              <label className="text-sm text-slate-300">{t('accountNumber')}</label>
               <Input 
                 value={settings.transfer_account_number} 
                 onChange={(e) => setSettings({...settings, transfer_account_number: e.target.value})}
@@ -2563,7 +2669,7 @@ const PaymentSettingsPage = () => {
               />
             </div>
             <div>
-              <label className="text-sm text-slate-300">Titular de la Cuenta / 账户持有人</label>
+              <label className="text-sm text-slate-300">{t('accountHolder')}</label>
               <Input 
                 value={settings.transfer_account_holder} 
                 onChange={(e) => setSettings({...settings, transfer_account_holder: e.target.value})}
@@ -2587,7 +2693,7 @@ const PaymentSettingsPage = () => {
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white">Pago Móvil / 移动支付</CardTitle>
+              <CardTitle className="text-white">{t('mobilePay')}</CardTitle>
               <input 
                 type="checkbox" 
                 checked={settings.pago_movil_enabled} 
@@ -2607,7 +2713,7 @@ const PaymentSettingsPage = () => {
               />
             </div>
             <div>
-              <label className="text-sm text-slate-300">Código de Banco / 银行代码</label>
+              <label className="text-sm text-slate-300">{t('selectBank')}</label>
               <Select value={settings.pago_movil_bank_code} onValueChange={(v) => setSettings({...settings, pago_movil_bank_code: v})}>
                 <SelectTrigger className="bg-slate-700 border-slate-600">
                   <SelectValue placeholder="Seleccione banco" />
@@ -2620,7 +2726,7 @@ const PaymentSettingsPage = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-slate-300">Cédula / 身份证号</label>
+              <label className="text-sm text-slate-300">{t('idNumber')}</label>
               <Input 
                 value={settings.pago_movil_cedula} 
                 onChange={(e) => setSettings({...settings, pago_movil_cedula: e.target.value})}
@@ -2639,12 +2745,12 @@ const PaymentSettingsPage = () => {
             <svg className="w-6 h-6 text-green-500" fill="currentColor" viewBox="0 0 24 24">
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
             </svg>
-            WhatsApp Contacto
+            {t('whatsappContact')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="text-sm text-slate-300">Número de WhatsApp / WhatsApp号码</label>
+            <label className="text-sm text-slate-300">{t('whatsappNumber')}</label>
             <Input 
               value={settings.whatsapp_number} 
               onChange={(e) => setSettings({...settings, whatsapp_number: e.target.value})}
@@ -2655,7 +2761,7 @@ const PaymentSettingsPage = () => {
           </div>
           {settings.whatsapp_number && (
             <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-              <p className="text-sm text-green-400">✓ Los clientes podrán contactarte por WhatsApp después de hacer un pedido</p>
+              <p className="text-sm text-green-400">{t('whatsappEnabled')}</p>
             </div>
           )}
         </CardContent>
@@ -2663,14 +2769,14 @@ const PaymentSettingsPage = () => {
 
       <div className="flex justify-end">
         <Button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600" disabled={saving} data-testid="save-payment-settings">
-          {saving ? 'Guardando...' : 'Guardar Configuración / 保存设置'}
+          {saving ? t('saving') : t('saveSettings')}
         </Button>
       </div>
 
       {/* Preview */}
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">Vista Previa / 预览</CardTitle>
+          <CardTitle className="text-white">{t('preview')}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {settings.transfer_enabled && (
@@ -4136,24 +4242,26 @@ const POSPage = () => {
   };
 
   const addToCart = (product) => {
-    const existing = cart.find(i => i.product_id === product.id);
-    if (existing) {
-      const newQty = existing.quantity + 1;
-      const amount = calcCartItemAmount(product, newQty, existing.price_mode);
-      setCart(cart.map(i => i.product_id === product.id 
-        ? {...i, quantity: newQty, amount} 
-        : i));
-    } else {
-      const p1 = product.price1 || product.retail_price || 0;
-      setCart([...cart, {
-        product_id: product.id,
-        product,
-        quantity: 1,
-        price_mode: "price1",
-        unit_price: p1,
-        amount: p1
-      }]);
-    }
+    setCart(prev => {
+      const existing = prev.find(i => i.product_id === product.id);
+      if (existing) {
+        const newQty = existing.quantity + 1;
+        const amount = calcCartItemAmount(product, newQty, existing.price_mode);
+        return prev.map(i => i.product_id === product.id 
+          ? {...i, quantity: newQty, amount} 
+          : i);
+      } else {
+        const p1 = product.price1 || product.retail_price || 0;
+        return [...prev, {
+          product_id: product.id,
+          product,
+          quantity: 1,
+          price_mode: "price1",
+          unit_price: p1,
+          amount: p1
+        }];
+      }
+    });
   };
 
   const updateQuantity = (productId, delta) => {
@@ -4190,7 +4298,7 @@ const POSPage = () => {
   };
 
   const removeFromCart = (productId) => {
-    setCart(cart.filter(i => i.product_id !== productId));
+    setCart(prev => prev.filter(i => i.product_id !== productId));
   };
 
   const clearCart = () => setCart([]);
@@ -4963,6 +5071,31 @@ const POSPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* POS Shortcut Toolbar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 z-30" data-testid="pos-toolbar">
+        <div className="flex items-center justify-center gap-1 px-2 py-1.5">
+          {[
+            { key: "F1", label: t('search'), action: () => setShowSearch(true), color: "bg-blue-600 hover:bg-blue-700" },
+            { key: "F3", label: t('clear'), action: () => clearCart(), color: "bg-orange-600 hover:bg-orange-700" },
+            { key: "F4", label: t('holdOrder'), action: () => holdCurrentOrder(), color: "bg-yellow-600 hover:bg-yellow-700" },
+            { key: "F9", label: t('checkout'), action: () => setShowPayment(true), color: "bg-green-600 hover:bg-green-700", disabled: cart.length === 0 || !shift },
+            { key: "F10", label: t('recallOrder'), action: () => setShowHeldOrders(true), color: "bg-purple-600 hover:bg-purple-700" },
+            { key: "F11", label: t('refund'), action: () => setShowRefund(true), color: "bg-red-600 hover:bg-red-700" },
+          ].map(btn => (
+            <button
+              key={btn.key}
+              onClick={btn.action}
+              disabled={btn.disabled}
+              className={`${btn.color} text-white px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed`}
+              data-testid={`toolbar-${btn.key.toLowerCase()}`}
+            >
+              <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-xs font-bold">{btn.key}</kbd>
+              <span>{btn.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
     </div>
   );
