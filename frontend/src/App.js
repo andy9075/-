@@ -272,7 +272,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-emerald-300 text-sm">今日销售额</p>
-                <p className="text-2xl font-bold text-white mt-1">¥{stats?.today_sales_amount?.toFixed(2) || '0.00'}</p>
+                <p className="text-2xl font-bold text-white mt-1">${stats?.today_sales_amount?.toFixed(2) || '0.00'}</p>
                 <p className="text-emerald-400 text-xs mt-1">{stats?.today_sales_count || 0} 笔订单</p>
               </div>
               <DollarSign className="w-12 h-12 text-emerald-400" />
@@ -285,7 +285,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-blue-300 text-sm">网店订单</p>
-                <p className="text-2xl font-bold text-white mt-1">¥{stats?.today_online_amount?.toFixed(2) || '0.00'}</p>
+                <p className="text-2xl font-bold text-white mt-1">${stats?.today_online_amount?.toFixed(2) || '0.00'}</p>
                 <p className="text-blue-400 text-xs mt-1">{stats?.today_online_count || 0} 笔订单</p>
               </div>
               <Globe className="w-12 h-12 text-blue-400" />
@@ -1160,7 +1160,7 @@ const CustomersPage = () => {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-purple-400">{customer.points}</TableCell>
-                <TableCell className="text-emerald-400">¥{customer.balance?.toFixed(2)}</TableCell>
+                <TableCell className="text-emerald-400">${customer.balance?.toFixed(2)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -1459,7 +1459,7 @@ const PurchasesPage = () => {
                 <TableCell className="text-slate-300">{suppliers.find(s => s.id === order.supplier_id)?.name}</TableCell>
                 <TableCell className="text-slate-300">{warehouses.find(w => w.id === order.warehouse_id)?.name}</TableCell>
                 <TableCell className="text-slate-300">{order.items?.length || 0}</TableCell>
-                <TableCell className="text-emerald-400">¥{order.total_amount?.toFixed(2)}</TableCell>
+                <TableCell className="text-emerald-400">${order.total_amount?.toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge className={order.status === 'received' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}>
                     {order.status === 'received' ? '已入库' : '待入库'}
@@ -1551,8 +1551,8 @@ const PurchasesPage = () => {
                     <TableRow key={idx} className="border-slate-700">
                       <TableCell className="text-white">{item.product_name}</TableCell>
                       <TableCell className="text-slate-300">{item.quantity}</TableCell>
-                      <TableCell className="text-slate-300">¥{item.unit_price?.toFixed(2)}</TableCell>
-                      <TableCell className="text-emerald-400">¥{item.amount?.toFixed(2)}</TableCell>
+                      <TableCell className="text-slate-300">${item.unit_price?.toFixed(2)}</TableCell>
+                      <TableCell className="text-emerald-400">${item.amount?.toFixed(2)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1614,7 +1614,7 @@ const SalesPage = () => {
               <TableRow key={order.id} className="border-slate-700">
                 <TableCell className="text-white font-mono">{order.order_no}</TableCell>
                 <TableCell className="text-slate-300">{order.items?.length || 0}</TableCell>
-                <TableCell className="text-emerald-400">¥{order.total_amount?.toFixed(2)}</TableCell>
+                <TableCell className="text-emerald-400">${order.total_amount?.toFixed(2)}</TableCell>
                 <TableCell className="text-slate-300">{order.payment_method === 'cash' ? '现金' : '其他'}</TableCell>
                 <TableCell>
                   <Badge className={order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}>
@@ -1669,14 +1669,14 @@ const ReportsPage = () => {
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="p-6">
             <p className="text-slate-400 text-sm">门店销售额</p>
-            <p className="text-2xl font-bold text-white mt-1">¥{salesSummary?.total_sales?.toFixed(2) || '0.00'}</p>
+            <p className="text-2xl font-bold text-white mt-1">${salesSummary?.total_sales?.toFixed(2) || '0.00'}</p>
             <p className="text-slate-500 text-xs mt-1">{salesSummary?.sales_count || 0} 笔</p>
           </CardContent>
         </Card>
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="p-6">
             <p className="text-slate-400 text-sm">网店销售额</p>
-            <p className="text-2xl font-bold text-white mt-1">¥{salesSummary?.total_online_sales?.toFixed(2) || '0.00'}</p>
+            <p className="text-2xl font-bold text-white mt-1">${salesSummary?.total_online_sales?.toFixed(2) || '0.00'}</p>
             <p className="text-slate-500 text-xs mt-1">{salesSummary?.online_count || 0} 笔</p>
           </CardContent>
         </Card>
@@ -1690,7 +1690,7 @@ const ReportsPage = () => {
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="p-6">
             <p className="text-slate-400 text-sm">库存总值</p>
-            <p className="text-2xl font-bold text-white mt-1">¥{inventorySummary?.total_value?.toFixed(2) || '0.00'}</p>
+            <p className="text-2xl font-bold text-white mt-1">${inventorySummary?.total_value?.toFixed(2) || '0.00'}</p>
             <p className="text-red-400 text-xs mt-1">{inventorySummary?.low_stock_count || 0} 种低库存</p>
           </CardContent>
         </Card>
@@ -1716,7 +1716,7 @@ const ReportsPage = () => {
                   <TableCell className="text-slate-300">{idx + 1}</TableCell>
                   <TableCell className="text-white">{item.product?.name}</TableCell>
                   <TableCell className="text-slate-300">{item.quantity}</TableCell>
-                  <TableCell className="text-emerald-400">¥{item.amount?.toFixed(2)}</TableCell>
+                  <TableCell className="text-emerald-400">${item.amount?.toFixed(2)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2315,7 +2315,7 @@ const ShopPage = () => {
                 <h3 className="text-white font-medium truncate">{product.name}</h3>
                 <p className="text-slate-400 text-sm">{product.code}</p>
                 <div className="flex items-center justify-between mt-3">
-                  <span className="text-emerald-400 font-bold">¥{product.retail_price?.toFixed(2)}</span>
+                  <span className="text-emerald-400 font-bold">${product.retail_price?.toFixed(2)}</span>
                   <span className="text-slate-500 text-sm">库存: {product.stock}</span>
                 </div>
                 <Button 
@@ -2346,7 +2346,7 @@ const ShopPage = () => {
                 <div key={item.product_id} className="flex items-center gap-4 p-3 bg-slate-700/50 rounded-lg">
                   <div className="flex-1">
                     <p className="text-white font-medium">{item.product.name}</p>
-                    <p className="text-emerald-400">¥{item.unit_price?.toFixed(2)}</p>
+                    <p className="text-emerald-400">${item.unit_price?.toFixed(2)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={() => updateCartItem(item.product_id, item.quantity - 1)} className="border-slate-600">-</Button>
@@ -2358,7 +2358,7 @@ const ShopPage = () => {
               <div className="border-t border-slate-700 pt-4">
                 <div className="flex justify-between text-lg">
                   <span className="text-slate-300">总计:</span>
-                  <span className="text-emerald-400 font-bold">¥{cartTotal.toFixed(2)}</span>
+                  <span className="text-emerald-400 font-bold">${cartTotal.toFixed(2)}</span>
                 </div>
                 <Button className="w-full mt-4 bg-emerald-500 hover:bg-emerald-600" onClick={() => { setShowCart(false); setShowCheckout(true); }} data-testid="checkout-btn">
                   去结算

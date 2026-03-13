@@ -1,101 +1,62 @@
-# POS管理系统 - PRD文档
+# POS System - Product Requirements Document
 
-## 项目概述
-参考秘奥POS系统开发的Web版POS管理系统，支持多店铺、多仓库、网店管理。
-**针对委内瑞拉市场**：支持银行转账(Transferencia)和Pago Móvil支付方式。
+## Original Problem Statement
+Build a comprehensive web-based POS system inspired by "秘奥软件" desktop application. The system includes:
+1. Admin backend for managing products, categories, inventory, stores, pricing, and exchange rates
+2. Online store for customer-facing e-commerce with Venezuelan payment methods
+3. POS cashier frontend with shift management and multi-currency support
 
-## 用户画像
-1. **系统管理员** - 管理整个系统，配置门店、仓库、用户权限、支付设置
-2. **门店经理** - 管理门店日常运营，查看销售报表
-3. **收银员** - 前台收银，处理日常销售
-4. **仓库管理员** - 管理库存，处理采购入库
-5. **网店客户** - 在线浏览商品，下单购买（委内瑞拉用户）
+## Target Market
+- Venezuelan retail businesses needing multi-currency support (USD + Bolívares)
+- Local payment methods: Bank Transfer, Pago Móvil
 
-## 核心需求
+## Tech Stack
+- **Backend**: FastAPI + MongoDB (Motor async driver)
+- **Frontend**: React (single SPA) + TailwindCSS + Shadcn/UI
+- **Auth**: JWT-based authentication
+- **Architecture**: Monolithic (server.py backend, App.js frontend)
 
-### 后台管理系统 (/admin)
-- [x] 用户认证（登录/登出）
-- [x] 仪表盘（销售统计、库存统计）
-- [x] 门店管理（实体店/网店/仓库类型）
-- [x] 仓库管理（总部仓库、库存查看）
-- [x] 商品管理（商品CRUD、分类管理）
-- [x] 客户管理（会员信息、积分、余额）
-- [x] 供应商管理
-- [x] 采购管理（采购单、入库）
-- [x] 销售管理（销售单查看）
-- [x] 网店订单管理（订单列表、确认支付、发货）
-- [x] 报表统计（销售报表、库存报表、热销排行）
-- [x] **支付设置**（Transferencia银行转账、Pago Móvil移动支付）
+## Core Requirements
 
-### 网店前台 (/shop)
-- [x] 商品展示（分类、搜索）
-- [x] 库存显示（连接总部仓库）
-- [x] 购物车功能
-- [x] **支付方式选择**（Transferencia / Pago Móvil）
-- [x] **显示收款信息**（银行账户、Pago Móvil电话/银行/身份证）
-- [x] **支付参考号输入**
-- [x] 订单成功页面（待确认支付状态）
-- [x] 订单同步到后台
+### Implemented Features (All Complete & Tested)
+1. **Admin Panel** - Dashboard, store/warehouse/product/customer/supplier/category management
+2. **Multi-Price System** - price1 (USD), price2 (Bs.), wholesale_price per product
+3. **Exchange Rate Management** - System-wide and per-category exchange rates (manual)
+4. **Venezuelan Payments** - Bank Transfer + Pago Móvil with admin configuration
+5. **WhatsApp Integration** - Click-to-chat button on order success (wa.me link)
+6. **Online Store** - Product catalog, cart, checkout with payment info display
+7. **Order Tracking** - Customer can look up orders by order number or phone at /shop/orders
+8. **POS Cashier** - Login, store selection, shift management, price mode switching (USD/Bs./Mayor)
+9. **Purchase Orders** - Create purchase orders, receive inventory
+10. **Inventory Management** - Multi-warehouse, stock tracking, transfers
+11. **Reports** - Sales summary, inventory summary, top products
 
-### 支付流程 (委内瑞拉)
-- [x] 支持Transferencia Bancaria（银行转账）
-- [x] 支持Pago Móvil（移动支付）
-- [x] 委内瑞拉银行列表（Banco de Venezuela, Banesco, Mercantil等22家银行）
-- [x] 后台确认支付功能
-- [x] 支付参考号追踪
+### Key Endpoints
+- `GET/POST /api/products` - Product CRUD
+- `GET/POST /api/categories` - Categories with exchange_rate field
+- `GET/PUT /api/exchange-rates` - System exchange rates
+- `GET/PUT /api/payment-settings` - Venezuelan payment config
+- `GET /api/shop/products` - Public product listing
+- `POST /api/shop/orders` - Create online order
+- `GET /api/shop/order-lookup` - Public order lookup by order_no/phone
+- `POST /api/sales-orders` - POS sales
+- `GET /api/dashboard/stats` - Dashboard statistics
 
-## 已实现功能 (2026-03-13)
+### DB Collections
+- users, products, categories, stores, warehouses, inventory, customers, suppliers
+- purchase_orders, sales_orders, online_orders, settings, inventory_logs, transfer_logs
 
-### 后端 API
-- 用户认证 API
-- 门店/仓库/商品/分类管理 API
-- 客户/供应商管理 API
-- 采购订单/销售订单 API
-- 网店 API（商品列表、下单、订单管理）
-- 库存 API（调整、调拨、查询）
-- 报表 API
-- **支付设置 API**（GET/PUT）
-- **支付确认 API**
+## Testing Status
+- Backend: 25/25 API tests passing (pytest)
+- Frontend: All pages functional and verified
+- Test files: /app/backend/tests/test_pos_api.py, /app/test_reports/iteration_2.json
 
-### 前端页面
-- 登录页面
-- 管理后台完整功能
-- **支付设置页面**（委内瑞拉银行列表）
-- **网店订单管理**（显示支付方式、参考号、确认支付按钮）
-- **网店前台**（双语西班牙语/中文、支付方式选择）
+## Credentials
+- Admin: username=admin, password=admin123
 
-## 待开发功能 (Backlog)
-
-### P0 - 高优先级
-- [ ] 前台收银系统（POS收银界面）
-- [ ] 收银员当班/交班功能
-
-### P1 - 中优先级
-- [ ] 会员储值卡功能
-- [ ] 促销活动管理
-- [ ] 订单打印功能
-- [ ] 短信/WhatsApp通知
-
-### P2 - 低优先级
-- [ ] 多语言完全支持
-- [ ] 数据导入导出
-- [ ] 条码打印
-- [ ] 手机端适配
-
-## 技术架构
-- 后端：Python FastAPI + MongoDB
-- 前端：React + Tailwind CSS
-- 认证：JWT Token
-- 部署：Emergent Platform
-
-## 登录信息
-- 管理员账号：admin
-- 管理员密码：admin123
-
-## 委内瑞拉银行代码
-0102-Banco de Venezuela, 0104-Venezolano de Crédito, 0105-Mercantil, 
-0108-Provincial, 0114-Bancaribe, 0115-Exterior, 0134-Banesco, 
-0137-Sofitasa, 0151-BFC, 0156-100%Banco, 0157-Del Sur, 
-0163-Banco del Tesoro, 0166-Banco Agrícola, 0168-Bancrecer, 
-0169-Mi Banco, 0171-Banco Activo, 0172-Bancamiga, 0174-Banplus, 
-0175-Bicentenario, 0177-Banfanb
+## Backlog / Future Tasks
+- P2: Refactor server.py into multiple router modules
+- P2: Refactor App.js into separate component files
+- P3: Add product image upload
+- P3: Add barcode scanner support for POS
+- P3: Implement customer loyalty/points system
