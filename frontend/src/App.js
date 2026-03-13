@@ -2412,11 +2412,576 @@ function App() {
               <AdminLayout><PaymentSettingsPage /></AdminLayout>
             </ProtectedRoute>
           } />
+          <Route path="/pos" element={<POSPage />} />
           <Route path="/" element={<Navigate to="/shop" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
   );
 }
+
+// POS Front Desk Page
+const POSPage = () => {
+  const [user, setUser] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [showLogin, setShowLogin] = useState(true);
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [stores, setStores] = useState([]);
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [receivedAmount, setReceivedAmount] = useState("");
+  const [shift, setShift] = useState(null);
+  const [showShiftModal, setShowShiftModal] = useState(false);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem("pos_user");
+    const savedStore = localStorage.getItem("pos_store");
+    const savedShift = localStorage.getItem("pos_shift");
+    if (savedUser && savedStore) {
+      setUser(JSON.parse(savedUser));
+      setSelectedStore(JSON.parse(savedStore));
+      setShowLogin(false);
+      if (savedShift) setShift(JSON.parse(savedShift));
+      fetchData(JSON.parse(savedUser).token);
+    }
+  }, []);
+
+  const fetchData = async (token) => {
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    try {
+      const [productsRes, categoriesRes, storesRes] = await Promise.all([
+        axios.get(`${API}/products`),
+        axios.get(`${API}/categories`),
+        axios.get(`${API}/stores`)
+      ]);
+      setProducts(productsRes.data);
+      setCategories(categoriesRes.data);
+      setStores(storesRes.data.filter(s => s.type === 'retail'));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      const res = await axios.post(`${API}/auth/login`, loginForm);
+      const userData = { ...res.data.user, token: res.data.token };
+      setUser(userData);
+      localStorage.setItem("pos_user", JSON.stringify(userData));
+      axios.defaults.headers.common["Authorization"] = `Bearer ${res.data.token}`;
+      await fetchData(res.data.token);
+      setShowLogin(false);
+    } catch (e) {
+      toast.error("Usuario o contraseña incorrectos");
+    }
+  };
+
+  const handleSelectStore = (store) => {
+    setSelectedStore(store);
+    localStorage.setItem("pos_store", JSON.stringify(store));
+  };
+
+  const handleStartShift = () => {
+    const newShift = {
+      id: Date.now(),
+      start_time: new Date().toISOString(),
+      user: user.username,
+      store: selectedStore.name,
+      sales: [],
+      total_sales: 0,
+      total_cash: 0
+    };
+    setShift(newShift);
+    localStorage.setItem("pos_shift", JSON.stringify(newShift));
+    toast.success("Turno iniciado / 已当班");
+  };
+
+  const handleEndShift = () => {
+    setShowShiftModal(true);
+  };
+
+  const confirmEndShift = () => {
+    localStorage.removeItem("pos_shift");
+    setShift(null);
+    setShowShiftModal(false);
+    toast.success("Turno finalizado / 已交班");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("pos_user");
+    localStorage.removeItem("pos_store");
+    localStorage.removeItem("pos_shift");
+    setUser(null);
+    setSelectedStore(null);
+    setShift(null);
+    setShowLogin(true);
+  };
+
+  const addToCart = (product) => {
+    const existing = cart.find(i => i.product_id === product.id);
+    if (existing) {
+      setCart(cart.map(i => i.product_id === product.id 
+        ? {...i, quantity: i.quantity + 1, amount: (i.quantity + 1) * i.unit_price} 
+        : i));
+    } else {
+      setCart([...cart, {
+        product_id: product.id,
+        product,
+        quantity: 1,
+        unit_price: product.retail_price,
+        amount: product.retail_price
+      }]);
+    }
+  };
+
+  const updateQuantity = (productId, delta) => {
+    setCart(cart.map(i => {
+      if (i.product_id === productId) {
+        const newQty = i.quantity + delta;
+        if (newQty <= 0) return null;
+        return {...i, quantity: newQty, amount: newQty * i.unit_price};
+      }
+      return i;
+    }).filter(Boolean));
+  };
+
+  const removeFromCart = (productId) => {
+    setCart(cart.filter(i => i.product_id !== productId));
+  };
+
+  const clearCart = () => setCart([]);
+
+  const cartTotal = cart.reduce((sum, i) => sum + i.amount, 0);
+  const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+
+  const handlePayment = async () => {
+    if (!shift) {
+      toast.error("Debe iniciar turno primero / 请先当班");
+      return;
+    }
+    
+    try {
+      const orderData = {
+        store_id: selectedStore.id,
+        customer_id: null,
+        items: cart.map(i => ({
+          product_id: i.product_id,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+          discount: 0,
+          amount: i.amount
+        })),
+        payment_method: paymentMethod,
+        paid_amount: parseFloat(receivedAmount) || cartTotal,
+        notes: ""
+      };
+
+      await axios.post(`${API}/sales-orders`, orderData);
+      
+      // Update shift stats
+      const updatedShift = {
+        ...shift,
+        sales: [...shift.sales, { amount: cartTotal, method: paymentMethod, time: new Date().toISOString() }],
+        total_sales: shift.total_sales + cartTotal,
+        total_cash: paymentMethod === 'cash' ? shift.total_cash + cartTotal : shift.total_cash
+      };
+      setShift(updatedShift);
+      localStorage.setItem("pos_shift", JSON.stringify(updatedShift));
+
+      toast.success("¡Venta completada! / 销售完成");
+      setCart([]);
+      setShowPayment(false);
+      setReceivedAmount("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Error al procesar venta");
+    }
+  };
+
+  const filteredProducts = products.filter(p => {
+    const matchSearch = !searchTerm || 
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.barcode?.includes(searchTerm);
+    const matchCategory = selectedCategory === "all" || p.category_id === selectedCategory;
+    return matchSearch && matchCategory && p.status === 'active';
+  });
+
+  const change = parseFloat(receivedAmount) - cartTotal;
+
+  // Login Screen
+  if (showLogin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-slate-800/80 border-slate-700 backdrop-blur">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-20 h-20 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mb-4">
+              <CreditCard className="w-10 h-10 text-white" />
+            </div>
+            <CardTitle className="text-2xl text-white">POS - Caja</CardTitle>
+            <p className="text-slate-400">Sistema de Punto de Venta</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm text-slate-300">Usuario / 用户名</label>
+              <Input
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                className="bg-slate-700 border-slate-600 text-white"
+                placeholder="Ingrese usuario"
+                data-testid="pos-username"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">Contraseña / 密码</label>
+              <Input
+                type="password"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                className="bg-slate-700 border-slate-600 text-white"
+                placeholder="Ingrese contraseña"
+                data-testid="pos-password"
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
+            <Button onClick={handleLogin} className="w-full bg-blue-500 hover:bg-blue-600" data-testid="pos-login-btn">
+              Iniciar Sesión / 登录
+            </Button>
+            <div className="text-center">
+              <Link to="/admin" className="text-slate-400 hover:text-white text-sm">
+                Ir al Panel Admin →
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Store Selection
+  if (!selectedStore) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg bg-slate-800/80 border-slate-700 backdrop-blur">
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl text-white">Seleccionar Tienda / 选择门店</CardTitle>
+            <p className="text-slate-400">{user?.name || user?.username}</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {stores.map(store => (
+              <div
+                key={store.id}
+                onClick={() => handleSelectStore(store)}
+                className="p-4 bg-slate-700/50 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors border border-slate-600"
+              >
+                <p className="text-white font-medium">{store.name}</p>
+                <p className="text-slate-400 text-sm">{store.code} - {store.address || 'Sin dirección'}</p>
+              </div>
+            ))}
+            {stores.length === 0 && (
+              <p className="text-slate-400 text-center py-4">No hay tiendas configuradas</p>
+            )}
+            <Button variant="outline" onClick={handleLogout} className="w-full mt-4 border-slate-600 text-slate-300">
+              Cerrar Sesión / 退出
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Main POS Interface
+  return (
+    <div className="min-h-screen bg-slate-900 flex flex-col">
+      {/* Header */}
+      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-6 h-6 text-blue-400" />
+            <span className="text-white font-bold">POS</span>
+          </div>
+          <div className="text-slate-400 text-sm">
+            <span className="text-white">{selectedStore?.name}</span> | {user?.name || user?.username}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {shift ? (
+            <Badge className="bg-green-500/20 text-green-400">
+              Turno Activo desde {new Date(shift.start_time).toLocaleTimeString()}
+            </Badge>
+          ) : (
+            <Badge className="bg-yellow-500/20 text-yellow-400">Sin Turno</Badge>
+          )}
+          {!shift ? (
+            <Button size="sm" onClick={handleStartShift} className="bg-green-600 hover:bg-green-700" data-testid="start-shift-btn">
+              Iniciar Turno
+            </Button>
+          ) : (
+            <Button size="sm" onClick={handleEndShift} className="bg-orange-600 hover:bg-orange-700" data-testid="end-shift-btn">
+              Cerrar Turno
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={handleLogout} className="border-slate-600 text-slate-300">
+            <LogOut className="w-4 h-4" />
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Products Section */}
+        <div className="flex-1 flex flex-col p-4 overflow-hidden">
+          {/* Search & Categories */}
+          <div className="flex gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Buscar producto o escanear código..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-slate-800 border-slate-700 text-white"
+                data-testid="pos-search"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          {/* Category Tabs */}
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+            <Button
+              size="sm"
+              variant={selectedCategory === "all" ? "default" : "outline"}
+              onClick={() => setSelectedCategory("all")}
+              className={selectedCategory === "all" ? "bg-blue-500" : "border-slate-600 text-slate-300"}
+            >
+              Todos
+            </Button>
+            {categories.map(cat => (
+              <Button
+                key={cat.id}
+                size="sm"
+                variant={selectedCategory === cat.id ? "default" : "outline"}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={selectedCategory === cat.id ? "bg-blue-500" : "border-slate-600 text-slate-300"}
+              >
+                {cat.name}
+              </Button>
+            ))}
+          </div>
+
+          {/* Products Grid */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {filteredProducts.map(product => (
+                <div
+                  key={product.id}
+                  onClick={() => addToCart(product)}
+                  className="bg-slate-800 border border-slate-700 rounded-lg p-3 cursor-pointer hover:bg-slate-700 hover:border-blue-500 transition-all"
+                  data-testid={`pos-product-${product.id}`}
+                >
+                  <div className="aspect-square bg-slate-700 rounded-lg mb-2 flex items-center justify-center">
+                    <Package className="w-8 h-8 text-slate-500" />
+                  </div>
+                  <p className="text-white text-sm font-medium truncate">{product.name}</p>
+                  <p className="text-slate-400 text-xs">{product.code}</p>
+                  <p className="text-blue-400 font-bold mt-1">${product.retail_price?.toFixed(2)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Cart Section */}
+        <div className="w-96 bg-slate-800 border-l border-slate-700 flex flex-col">
+          <div className="p-4 border-b border-slate-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-bold flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" /> Carrito
+              </h2>
+              <Badge className="bg-blue-500">{cartCount} items</Badge>
+            </div>
+          </div>
+
+          {/* Cart Items */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {cart.length === 0 ? (
+              <div className="text-center text-slate-400 py-8">
+                <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Carrito vacío</p>
+                <p className="text-sm">Seleccione productos</p>
+              </div>
+            ) : (
+              cart.map(item => (
+                <div key={item.product_id} className="bg-slate-700/50 rounded-lg p-3">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <p className="text-white text-sm font-medium">{item.product.name}</p>
+                      <p className="text-slate-400 text-xs">${item.unit_price?.toFixed(2)} c/u</p>
+                    </div>
+                    <button onClick={() => removeFromCart(item.product_id)} className="text-red-400 hover:text-red-300">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="w-8 h-8 p-0 border-slate-600" onClick={() => updateQuantity(item.product_id, -1)}>-</Button>
+                      <span className="text-white w-8 text-center">{item.quantity}</span>
+                      <Button size="sm" variant="outline" className="w-8 h-8 p-0 border-slate-600" onClick={() => updateQuantity(item.product_id, 1)}>+</Button>
+                    </div>
+                    <p className="text-blue-400 font-bold">${item.amount?.toFixed(2)}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Cart Footer */}
+          <div className="p-4 border-t border-slate-700 space-y-3">
+            <div className="flex justify-between text-lg">
+              <span className="text-slate-300">Total:</span>
+              <span className="text-white font-bold text-2xl">${cartTotal.toFixed(2)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={clearCart} className="border-slate-600 text-slate-300" disabled={cart.length === 0}>
+                Limpiar
+              </Button>
+              <Button 
+                onClick={() => setShowPayment(true)} 
+                className="bg-green-600 hover:bg-green-700" 
+                disabled={cart.length === 0 || !shift}
+                data-testid="pos-pay-btn"
+              >
+                Cobrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Modal */}
+      <Dialog open={showPayment} onOpenChange={setShowPayment}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Cobrar / 收款</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-slate-700/50 rounded-lg p-4 text-center">
+              <p className="text-slate-400 text-sm">Total a Cobrar</p>
+              <p className="text-4xl font-bold text-white">${cartTotal.toFixed(2)}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Método de Pago</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'cash', label: 'Efectivo', icon: '💵' },
+                  { id: 'card', label: 'Tarjeta', icon: '💳' },
+                  { id: 'transfer', label: 'Transfer', icon: '📱' }
+                ].map(method => (
+                  <div
+                    key={method.id}
+                    onClick={() => setPaymentMethod(method.id)}
+                    className={`p-3 rounded-lg border cursor-pointer text-center transition-colors ${
+                      paymentMethod === method.id 
+                        ? 'border-green-500 bg-green-500/10' 
+                        : 'border-slate-600 hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="text-2xl">{method.icon}</span>
+                    <p className="text-sm mt-1">{method.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {paymentMethod === 'cash' && (
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300">Monto Recibido</label>
+                <Input
+                  type="number"
+                  value={receivedAmount}
+                  onChange={(e) => setReceivedAmount(e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-2xl text-center"
+                  placeholder="0.00"
+                  data-testid="pos-received-amount"
+                />
+                {receivedAmount && change >= 0 && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
+                    <p className="text-sm text-slate-400">Cambio / 找零</p>
+                    <p className="text-2xl font-bold text-green-400">${change.toFixed(2)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button variant="outline" onClick={() => setShowPayment(false)} className="border-slate-600">
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handlePayment} 
+                className="bg-green-600 hover:bg-green-700"
+                disabled={paymentMethod === 'cash' && (!receivedAmount || change < 0)}
+                data-testid="pos-confirm-payment"
+              >
+                Confirmar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* End Shift Modal */}
+      <Dialog open={showShiftModal} onOpenChange={setShowShiftModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Cerrar Turno / 交班</DialogTitle>
+          </DialogHeader>
+          {shift && (
+            <div className="space-y-4">
+              <div className="bg-slate-700/50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Cajero:</span>
+                  <span className="text-white">{shift.user}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Tienda:</span>
+                  <span className="text-white">{shift.store}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Inicio:</span>
+                  <span className="text-white">{new Date(shift.start_time).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Ventas:</span>
+                  <span className="text-white">{shift.sales?.length || 0} transacciones</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-600">
+                  <span className="text-slate-300">Total Ventas:</span>
+                  <span className="text-green-400">${shift.total_sales?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Efectivo:</span>
+                  <span className="text-white">${shift.total_cash?.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="outline" onClick={() => setShowShiftModal(false)} className="border-slate-600">
+                  Cancelar
+                </Button>
+                <Button onClick={confirmEndShift} className="bg-orange-600 hover:bg-orange-700" data-testid="confirm-end-shift">
+                  Confirmar Cierre
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
 
 export default App;
