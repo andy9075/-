@@ -274,6 +274,7 @@ class PaymentSettingsUpdate(BaseModel):
     pago_movil_phone: str = ""
     pago_movil_bank_code: str = ""
     pago_movil_cedula: str = ""
+    whatsapp_number: str = ""  # WhatsApp contact number
 
 # Online Shop Order Models
 class OnlineOrderCreate(BaseModel):
@@ -1201,7 +1202,8 @@ async def get_payment_settings():
             "pago_movil_enabled": True,
             "pago_movil_phone": "",
             "pago_movil_bank_code": "0102",
-            "pago_movil_cedula": ""
+            "pago_movil_cedula": "",
+            "whatsapp_number": ""
         }
     return settings
 
