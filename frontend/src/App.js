@@ -168,6 +168,7 @@ const AdminLayout = ({ children }) => {
     { icon: CreditCard, label: "销售管理", path: "/admin/sales" },
     { icon: Globe, label: "网店订单", path: "/admin/online-orders" },
     { icon: BarChart3, label: "报表统计", path: "/admin/reports" },
+    { icon: DollarSign, label: "汇率设置", path: "/admin/exchange-rates" },
     { icon: Settings, label: "支付设置", path: "/admin/payment-settings" },
   ];
 
@@ -382,8 +383,8 @@ const ProductsPage = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({
     code: "", barcode: "", name: "", category_id: "", unit: "件",
-    cost_price: 0, retail_price: 0, wholesale_price: 0,
-    min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
+    cost_price: 0, price1: 0, price2: 0, wholesale_price: 0, box_quantity: 1,
+    retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
   });
 
   useEffect(() => {
@@ -449,8 +450,8 @@ const ProductsPage = () => {
   const resetForm = () => {
     setFormData({
       code: "", barcode: "", name: "", category_id: "", unit: "件",
-      cost_price: 0, retail_price: 0, wholesale_price: 0,
-      min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
+      cost_price: 0, price1: 0, price2: 0, wholesale_price: 0, box_quantity: 1,
+      retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
     });
   };
 
@@ -484,8 +485,9 @@ const ProductsPage = () => {
               <TableHead className="text-slate-300">编码</TableHead>
               <TableHead className="text-slate-300">商品名称</TableHead>
               <TableHead className="text-slate-300">分类</TableHead>
-              <TableHead className="text-slate-300">零售价</TableHead>
-              <TableHead className="text-slate-300">成本价</TableHead>
+              <TableHead className="text-slate-300">价格1 ($)</TableHead>
+              <TableHead className="text-slate-300">价格2 (Bs.)</TableHead>
+              <TableHead className="text-slate-300">批发价</TableHead>
               <TableHead className="text-slate-300">状态</TableHead>
               <TableHead className="text-slate-300">操作</TableHead>
             </TableRow>
@@ -498,8 +500,9 @@ const ProductsPage = () => {
                 <TableCell className="text-slate-300">
                   {categories.find(c => c.id === product.category_id)?.name || '-'}
                 </TableCell>
-                <TableCell className="text-emerald-400">¥{product.retail_price?.toFixed(2)}</TableCell>
-                <TableCell className="text-slate-400">¥{product.cost_price?.toFixed(2)}</TableCell>
+                <TableCell className="text-emerald-400">${product.price1?.toFixed(2) || product.retail_price?.toFixed(2)}</TableCell>
+                <TableCell className="text-yellow-400">Bs.{product.price2?.toFixed(2) || '0.00'}</TableCell>
+                <TableCell className="text-blue-400">${product.wholesale_price?.toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge variant={product.status === 'active' ? 'default' : 'secondary'}>
                     {product.status === 'active' ? '在售' : '下架'}
@@ -557,16 +560,24 @@ const ProductsPage = () => {
               <Input value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">成本价</label>
+              <label className="text-sm text-slate-300">成本价 ($)</label>
               <Input type="number" value={formData.cost_price} onChange={(e) => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">零售价</label>
-              <Input type="number" value={formData.retail_price} onChange={(e) => setFormData({...formData, retail_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" data-testid="product-price" />
+              <label className="text-sm text-slate-300">价格1 ($ USD)</label>
+              <Input type="number" value={formData.price1} onChange={(e) => setFormData({...formData, price1: parseFloat(e.target.value) || 0, retail_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" data-testid="product-price1" />
             </div>
             <div>
-              <label className="text-sm text-slate-300">批发价</label>
+              <label className="text-sm text-slate-300">价格2 (Bs. 本地)</label>
+              <Input type="number" value={formData.price2} onChange={(e) => setFormData({...formData, price2: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" data-testid="product-price2" />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">批发价/整箱价 ($)</label>
               <Input type="number" value={formData.wholesale_price} onChange={(e) => setFormData({...formData, wholesale_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">每箱数量</label>
+              <Input type="number" value={formData.box_quantity} onChange={(e) => setFormData({...formData, box_quantity: parseInt(e.target.value) || 1})} className="bg-slate-700 border-slate-600" />
             </div>
             <div>
               <label className="text-sm text-slate-300">状态</label>
@@ -1736,6 +1747,180 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Exchange Rates Settings Page
+const ExchangeRatesPage = () => {
+  const [rates, setRates] = useState({
+    usd_to_ves: 36.5,
+    usd_to_cop: 4000,
+    default_currency: "USD",
+    local_currency: "VES",
+    local_currency_symbol: "Bs."
+  });
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [ratesRes, catsRes] = await Promise.all([
+        axios.get(`${API}/exchange-rates`),
+        axios.get(`${API}/categories`)
+      ]);
+      setRates(ratesRes.data);
+      setCategories(catsRes.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveRates = async () => {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/exchange-rates?usd_to_ves=${rates.usd_to_ves}&usd_to_cop=${rates.usd_to_cop}&default_currency=${rates.default_currency}&local_currency=${rates.local_currency}&local_currency_symbol=${encodeURIComponent(rates.local_currency_symbol)}`);
+      toast.success("Tasas actualizadas / 汇率已更新");
+    } catch (e) {
+      toast.error("Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateCategoryRate = async (categoryId, newRate) => {
+    try {
+      const cat = categories.find(c => c.id === categoryId);
+      await axios.put(`${API}/categories/${categoryId}`, { ...cat, exchange_rate: newRate });
+      setCategories(categories.map(c => c.id === categoryId ? { ...c, exchange_rate: newRate } : c));
+      toast.success("Tasa de categoría actualizada");
+    } catch (e) {
+      toast.error("Error al actualizar");
+    }
+  };
+
+  if (loading) return <div className="text-white">Cargando...</div>;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">Tasas de Cambio / 汇率设置</h1>
+
+      {/* System Exchange Rates */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">Tasas del Sistema / 系统汇率</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm text-slate-300">USD → Bolívares (VES)</label>
+              <Input
+                type="number"
+                value={rates.usd_to_ves}
+                onChange={(e) => setRates({ ...rates, usd_to_ves: parseFloat(e.target.value) || 0 })}
+                className="bg-slate-700 border-slate-600 text-white text-lg"
+                step="0.01"
+              />
+              <p className="text-xs text-slate-500 mt-1">$1 USD = Bs.{rates.usd_to_ves}</p>
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">USD → Pesos Colombianos</label>
+              <Input
+                type="number"
+                value={rates.usd_to_cop}
+                onChange={(e) => setRates({ ...rates, usd_to_cop: parseFloat(e.target.value) || 0 })}
+                className="bg-slate-700 border-slate-600 text-white text-lg"
+              />
+              <p className="text-xs text-slate-500 mt-1">$1 USD = COP {rates.usd_to_cop}</p>
+            </div>
+            <div>
+              <label className="text-sm text-slate-300">Símbolo Local</label>
+              <Input
+                value={rates.local_currency_symbol}
+                onChange={(e) => setRates({ ...rates, local_currency_symbol: e.target.value })}
+                className="bg-slate-700 border-slate-600 text-white"
+                placeholder="Bs."
+              />
+            </div>
+          </div>
+          <Button onClick={handleSaveRates} className="bg-emerald-500 hover:bg-emerald-600" disabled={saving}>
+            {saving ? 'Guardando...' : 'Guardar Tasas / 保存汇率'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Category Exchange Rates */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">Tasas por Categoría / 部门汇率</CardTitle>
+          <p className="text-slate-400 text-sm">Configurar tasa de cambio específica para cada departamento</p>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-700">
+                <TableHead className="text-slate-300">Código</TableHead>
+                <TableHead className="text-slate-300">Categoría / 部门</TableHead>
+                <TableHead className="text-slate-300">Tasa de Cambio / 汇率</TableHead>
+                <TableHead className="text-slate-300">Ejemplo (USD → Local)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {categories.map(cat => (
+                <TableRow key={cat.id} className="border-slate-700">
+                  <TableCell className="text-slate-400">{cat.code}</TableCell>
+                  <TableCell className="text-white font-medium">{cat.name}</TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={cat.exchange_rate || rates.usd_to_ves}
+                      onChange={(e) => handleUpdateCategoryRate(cat.id, parseFloat(e.target.value) || 0)}
+                      className="bg-slate-700 border-slate-600 w-32"
+                      step="0.01"
+                    />
+                  </TableCell>
+                  <TableCell className="text-yellow-400">
+                    $10 → Bs.{((cat.exchange_rate || rates.usd_to_ves) * 10).toFixed(2)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Quick Converter */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">Convertidor Rápido / 快速换算</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-slate-700/50 rounded-lg p-4">
+              <p className="text-slate-400 text-sm">$1 USD</p>
+              <p className="text-2xl font-bold text-emerald-400">=</p>
+              <p className="text-xl font-bold text-yellow-400">Bs.{rates.usd_to_ves}</p>
+            </div>
+            <div className="bg-slate-700/50 rounded-lg p-4">
+              <p className="text-slate-400 text-sm">$10 USD</p>
+              <p className="text-2xl font-bold text-emerald-400">=</p>
+              <p className="text-xl font-bold text-yellow-400">Bs.{(rates.usd_to_ves * 10).toFixed(2)}</p>
+            </div>
+            <div className="bg-slate-700/50 rounded-lg p-4">
+              <p className="text-slate-400 text-sm">$100 USD</p>
+              <p className="text-2xl font-bold text-emerald-400">=</p>
+              <p className="text-xl font-bold text-yellow-400">Bs.{(rates.usd_to_ves * 100).toFixed(2)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 // Payment Settings Page
 const PaymentSettingsPage = () => {
   const [settings, setSettings] = useState({
@@ -2407,6 +2592,11 @@ function App() {
               <AdminLayout><ReportsPage /></AdminLayout>
             </ProtectedRoute>
           } />
+          <Route path="/admin/exchange-rates" element={
+            <ProtectedRoute>
+              <AdminLayout><ExchangeRatesPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
           <Route path="/admin/payment-settings" element={
             <ProtectedRoute>
               <AdminLayout><PaymentSettingsPage /></AdminLayout>
@@ -2437,16 +2627,20 @@ const POSPage = () => {
   const [receivedAmount, setReceivedAmount] = useState("");
   const [shift, setShift] = useState(null);
   const [showShiftModal, setShowShiftModal] = useState(false);
+  const [priceMode, setPriceMode] = useState("price1"); // price1, price2, wholesale
+  const [exchangeRates, setExchangeRates] = useState({ usd_to_ves: 36.5 });
 
   useEffect(() => {
     const savedUser = localStorage.getItem("pos_user");
     const savedStore = localStorage.getItem("pos_store");
     const savedShift = localStorage.getItem("pos_shift");
+    const savedPriceMode = localStorage.getItem("pos_price_mode");
     if (savedUser && savedStore) {
       setUser(JSON.parse(savedUser));
       setSelectedStore(JSON.parse(savedStore));
       setShowLogin(false);
       if (savedShift) setShift(JSON.parse(savedShift));
+      if (savedPriceMode) setPriceMode(savedPriceMode);
       fetchData(JSON.parse(savedUser).token);
     }
   }, []);
@@ -2454,16 +2648,54 @@ const POSPage = () => {
   const fetchData = async (token) => {
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     try {
-      const [productsRes, categoriesRes, storesRes] = await Promise.all([
+      const [productsRes, categoriesRes, storesRes, ratesRes] = await Promise.all([
         axios.get(`${API}/products`),
         axios.get(`${API}/categories`),
-        axios.get(`${API}/stores`)
+        axios.get(`${API}/stores`),
+        axios.get(`${API}/exchange-rates`)
       ]);
       setProducts(productsRes.data);
       setCategories(categoriesRes.data);
       setStores(storesRes.data.filter(s => s.type === 'retail'));
+      setExchangeRates(ratesRes.data);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const getProductPrice = (product) => {
+    const basePrice = product.price1 || product.retail_price || 0;
+    switch (priceMode) {
+      case "price2": return product.price2 || (basePrice * exchangeRates.usd_to_ves);
+      case "wholesale": return product.wholesale_price || basePrice;
+      default: return basePrice;
+    }
+  };
+
+  const getPriceSymbol = () => {
+    switch (priceMode) {
+      case "price2": return "Bs.";
+      case "wholesale": return "$ Mayor";
+      default: return "$";
+    }
+  };
+
+  const handlePriceModeChange = (mode) => {
+    setPriceMode(mode);
+    localStorage.setItem("pos_price_mode", mode);
+    // Update cart prices
+    setCart(cart.map(item => {
+      const newPrice = getProductPriceByMode(item.product, mode);
+      return { ...item, unit_price: newPrice, amount: item.quantity * newPrice };
+    }));
+  };
+
+  const getProductPriceByMode = (product, mode) => {
+    const basePrice = product.price1 || product.retail_price || 0;
+    switch (mode) {
+      case "price2": return product.price2 || (basePrice * exchangeRates.usd_to_ves);
+      case "wholesale": return product.wholesale_price || basePrice;
+      default: return basePrice;
     }
   };
 
@@ -2523,6 +2755,7 @@ const POSPage = () => {
   };
 
   const addToCart = (product) => {
+    const price = getProductPrice(product);
     const existing = cart.find(i => i.product_id === product.id);
     if (existing) {
       setCart(cart.map(i => i.product_id === product.id 
@@ -2533,8 +2766,8 @@ const POSPage = () => {
         product_id: product.id,
         product,
         quantity: 1,
-        unit_price: product.retail_price,
-        amount: product.retail_price
+        unit_price: price,
+        amount: price
       }]);
     }
   };
@@ -2709,6 +2942,30 @@ const POSPage = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Price Mode Selector */}
+          <div className="flex bg-slate-700 rounded-lg p-1">
+            <button 
+              onClick={() => handlePriceModeChange('price1')}
+              className={`px-3 py-1 text-sm rounded ${priceMode === 'price1' ? 'bg-emerald-500 text-white' : 'text-slate-300 hover:text-white'}`}
+              data-testid="price-mode-1"
+            >
+              $ USD
+            </button>
+            <button 
+              onClick={() => handlePriceModeChange('price2')}
+              className={`px-3 py-1 text-sm rounded ${priceMode === 'price2' ? 'bg-yellow-500 text-white' : 'text-slate-300 hover:text-white'}`}
+              data-testid="price-mode-2"
+            >
+              Bs.
+            </button>
+            <button 
+              onClick={() => handlePriceModeChange('wholesale')}
+              className={`px-3 py-1 text-sm rounded ${priceMode === 'wholesale' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:text-white'}`}
+              data-testid="price-mode-wholesale"
+            >
+              Mayor
+            </button>
+          </div>
           {shift ? (
             <Badge className="bg-green-500/20 text-green-400">
               Turno Activo desde {new Date(shift.start_time).toLocaleTimeString()}
@@ -2787,7 +3044,9 @@ const POSPage = () => {
                   </div>
                   <p className="text-white text-sm font-medium truncate">{product.name}</p>
                   <p className="text-slate-400 text-xs">{product.code}</p>
-                  <p className="text-blue-400 font-bold mt-1">${product.retail_price?.toFixed(2)}</p>
+                  <p className={`font-bold mt-1 ${priceMode === 'price2' ? 'text-yellow-400' : priceMode === 'wholesale' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                    {getPriceSymbol()}{getProductPrice(product).toFixed(2)}
+                  </p>
                 </div>
               ))}
             </div>
@@ -2801,7 +3060,12 @@ const POSPage = () => {
               <h2 className="text-white font-bold flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" /> Carrito
               </h2>
-              <Badge className="bg-blue-500">{cartCount} items</Badge>
+              <div className="flex items-center gap-2">
+                <Badge className={priceMode === 'price2' ? 'bg-yellow-500' : priceMode === 'wholesale' ? 'bg-blue-500' : 'bg-emerald-500'}>
+                  {priceMode === 'price2' ? 'Bs.' : priceMode === 'wholesale' ? 'Mayor' : 'USD'}
+                </Badge>
+                <Badge className="bg-slate-600">{cartCount} items</Badge>
+              </div>
             </div>
           </div>
 
@@ -2819,7 +3083,7 @@ const POSPage = () => {
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
                       <p className="text-white text-sm font-medium">{item.product.name}</p>
-                      <p className="text-slate-400 text-xs">${item.unit_price?.toFixed(2)} c/u</p>
+                      <p className="text-slate-400 text-xs">{getPriceSymbol()}{item.unit_price?.toFixed(2)} c/u</p>
                     </div>
                     <button onClick={() => removeFromCart(item.product_id)} className="text-red-400 hover:text-red-300">
                       <X className="w-4 h-4" />
@@ -2842,7 +3106,9 @@ const POSPage = () => {
           <div className="p-4 border-t border-slate-700 space-y-3">
             <div className="flex justify-between text-lg">
               <span className="text-slate-300">Total:</span>
-              <span className="text-white font-bold text-2xl">${cartTotal.toFixed(2)}</span>
+              <span className={`font-bold text-2xl ${priceMode === 'price2' ? 'text-yellow-400' : 'text-white'}`}>
+                {getPriceSymbol()}{cartTotal.toFixed(2)}
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" onClick={clearCart} className="border-slate-600 text-slate-300" disabled={cart.length === 0}>
@@ -2869,8 +3135,10 @@ const POSPage = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
-              <p className="text-slate-400 text-sm">Total a Cobrar</p>
-              <p className="text-4xl font-bold text-white">${cartTotal.toFixed(2)}</p>
+              <p className="text-slate-400 text-sm">Total a Cobrar ({priceMode === 'price2' ? 'Bs.' : priceMode === 'wholesale' ? 'Mayor' : 'USD'})</p>
+              <p className={`text-4xl font-bold ${priceMode === 'price2' ? 'text-yellow-400' : 'text-white'}`}>
+                {getPriceSymbol()}{cartTotal.toFixed(2)}
+              </p>
             </div>
 
             <div className="space-y-2">

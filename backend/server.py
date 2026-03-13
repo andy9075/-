@@ -143,13 +143,15 @@ class CategoryCreate(BaseModel):
     name: str
     parent_id: Optional[str] = None
     sort_order: int = 0
+    exchange_rate: float = 1.0  # 汇率 (例如 USD to VES)
 
 class CategoryResponse(BaseModel):
     id: str
     code: str
     name: str
-    parent_id: Optional[str]
-    sort_order: int
+    parent_id: Optional[str] = None
+    sort_order: int = 0
+    exchange_rate: float = 1.0
     created_at: str
 
 # Product Models
@@ -160,8 +162,11 @@ class ProductCreate(BaseModel):
     category_id: Optional[str] = None
     unit: str = "件"
     cost_price: float = 0.0
-    retail_price: float = 0.0
-    wholesale_price: float = 0.0
+    price1: float = 0.0  # 价格1 (零售价 USD)
+    price2: float = 0.0  # 价格2 (零售价 本地货币)
+    wholesale_price: float = 0.0  # 批发价/整箱价
+    box_quantity: int = 1  # 每箱数量
+    retail_price: float = 0.0  # 保留兼容
     min_stock: int = 0
     max_stock: int = 9999
     image_url: str = ""
@@ -171,18 +176,21 @@ class ProductCreate(BaseModel):
 class ProductResponse(BaseModel):
     id: str
     code: str
-    barcode: str
+    barcode: str = ""
     name: str
-    category_id: Optional[str]
-    unit: str
-    cost_price: float
-    retail_price: float
-    wholesale_price: float
-    min_stock: int
-    max_stock: int
-    image_url: str
-    description: str
-    status: str
+    category_id: Optional[str] = None
+    unit: str = "件"
+    cost_price: float = 0.0
+    price1: float = 0.0
+    price2: float = 0.0
+    wholesale_price: float = 0.0
+    box_quantity: int = 1
+    retail_price: float = 0.0
+    min_stock: int = 0
+    max_stock: int = 9999
+    image_url: str = ""
+    description: str = ""
+    status: str = "active"
     created_at: str
 
 # Inventory Models
@@ -1183,6 +1191,49 @@ async def get_top_products(
             })
     
     return result
+
+# ==================== Exchange Rate Settings ====================
+
+@api_router.get("/exchange-rates")
+async def get_exchange_rates():
+    """Get system exchange rates"""
+    settings = await db.settings.find_one({"type": "exchange_rates"}, {"_id": 0})
+    if not settings:
+        settings = {
+            "type": "exchange_rates",
+            "usd_to_ves": 36.5,  # USD to Bolivares
+            "usd_to_cop": 4000,  # USD to Colombian Pesos
+            "default_currency": "USD",
+            "local_currency": "VES",
+            "local_currency_symbol": "Bs."
+        }
+    return settings
+
+@api_router.put("/exchange-rates")
+async def update_exchange_rates(
+    usd_to_ves: float,
+    usd_to_cop: float = 4000,
+    default_currency: str = "USD",
+    local_currency: str = "VES",
+    local_currency_symbol: str = "Bs.",
+    current_user: dict = Depends(get_current_user)
+):
+    """Update system exchange rates"""
+    settings_doc = {
+        "type": "exchange_rates",
+        "usd_to_ves": usd_to_ves,
+        "usd_to_cop": usd_to_cop,
+        "default_currency": default_currency,
+        "local_currency": local_currency,
+        "local_currency_symbol": local_currency_symbol,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.settings.update_one(
+        {"type": "exchange_rates"},
+        {"$set": settings_doc},
+        upsert=True
+    )
+    return {"message": "汇率已更新"}
 
 # ==================== Payment Settings Routes ====================
 
