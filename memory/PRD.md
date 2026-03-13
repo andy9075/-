@@ -1,71 +1,69 @@
-# POS System - PRD
+# POS System (秘奥软件) - PRD
 
-## Tech Stack
-Backend: FastAPI + MongoDB | Frontend: React + TailwindCSS + Shadcn/UI | Auth: JWT
+## Original Problem Statement
+Build a comprehensive, desktop-style POS application as a web-based system with multi-store, multi-warehouse support, product management, sales, inventory transfers, and an online store.
 
-## Implemented Features
+## Architecture
+- **Frontend:** React (single App.js) + TailwindCSS + Shadcn/UI
+- **Backend:** FastAPI (server.py) + MongoDB
+- **Auth:** JWT-based login
+- **i18n:** LangContext with zh/en/es translations
 
-### POS Cashier
-- **Multi-user login**: Cashier avatar list, click to select, enter password
-- Full-screen cart table with decimal quantity support (0.5kg, 1.5, etc.)
-- Product search popup (F1), barcode scanner (Enter key in search)
-- Per-item price arrows: Price1 → Price2 → Box
-- Box mode: qty=boxes, unit=per-box price
-- **F9 Payment Modal**: F5=Cash, F6=Card, F7=Biopago, F8=Transfer + discount %
-- **F4 Hold Order** / **F10 Recall Order** - save & restore pending orders
-- **F11 Refund** - return items by order number
-- Currency toggle $/Bs. with dual display (Bs shows both)
-- Online/offline indicator + auto-sync
-- F3=Clear cart, ESC=Close popups
+## Core Modules
+1. **POS** (/pos) - Full-screen cashier interface with barcode scanning, hold/recall orders, multi-price levels, payment modal, shortcut toolbar
+2. **Admin Panel** (/admin/*) - Dashboard, Stores, Warehouses, Products, Transfers, Customers, Suppliers, Purchases, Sales, Reports, Exchange Rates, Payment Settings
+3. **Online Store** (/) - Customer-facing e-commerce with cart, checkout, WhatsApp contact
 
-### Admin - System Settings (/admin/settings)
-- Company info: name, tax ID, address, phone, invoice header/footer
-- Print: 80mm receipt / A4 invoice, auto-print, copies
-- Barcode scanner: enable/disable, input delay
-- Wholesale: enable, min quantity, discount %
-- Document numbering: SO/TR/PO prefixes
-- Report currency: USD/VES
+## Implemented Features (as of 2026-03-13)
+- Multi-user login (admin + cashier roles)
+- Decimal quantity input in POS
+- Barcode scanner integration
+- Hold/Recall orders (F4/F10)
+- Advanced payment modal (F9) with cash/card/multi-currency
+- Dual currency display ($/Bs.)
+- POS shortcut toolbar (F1 Search, F3 Clear, F4 Hold, F9 Checkout, F10 Recall, F11 Refund)
+- Product import from external systems (Excel .xlsx/.xls, CSV, JSON)
+- Multi-language support (Chinese/English/Spanish) on ALL pages
+- Store/Warehouse/Customer/Supplier/Purchase/Sales/Transfer management
+- Exchange rate settings with per-category rates
+- Payment settings (bank transfer, mobile pay, WhatsApp)
+- Online store with language switcher and category filtering
 
-### Admin - Employee Management (/admin/employees)
-- CRUD for cashiers/staff with roles (admin, manager, cashier, staff)
-- Permissions: can_discount, can_refund, max_discount %
-- Assign to specific store
+## Bug Fixes Applied
+- POS price switching (box↔piece) - fixed stale state closures in addToCart/removeFromCart using functional updates (setCart(prev => ...))
 
-### Admin - Stock Alerts (/admin/stock-alerts)
-- Products below min_stock show critical (red) or warning (yellow)
+## P0 - Completed
+- [x] POS price switching bug fix
+- [x] POS shortcut toolbar
+- [x] Product import (multi-format)
+- [x] i18n fix for all admin pages
 
-### Admin - Stock Taking (/admin/stock-taking)
-- Select warehouse, auto-load products with system qty
-- Input actual qty, shows difference
-- Draft or confirmed (confirmed auto-adjusts inventory)
+## P1 - Upcoming
+- [ ] Wholesale module
+- [ ] Receipt/Invoice printing (80mm + A4)
+- [ ] Offline mode sync logic
 
-### Reports
-- Sales Report: date/store filter, print
-- Daily Settlement: by date, payment method breakdown, gross profit
-- Bestsellers/Slowsellers: top/bottom products by sales
+## P2 - Future
+- [ ] Enhanced reporting with charts
+- [ ] UI/background improvements
+- [ ] Code refactoring (split App.js and server.py)
 
-### Multi-Language (i18n)
-- Chinese/English/Spanish across ALL pages
-- Admin sidebar, POS header, Shop header switchers
+## Key API Endpoints
+- POST /api/auth/login
+- GET/POST /api/products, /api/products/import
+- GET /api/products/import/template
+- GET/POST /api/stores, /api/warehouses
+- GET/POST /api/customers, /api/suppliers
+- GET/POST /api/purchase-orders
+- GET/POST /api/sales, /api/sales-orders
+- POST /api/inventory/transfer
+- GET/PUT /api/exchange-rates, /api/payment-settings
+- GET /api/dashboard/stats
 
-### Online Shop
-- Category filter tabs + search + language switcher
-- Cart, checkout with shipping info
+## DB Schema
+- products: {id, code, name, category, cost_price, margin1-3, price1-3, items_per_box, barcode, stock, status}
+- users: {id, username, password, role, permissions}
+- stores, warehouses, customers, suppliers, purchase_orders, sales, inventory, transfers
 
-### Other
-- Multi-price (cost+margin), warehouse transfers, online orders with item details
-- Offline POS, exchange rates, payment settings
-
-## Links
-Admin: /admin | POS: /pos | Shop: /shop
-
-## Credentials: admin / admin123
-
-## Backlog
-- P1: Print receipt/invoice (80mm + A4 CSS @media print)
-- P1: Barcode label printing
-- P1: UI/background design improvement
-- P2: Refactor App.js into components
-- P2: Refactor server.py into route modules
-- P3: Member/loyalty pricing
-- P3: Product images
+## Test Credentials
+- Username: admin / Password: admin123
