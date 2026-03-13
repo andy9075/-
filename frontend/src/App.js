@@ -505,8 +505,14 @@ const ProductsPage = () => {
     return catRate > 1 ? catRate : (exchangeRates.usd_to_ves || 1);
   };
   const localSymbol = exchangeRates.local_currency_symbol || 'Bs.';
+  const sysRate = exchangeRates.usd_to_ves || 1;
   const selectedCatRate = getCategoryRate(formData.category_id);
   const toBs = (usd) => (usd * selectedCatRate).toFixed(2);
+  // Auto-calc: USD selling price = cost × category_rate / system_rate
+  const autoCalcPrice = (cost, catRate) => {
+    if (!cost || !catRate || catRate <= 1 || !sysRate) return 0;
+    return Math.round(cost * catRate / sysRate * 100) / 100;
+  };
 
   // Import functionality
   const [showImport, setShowImport] = useState(false);
@@ -658,7 +664,16 @@ const ProductsPage = () => {
             {/* Category with Exchange Rate */}
             <div>
               <label className="text-sm text-slate-300">{t('category')}</label>
-              <Select value={formData.category_id} onValueChange={(v) => setFormData({...formData, category_id: v})}>
+              <Select value={formData.category_id} onValueChange={(v) => {
+                const newCatRate = getCategoryRate(v);
+                const cost = formData.cost_price || 0;
+                const autoPrice = autoCalcPrice(cost, newCatRate);
+                if (autoPrice > 0) {
+                  setFormData({...formData, category_id: v, price1: autoPrice, price2: autoPrice, price3: autoPrice});
+                } else {
+                  setFormData({...formData, category_id: v});
+                }
+              }}>
                 <SelectTrigger className="bg-slate-700 border-slate-600">
                   <SelectValue placeholder={t('category')} />
                 </SelectTrigger>
@@ -689,17 +704,29 @@ const ProductsPage = () => {
                   <label className="text-xs text-slate-400">{t('costPrice')} ($)</label>
                   <Input type="number" step="0.01" value={formData.cost_price} onChange={(e) => {
                     const cost = parseFloat(e.target.value) || 0;
-                    const m1 = formData.margin1 || 0;
-                    const m2 = formData.margin2 || 0;
-                    const m3 = formData.margin3 || 0;
-                    setFormData({...formData, cost_price: cost,
-                      price1: m1 > 0 ? Math.round(cost * (1 + m1/100) * 100) / 100 : formData.price1,
-                      price2: m2 > 0 ? Math.round(cost * (1 + m2/100) * 100) / 100 : formData.price2,
-                      price3: m3 > 0 ? Math.round(cost * (1 + m3/100) * 100) / 100 : formData.price3
-                    });
+                    const catRate = selectedCatRate;
+                    // Auto-calc from category rate if available
+                    const autoPrice = autoCalcPrice(cost, catRate);
+                    if (autoPrice > 0) {
+                      setFormData({...formData, cost_price: cost, price1: autoPrice, price2: autoPrice, price3: autoPrice});
+                    } else {
+                      const m1 = formData.margin1 || 0;
+                      const m2 = formData.margin2 || 0;
+                      const m3 = formData.margin3 || 0;
+                      setFormData({...formData, cost_price: cost,
+                        price1: m1 > 0 ? Math.round(cost * (1 + m1/100) * 100) / 100 : formData.price1,
+                        price2: m2 > 0 ? Math.round(cost * (1 + m2/100) * 100) / 100 : formData.price2,
+                        price3: m3 > 0 ? Math.round(cost * (1 + m3/100) * 100) / 100 : formData.price3
+                      });
+                    }
                   }} className="bg-slate-700 border-slate-600" data-testid="product-cost" />
                   {formData.cost_price > 0 && formData.category_id && (
                     <p className="text-xs text-cyan-400 mt-0.5">{localSymbol}{toBs(formData.cost_price)}</p>
+                  )}
+                  {formData.cost_price > 0 && selectedCatRate > 1 && (
+                    <p className="text-xs text-emerald-400 mt-0.5">
+                      ${formData.cost_price}×{selectedCatRate}/{sysRate} = ${autoCalcPrice(formData.cost_price, selectedCatRate).toFixed(2)}
+                    </p>
                   )}
                 </div>
               </div>
@@ -4054,7 +4081,7 @@ const POSPage = () => {
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [priceMode, setPriceMode] = useState("price1");
   const [exchangeRates, setExchangeRates] = useState({ usd_to_ves: 36.5 });
-  const [showBs, setShowBs] = useState(false);
+  const [showBs, setShowBs] = useState(true);
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingOrders, setPendingOrders] = useState(() => {
@@ -4204,10 +4231,38 @@ const POSPage = () => {
 
   const getProductPrice = (product) => {
     const p1 = product.price1 || product.retail_price || 0;
-    return showBs ? p1 * (exchangeRates.usd_to_ves || 1) : p1;
+    if (!showBs) return p1;
+    // Bs. price = cost × category_rate (if category has a custom rate)
+    const cat = categories.find(c => c.id === product.category_id);
+    const catRate = cat?.exchange_rate;
+    if (catRate && catRate > 1 && product.cost_price > 0) {
+      return product.cost_price * catRate;
+    }
+    return p1 * (exchangeRates.usd_to_ves || 1);
   };
 
   const getPriceSymbol = () => showBs ? "Bs." : "$";
+
+  // Get the Bs. rate for a specific product (based on its category)
+  const getProductBsRate = (product) => {
+    const cat = categories.find(c => c.id === product.category_id);
+    const catRate = cat?.exchange_rate;
+    if (catRate && catRate > 1) return catRate;
+    return exchangeRates.usd_to_ves || 1;
+  };
+
+  // Convert a USD price to display value (Bs. or USD)
+  const toDisplayPrice = (usdPrice, product) => {
+    if (!showBs) return usdPrice;
+    // Use category rate for Bs. conversion
+    const rate = getProductBsRate(product);
+    // If product has cost_price, calculate Bs. from cost × category_rate × (price/cost) ratio
+    if (product.cost_price > 0) {
+      const priceRatio = usdPrice / (product.price1 || product.retail_price || usdPrice || 1);
+      return product.cost_price * rate * (priceRatio || 1);
+    }
+    return usdPrice * rate;
+  };
 
   const getItemPriceByMode = (product, mode) => {
     const p1 = product.price1 || product.retail_price || 0;
@@ -4393,6 +4448,17 @@ const POSPage = () => {
 
   const cartTotal = cart.reduce((sum, i) => sum + i.amount, 0);
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+  // Display total in Bs. using category rates
+  const cartTotalDisplay = showBs
+    ? cart.reduce((sum, i) => {
+        const rate = getProductBsRate(i.product);
+        if (i.product.cost_price > 0) {
+          const basePrice = i.product.price1 || i.product.retail_price || 1;
+          return sum + (i.amount / basePrice) * i.product.cost_price * rate;
+        }
+        return sum + i.amount * rate;
+      }, 0)
+    : cartTotal;
   // Discount: max discount = total - total_cost (can't sell below cost)
   const cartCost = cart.reduce((sum, i) => {
     const cost = i.product.cost_price || 0;
@@ -4652,10 +4718,10 @@ const POSPage = () => {
               {showBs ? 'Bs.' : '$'}
             </span>
             <div className="flex flex-col">
-              <button onClick={() => setShowBs(!showBs)} className="text-slate-400 hover:text-white leading-none" data-testid="currency-up">
+              <button onClick={() => !showPayment && setShowBs(!showBs)} className={`text-slate-400 hover:text-white leading-none ${showPayment ? 'opacity-30 cursor-not-allowed' : ''}`} data-testid="currency-up">
                 <ChevronDown className="w-3 h-3 rotate-180" />
               </button>
-              <button onClick={() => setShowBs(!showBs)} className="text-slate-400 hover:text-white leading-none" data-testid="currency-down">
+              <button onClick={() => !showPayment && setShowBs(!showBs)} className={`text-slate-400 hover:text-white leading-none ${showPayment ? 'opacity-30 cursor-not-allowed' : ''}`} data-testid="currency-down">
                 <ChevronDown className="w-3 h-3" />
               </button>
             </div>
@@ -4830,8 +4896,8 @@ const POSPage = () => {
                     const boxQty = item.product.box_quantity || 1;
                     const isBoxMode = item.price_mode === "box";
                     const totalPieces = isBoxMode ? item.quantity * boxQty : item.quantity;
-                    const displayAmount = showBs ? item.amount * (exchangeRates.usd_to_ves || 1) : item.amount;
-                    const displayUnitPrice = showBs ? getItemPriceByMode(item.product, item.price_mode) * (exchangeRates.usd_to_ves || 1) : getItemPriceByMode(item.product, item.price_mode);
+                    const displayAmount = showBs ? toDisplayPrice(item.amount / (item.quantity || 1), item.product) * item.quantity : item.amount;
+                    const displayUnitPrice = showBs ? toDisplayPrice(getItemPriceByMode(item.product, item.price_mode), item.product) : getItemPriceByMode(item.product, item.price_mode);
                     const priceModes = ["price1", "price2", "box"];
                     const currentIdx = priceModes.indexOf(item.price_mode);
                     const modeLabels = { price1: t('price1'), price2: t('price2'), box: t('box') };
@@ -4844,12 +4910,13 @@ const POSPage = () => {
                           <p className="text-slate-500 text-xs">{item.product.code}</p>
                           {/* Box calculation: show per-box breakdown */}
                           {isBoxMode && (() => {
-                            const rate = exchangeRates.usd_to_ves || 1;
+                            const rate = getProductBsRate(item.product);
                             const p3 = item.product.price3 || item.product.wholesale_price || 0;
-                            const perBoxTotal = boxQty * p3;
+                            const p3Display = showBs ? (item.product.cost_price > 0 ? item.product.cost_price * rate / (item.product.price1 || 1) * p3 : p3 * rate) : p3;
+                            const perBoxDisplay = p3Display * boxQty;
                             return (
                               <p className="text-blue-300 text-xs mt-0.5">
-                                {boxQty}×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{(showBs ? perBoxTotal*rate : perBoxTotal).toFixed(2)}/{t('box')}
+                                {boxQty}×{getPriceSymbol()}{p3Display.toFixed(2)}={getPriceSymbol()}{perBoxDisplay.toFixed(2)}/{t('box')}
                                 <span className="text-slate-400 ml-1">({totalPieces}{t('pieces')})</span>
                               </p>
                             );
@@ -4924,7 +4991,7 @@ const POSPage = () => {
                     <div>
                       <span className="text-slate-400 text-xs mr-1">Bs.</span>
                       <span className="text-xl font-bold text-orange-400">
-                        {(finalTotal * (exchangeRates.usd_to_ves || 1)).toFixed(2)}
+                        {(cartTotalDisplay * (1 - safeDiscount / 100)).toFixed(2)}
                       </span>
                     </div>
                     <div>
@@ -4964,7 +5031,7 @@ const POSPage = () => {
               {showBs ? (
                 <>
                   <p className="text-slate-400 text-xs">Bs.</p>
-                  <p className="text-3xl font-bold text-orange-400">Bs.{(finalTotal * (exchangeRates.usd_to_ves || 1)).toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-orange-400">Bs.{(cartTotalDisplay * (1 - safeDiscount / 100)).toFixed(2)}</p>
                   <p className="text-slate-400 text-sm mt-1">${finalTotal.toFixed(2)} USD</p>
                 </>
               ) : (
