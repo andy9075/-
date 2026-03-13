@@ -144,6 +144,12 @@ const translations = {
     whatsappEnabled: "客户下单后可通过WhatsApp联系您",
     saving: "保存中...",
     notes: "备注",
+    // Pricing mode
+    pricingMode: "外币定价模式",
+    pricingLocalBased: "外币价格按本地价格计算",
+    pricingLocalDesc: "Bs.价格=进货价×部门汇率, USD=Bs.÷销售汇率（适用黑市汇率）",
+    pricingForeignDirect: "外币价格按本身价格",
+    pricingForeignDesc: "直接使用商品设定的USD价格（适用央行汇率）",
   },
   en: {
     save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add",
@@ -263,6 +269,11 @@ const translations = {
     whatsappEnabled: "Customers can contact you via WhatsApp after ordering",
     saving: "Saving...",
     notes: "Notes",
+    pricingMode: "Foreign Currency Pricing",
+    pricingLocalBased: "Calculate from local price",
+    pricingLocalDesc: "Bs.=Cost×Dept.Rate, USD=Bs.÷Sales Rate (black market rate)",
+    pricingForeignDirect: "Use direct foreign price",
+    pricingForeignDesc: "Use stored USD prices directly (central bank rate)",
   },
   es: {
     save: "Guardar", cancel: "Cancelar", delete: "Eliminar", edit: "Editar", add: "Agregar",
@@ -382,6 +393,11 @@ const translations = {
     whatsappEnabled: "Los clientes podran contactarte por WhatsApp despues de hacer un pedido",
     saving: "Guardando...",
     notes: "Notas",
+    pricingMode: "Modo de Precio en Divisa",
+    pricingLocalBased: "Calcular desde precio local",
+    pricingLocalDesc: "Bs.=Costo×Tasa Dpto., USD=Bs.÷Tasa Venta (tasa paralela)",
+    pricingForeignDirect: "Usar precio directo en divisa",
+    pricingForeignDesc: "Usar precios USD almacenados directamente (tasa BCV)",
   }
 };
 

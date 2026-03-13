@@ -3741,6 +3741,41 @@ const SystemSettingsPage = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Pricing Mode */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader><CardTitle className="text-white text-base">{t('pricingMode')}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div
+              onClick={() => updateField("pricing_mode", "local_based")}
+              className={`p-3 rounded-lg cursor-pointer border-2 transition-colors ${settings.pricing_mode === 'local_based' || !settings.pricing_mode ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-600 hover:border-slate-500'}`}
+              data-testid="pricing-local-based"
+            >
+              <div className="flex items-center gap-2">
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${settings.pricing_mode === 'local_based' || !settings.pricing_mode ? 'border-emerald-500' : 'border-slate-500'}`}>
+                  {(settings.pricing_mode === 'local_based' || !settings.pricing_mode) && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+                </div>
+                <span className="text-white font-medium text-sm">{t('pricingLocalBased')}</span>
+              </div>
+              <p className="text-slate-400 text-xs mt-1 ml-6">{t('pricingLocalDesc')}</p>
+              <p className="text-cyan-400 text-xs mt-1 ml-6">Bs. = $Cost × Dept.Rate | USD = Bs. ÷ Sales Rate</p>
+            </div>
+            <div
+              onClick={() => updateField("pricing_mode", "foreign_direct")}
+              className={`p-3 rounded-lg cursor-pointer border-2 transition-colors ${settings.pricing_mode === 'foreign_direct' ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-600 hover:border-slate-500'}`}
+              data-testid="pricing-foreign-direct"
+            >
+              <div className="flex items-center gap-2">
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${settings.pricing_mode === 'foreign_direct' ? 'border-emerald-500' : 'border-slate-500'}`}>
+                  {settings.pricing_mode === 'foreign_direct' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+                </div>
+                <span className="text-white font-medium text-sm">{t('pricingForeignDirect')}</span>
+              </div>
+              <p className="text-slate-400 text-xs mt-1 ml-6">{t('pricingForeignDesc')}</p>
+              <p className="text-cyan-400 text-xs mt-1 ml-6">USD = $Price | Bs. = $Price × Sales Rate</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -4093,6 +4128,7 @@ const POSPage = () => {
   const [showHeldOrders, setShowHeldOrders] = useState(false);
   const [showRefund, setShowRefund] = useState(false);
   const [refundOrderNo, setRefundOrderNo] = useState("");
+  const [pricingMode, setPricingMode] = useState("local_based");
   const searchInputRef = React.useRef(null);
   const lastKeyTime = React.useRef(0);
   const scanBuffer = React.useRef("");
@@ -4209,16 +4245,18 @@ const POSPage = () => {
   const fetchData = async (token) => {
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     try {
-      const [productsRes, categoriesRes, storesRes, ratesRes] = await Promise.all([
+      const [productsRes, categoriesRes, storesRes, ratesRes, settingsRes] = await Promise.all([
         axios.get(`${API}/products`),
         axios.get(`${API}/categories`),
         axios.get(`${API}/stores`),
-        axios.get(`${API}/exchange-rates`)
+        axios.get(`${API}/exchange-rates`),
+        axios.get(`${API}/settings/system`).catch(() => ({ data: {} }))
       ]);
       setProducts(productsRes.data);
       setCategories(categoriesRes.data);
       setStores(storesRes.data.filter(s => s.type === 'retail'));
       setExchangeRates(ratesRes.data);
+      if (settingsRes.data?.pricing_mode) setPricingMode(settingsRes.data.pricing_mode);
     } catch (e) {
       console.error(e);
     }
@@ -4232,7 +4270,11 @@ const POSPage = () => {
   const getProductPrice = (product) => {
     const p1 = product.price1 || product.retail_price || 0;
     if (!showBs) return p1;
-    // Bs. price = cost × category_rate (if category has a custom rate)
+    if (pricingMode === "foreign_direct") {
+      // Direct mode: Bs. = USD price × system rate
+      return p1 * (exchangeRates.usd_to_ves || 1);
+    }
+    // Local-based mode: Bs. = cost × category_rate
     const cat = categories.find(c => c.id === product.category_id);
     const catRate = cat?.exchange_rate;
     if (catRate && catRate > 1 && product.cost_price > 0) {
@@ -4245,6 +4287,7 @@ const POSPage = () => {
 
   // Get the Bs. rate for a specific product (based on its category)
   const getProductBsRate = (product) => {
+    if (pricingMode === "foreign_direct") return exchangeRates.usd_to_ves || 1;
     const cat = categories.find(c => c.id === product.category_id);
     const catRate = cat?.exchange_rate;
     if (catRate && catRate > 1) return catRate;
@@ -4254,11 +4297,15 @@ const POSPage = () => {
   // Convert a USD price to display value (Bs. or USD)
   const toDisplayPrice = (usdPrice, product) => {
     if (!showBs) return usdPrice;
-    // Use category rate for Bs. conversion
+    if (pricingMode === "foreign_direct") {
+      // Direct: Bs. = USD × system_rate
+      return usdPrice * (exchangeRates.usd_to_ves || 1);
+    }
+    // Local-based: Bs. = cost × category_rate × (price/base_price) ratio
     const rate = getProductBsRate(product);
-    // If product has cost_price, calculate Bs. from cost × category_rate × (price/cost) ratio
     if (product.cost_price > 0) {
-      const priceRatio = usdPrice / (product.price1 || product.retail_price || usdPrice || 1);
+      const basePrice = product.price1 || product.retail_price || usdPrice || 1;
+      const priceRatio = usdPrice / basePrice;
       return product.cost_price * rate * (priceRatio || 1);
     }
     return usdPrice * rate;
@@ -4448,16 +4495,18 @@ const POSPage = () => {
 
   const cartTotal = cart.reduce((sum, i) => sum + i.amount, 0);
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
-  // Display total in Bs. using category rates
+  // Display total in Bs. using category rates or system rate
   const cartTotalDisplay = showBs
-    ? cart.reduce((sum, i) => {
-        const rate = getProductBsRate(i.product);
-        if (i.product.cost_price > 0) {
-          const basePrice = i.product.price1 || i.product.retail_price || 1;
-          return sum + (i.amount / basePrice) * i.product.cost_price * rate;
-        }
-        return sum + i.amount * rate;
-      }, 0)
+    ? (pricingMode === "foreign_direct"
+      ? cartTotal * (exchangeRates.usd_to_ves || 1)
+      : cart.reduce((sum, i) => {
+          const rate = getProductBsRate(i.product);
+          if (i.product.cost_price > 0) {
+            const basePrice = i.product.price1 || i.product.retail_price || 1;
+            return sum + (i.amount / basePrice) * i.product.cost_price * rate;
+          }
+          return sum + i.amount * rate;
+        }, 0))
     : cartTotal;
   // Discount: max discount = total - total_cost (can't sell below cost)
   const cartCost = cart.reduce((sum, i) => {

@@ -324,7 +324,9 @@ class SystemSettings(BaseModel):
     # Wholesale
     wholesale_enabled: bool = True
     wholesale_min_quantity: int = 10
-    wholesale_discount_percent: float = 0.0  # WhatsApp contact number
+    wholesale_discount_percent: float = 0.0
+    # Pricing Mode: "local_based" or "foreign_direct"
+    pricing_mode: str = "local_based"
 
 # Online Shop Order Models
 class OnlineOrderCreate(BaseModel):
