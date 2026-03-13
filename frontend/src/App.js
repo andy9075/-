@@ -22,6 +22,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Global axios interceptor - handle auth errors silently
+axios.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Don't show toast for auth errors - will be handled by redirect
+      console.warn('Auth error:', error.response?.status);
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Auth Context
 const AuthContext = createContext(null);
 
@@ -400,7 +412,7 @@ const ProductsPage = () => {
       const res = await axios.get(`${API}/products`, { params: { search } });
       setProducts(res.data);
     } catch (e) {
-      toast.error("加载商品失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载商品失败");
     } finally {
       setLoading(false);
     }
@@ -662,7 +674,7 @@ const StoresPage = () => {
       const res = await axios.get(`${API}/stores`);
       setStores(res.data);
     } catch (e) {
-      toast.error("加载门店失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载门店失败");
     } finally {
       setLoading(false);
     }
@@ -846,7 +858,7 @@ const WarehousesPage = () => {
         setSelectedWarehouse(res.data[0].id);
       }
     } catch (e) {
-      toast.error("加载仓库失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载仓库失败");
     } finally {
       setLoading(false);
     }
@@ -990,7 +1002,7 @@ const OnlineOrdersPage = () => {
       const res = await axios.get(`${API}/shop/orders`, { params });
       setOrders(res.data);
     } catch (e) {
-      toast.error("加载订单失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载订单失败");
     } finally {
       setLoading(false);
     }
@@ -1136,7 +1148,7 @@ const CustomersPage = () => {
       const res = await axios.get(`${API}/customers`, { params: { search: search || undefined } });
       setCustomers(res.data);
     } catch (e) {
-      toast.error("加载客户失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载客户失败");
     } finally {
       setLoading(false);
     }
@@ -1265,7 +1277,7 @@ const SuppliersPage = () => {
       const res = await axios.get(`${API}/suppliers`);
       setSuppliers(res.data);
     } catch (e) {
-      toast.error("加载供应商失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载供应商失败");
     } finally {
       setLoading(false);
     }
@@ -1399,7 +1411,9 @@ const PurchasesPage = () => {
       const res = await axios.get(`${API}/purchase-orders`);
       setOrders(res.data);
     } catch (e) {
-      toast.error("加载采购单失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) {
+        toast.error("加载采购单失败");
+      }
     } finally {
       setLoading(false);
     }
@@ -1624,7 +1638,9 @@ const SalesPage = () => {
       const res = await axios.get(`${API}/sales-orders`);
       setOrders(res.data);
     } catch (e) {
-      toast.error("加载销售单失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) {
+        toast.error("加载销售单失败");
+      }
     } finally {
       setLoading(false);
     }
@@ -1814,7 +1830,7 @@ const TransferPage = () => {
       setInventory(iRes.data);
       setTransfers(tRes.data);
     } catch (e) {
-      toast.error("加载数据失败");
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("加载数据失败");
     } finally {
       setLoading(false);
     }
