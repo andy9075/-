@@ -2650,6 +2650,7 @@ const PaymentSettingsPage = () => {
 
 // Online Shop (Public)
 const ShopPage = () => {
+  const { t } = useLang();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [cart, setCart] = useState([]);
@@ -2657,6 +2658,8 @@ const ShopPage = () => {
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [checkoutForm, setCheckoutForm] = useState({
     customer_id: "", shipping_name: "", shipping_phone: "", shipping_address: "",
     payment_method: "transfer", payment_reference: ""
@@ -2699,13 +2702,14 @@ const ShopPage = () => {
   };
 
   const addToCart = (product) => {
+    const price = product.price1 || product.retail_price || 0;
     const existing = cart.find(i => i.product_id === product.id);
     if (existing) {
-      setCart(cart.map(i => i.product_id === product.id ? {...i, quantity: i.quantity + 1} : i));
+      setCart(cart.map(i => i.product_id === product.id ? {...i, quantity: i.quantity + 1, amount: (i.quantity + 1) * price} : i));
     } else {
-      setCart([...cart, { product_id: product.id, product, quantity: 1, unit_price: product.retail_price, amount: product.retail_price }]);
+      setCart([...cart, { product_id: product.id, product, quantity: 1, unit_price: price, amount: price }]);
     }
-    toast.success("已加入购物车");
+    toast.success(t('addToCart'));
   };
 
   const updateCartItem = (productId, quantity) => {
@@ -2719,6 +2723,12 @@ const ShopPage = () => {
   const cartTotal = cart.reduce((sum, i) => sum + i.amount, 0);
   const shippingFee = cartTotal >= 100 ? 0 : 10;
   const orderTotal = cartTotal + shippingFee;
+
+  const filteredProducts = products.filter(p => {
+    const matchCat = selectedCategory === "all" || p.category_id === selectedCategory;
+    const matchSearch = !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code?.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchCat && matchSearch;
+  });
 
   const handleCheckout = async () => {
     if (!checkoutForm.shipping_name || !checkoutForm.shipping_phone || !checkoutForm.shipping_address) {
@@ -2758,14 +2768,14 @@ const ShopPage = () => {
             <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
               <Store className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-white">网上商城</h1>
+            <h1 className="text-xl font-bold text-white">{t('shopTitle')}</h1>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/shop/orders" className="text-slate-400 hover:text-white text-sm">
-              Mis Pedidos / 我的订单
+              {t('myOrders')}
             </Link>
             <Link to="/admin" className="text-slate-400 hover:text-white text-sm">
-              管理后台
+              Admin
             </Link>
             <Button variant="outline" className="relative border-slate-600 text-slate-300" onClick={() => setShowCart(true)} data-testid="cart-btn">
               <ShoppingBag className="w-5 h-5" />
@@ -2779,10 +2789,46 @@ const ShopPage = () => {
         </div>
       </header>
 
+      {/* Category Filter + Search */}
+      <div className="max-w-7xl mx-auto px-4 pt-6 pb-2">
+        <div className="flex flex-col gap-3">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              placeholder={t('searchProduct')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-slate-800 border-slate-700 text-white"
+              data-testid="shop-search"
+            />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant={selectedCategory === "all" ? "default" : "outline"}
+              onClick={() => setSelectedCategory("all")}
+              className={`h-8 ${selectedCategory === "all" ? "bg-emerald-500" : "border-slate-600 text-slate-300"}`}
+              data-testid="shop-cat-all"
+            >
+              {t('all')}
+            </Button>
+            {categories.map(cat => (
+              <Button key={cat.id} size="sm" variant={selectedCategory === cat.id ? "default" : "outline"}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`h-8 ${selectedCategory === cat.id ? "bg-emerald-500" : "border-slate-600 text-slate-300"}`}
+                data-testid={`shop-cat-${cat.id}`}
+              >
+                {cat.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Products Grid */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-4">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {products.map((product) => (
+          {filteredProducts.map((product) => {
+            const price = product.price1 || product.retail_price || 0;
+            return (
             <Card key={product.id} className="bg-slate-800 border-slate-700 overflow-hidden">
               <div className="aspect-square bg-slate-700 flex items-center justify-center">
                 {product.image_url ? (
@@ -2795,8 +2841,8 @@ const ShopPage = () => {
                 <h3 className="text-white font-medium truncate">{product.name}</h3>
                 <p className="text-slate-400 text-sm">{product.code}</p>
                 <div className="flex items-center justify-between mt-3">
-                  <span className="text-emerald-400 font-bold">${product.retail_price?.toFixed(2)}</span>
-                  <span className="text-slate-500 text-sm">库存: {product.stock}</span>
+                  <span className="text-emerald-400 font-bold">${price.toFixed(2)}</span>
+                  <span className="text-slate-500 text-sm">{t('stock')}: {product.stock}</span>
                 </div>
                 <Button 
                   className="w-full mt-3 bg-emerald-500 hover:bg-emerald-600" 
@@ -2804,11 +2850,15 @@ const ShopPage = () => {
                   disabled={product.stock <= 0}
                   data-testid={`add-to-cart-${product.id}`}
                 >
-                  {product.stock > 0 ? '加入购物车' : '缺货'}
+                  {product.stock > 0 ? t('addToCart') : t('noData')}
                 </Button>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
+          {filteredProducts.length === 0 && (
+            <div className="col-span-full text-center py-12 text-slate-400">{t('noData')}</div>
+          )}
         </div>
       </main>
 
@@ -2816,10 +2866,10 @@ const ShopPage = () => {
       <Dialog open={showCart} onOpenChange={setShowCart}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>购物车</DialogTitle>
+            <DialogTitle>{t('cart')}</DialogTitle>
           </DialogHeader>
           {cart.length === 0 ? (
-            <p className="text-slate-400 text-center py-8">购物车是空的</p>
+            <p className="text-slate-400 text-center py-8">{t('noData')}</p>
           ) : (
             <div className="space-y-4">
               {cart.map((item) => (
@@ -2837,11 +2887,11 @@ const ShopPage = () => {
               ))}
               <div className="border-t border-slate-700 pt-4">
                 <div className="flex justify-between text-lg">
-                  <span className="text-slate-300">总计:</span>
+                  <span className="text-slate-300">{t('total')}:</span>
                   <span className="text-emerald-400 font-bold">${cartTotal.toFixed(2)}</span>
                 </div>
                 <Button className="w-full mt-4 bg-emerald-500 hover:bg-emerald-600" onClick={() => { setShowCart(false); setShowCheckout(true); }} data-testid="checkout-btn">
-                  去结算
+                  {t('checkoutTitle')}
                 </Button>
               </div>
             </div>
@@ -2853,29 +2903,29 @@ const ShopPage = () => {
       <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Información de Pago / 支付信息</DialogTitle>
+            <DialogTitle>{t('paymentInfo')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {/* Shipping Info */}
             <div className="space-y-3">
-              <h3 className="text-sm font-medium text-emerald-400">Dirección de Entrega / 收货地址</h3>
+              <h3 className="text-sm font-medium text-emerald-400">{t('shippingInfo')}</h3>
               <div>
-                <label className="text-sm text-slate-300">Nombre / 收货人</label>
-                <Input value={checkoutForm.shipping_name} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-name" placeholder="Nombre completo" />
+                <label className="text-sm text-slate-300">{t('name')}</label>
+                <Input value={checkoutForm.shipping_name} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-name" />
               </div>
               <div>
-                <label className="text-sm text-slate-300">Teléfono / 电话</label>
-                <Input value={checkoutForm.shipping_phone} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_phone: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-phone" placeholder="0412-1234567" />
+                <label className="text-sm text-slate-300">{t('phone')}</label>
+                <Input value={checkoutForm.shipping_phone} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_phone: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-phone" />
               </div>
               <div>
-                <label className="text-sm text-slate-300">Dirección / 地址</label>
-                <Input value={checkoutForm.shipping_address} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_address: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-address" placeholder="Dirección completa" />
+                <label className="text-sm text-slate-300">{t('address')}</label>
+                <Input value={checkoutForm.shipping_address} onChange={(e) => setCheckoutForm({...checkoutForm, shipping_address: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="checkout-address" />
               </div>
             </div>
 
             {/* Payment Method */}
             <div className="space-y-3 border-t border-slate-700 pt-4">
-              <h3 className="text-sm font-medium text-emerald-400">Método de Pago / 支付方式</h3>
+              <h3 className="text-sm font-medium text-emerald-400">{t('paymentMethod')}</h3>
               <div className="grid grid-cols-2 gap-3">
                 {paymentSettings?.transfer_enabled && (
                   <div 
@@ -3354,6 +3404,19 @@ const POSPage = () => {
     }
   }, []);
 
+  // Keyboard shortcuts: F1=search, F2=checkout, F3=clear, ESC=close
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (showLogin || !selectedStore) return;
+      if (e.key === 'F1') { e.preventDefault(); setShowProductSearch(true); }
+      if (e.key === 'F2') { e.preventDefault(); if (cart.length > 0 && shift) setShowPayment(true); }
+      if (e.key === 'F3') { e.preventDefault(); clearCart(); }
+      if (e.key === 'Escape') { setShowProductSearch(false); setShowPayment(false); setShowShiftModal(false); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showLogin, selectedStore, cart, shift]);
+
   const fetchData = async (token) => {
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     try {
@@ -3383,9 +3446,10 @@ const POSPage = () => {
     const p1 = product.price1 || product.retail_price || 0;
     const p2 = product.price2 || p1;
     const p3 = product.price3 || product.wholesale_price || p1;
+    const boxQty = product.box_quantity || 1;
     switch (mode) {
       case "price2": return p2;
-      case "box": return p3;
+      case "box": return p3 * boxQty; // per-box price = items_per_box × unit_price
       default: return p1;
     }
   };
@@ -3396,8 +3460,8 @@ const POSPage = () => {
     const p3 = product.price3 || product.wholesale_price || p1;
     const boxQty = product.box_quantity || 1;
     if (mode === "box") {
-      // quantity = number of boxes, each box has boxQty items
-      return quantity * p3;
+      // quantity = number of boxes, each box has boxQty items at p3 per item
+      return quantity * boxQty * p3;
     }
     const unitPrice = mode === "price2" ? p2 : p1;
     return quantity * unitPrice;
@@ -3919,13 +3983,14 @@ const POSPage = () => {
                         <td className="px-4 py-3">
                           <p className="text-white text-sm font-medium">{item.product.name}</p>
                           <p className="text-slate-500 text-xs">{item.product.code}</p>
-                          {/* Box calculation: 数量×单价=金额 */}
+                          {/* Box calculation: 每箱件数×单价=每箱金额 */}
                           {isBoxMode && (() => {
                             const rate = exchangeRates.usd_to_ves || 1;
                             const p3 = item.product.price3 || item.product.wholesale_price || 0;
+                            const perBoxTotal = boxQty * p3;
                             return (
                               <p className="text-blue-300 text-xs mt-0.5">
-                                {item.quantity}{t('boxes')}×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{displayAmount.toFixed(2)}
+                                {boxQty}×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{(showBs ? perBoxTotal*rate : perBoxTotal).toFixed(2)}/{t('box')}
                                 <span className="text-slate-400 ml-1">({totalPieces}{t('pieces')})</span>
                               </p>
                             );
