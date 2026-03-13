@@ -1331,12 +1331,21 @@ async def get_sales_summary(
     total_sales = sum(o["total_amount"] for o in sales_orders)
     total_online = sum(o["total_amount"] for o in online_orders)
     
+    by_method = {}
+    for o in sales_orders:
+        method = o.get("payment_method", "other")
+        if method not in by_method:
+            by_method[method] = {"count": 0, "amount": 0.0}
+        by_method[method]["count"] += 1
+        by_method[method]["amount"] += o.get("total_amount", 0)
+    
     return {
         "total_sales": total_sales,
         "total_online_sales": total_online,
         "total_combined": total_sales + total_online,
         "sales_count": len(sales_orders),
-        "online_count": len(online_orders)
+        "online_count": len(online_orders),
+        "by_payment_method": by_method
     }
 
 @api_router.get("/reports/inventory-summary")
