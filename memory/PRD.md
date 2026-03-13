@@ -6,49 +6,66 @@ Backend: FastAPI + MongoDB | Frontend: React + TailwindCSS + Shadcn/UI | Auth: J
 ## Implemented Features
 
 ### POS Cashier
-- Full-screen cart table with product search popup (F1)
-- Per-item price arrows: cycle Price1 → Price2 → Box
-- Box mode: qty=boxes, unit=per-box price, detail shows `12×$16.50=$198/box`
-- Currency toggle $/Bs. with dual display (Bs mode shows both currencies)
-- **F9 Payment Modal**: 4 methods with shortcuts:
-  - F5=Cash, F6=Card, F7=Biopago, F8=Transfer
-  - Discount % input (validated: can't go below cost price)
-  - Dual currency total when Bs mode
-- F1=Search, F3=Clear cart, ESC=Close popups
+- **Multi-user login**: Cashier avatar list, click to select, enter password
+- Full-screen cart table with decimal quantity support (0.5kg, 1.5, etc.)
+- Product search popup (F1), barcode scanner (Enter key in search)
+- Per-item price arrows: Price1 → Price2 → Box
+- Box mode: qty=boxes, unit=per-box price
+- **F9 Payment Modal**: F5=Cash, F6=Card, F7=Biopago, F8=Transfer + discount %
+- **F4 Hold Order** / **F10 Recall Order** - save & restore pending orders
+- **F11 Refund** - return items by order number
+- Currency toggle $/Bs. with dual display (Bs shows both)
 - Online/offline indicator + auto-sync
+- F3=Clear cart, ESC=Close popups
+
+### Admin - System Settings (/admin/settings)
+- Company info: name, tax ID, address, phone, invoice header/footer
+- Print: 80mm receipt / A4 invoice, auto-print, copies
+- Barcode scanner: enable/disable, input delay
+- Wholesale: enable, min quantity, discount %
+- Document numbering: SO/TR/PO prefixes
+- Report currency: USD/VES
+
+### Admin - Employee Management (/admin/employees)
+- CRUD for cashiers/staff with roles (admin, manager, cashier, staff)
+- Permissions: can_discount, can_refund, max_discount %
+- Assign to specific store
+
+### Admin - Stock Alerts (/admin/stock-alerts)
+- Products below min_stock show critical (red) or warning (yellow)
+
+### Admin - Stock Taking (/admin/stock-taking)
+- Select warehouse, auto-load products with system qty
+- Input actual qty, shows difference
+- Draft or confirmed (confirmed auto-adjusts inventory)
+
+### Reports
+- Sales Report: date/store filter, print
+- Daily Settlement: by date, payment method breakdown, gross profit
+- Bestsellers/Slowsellers: top/bottom products by sales
 
 ### Multi-Language (i18n)
 - Chinese/English/Spanish across ALL pages
-- Admin sidebar, POS header, Shop header all have language switchers
-- Persisted in localStorage
+- Admin sidebar, POS header, Shop header switchers
 
 ### Online Shop
-- Category filter tabs + search bar
-- Language switcher (中/EN/ES)
-- Products use price1, show stock
+- Category filter tabs + search + language switcher
 - Cart, checkout with shipping info
 
-### Admin Panel
-- Dashboard, CRUD for stores/warehouses/products/categories/customers/suppliers
-- **Online Orders**: expandable rows showing full order item details (product name, qty, price, amount)
-- Sales Report with date/store filters + print
-- Exchange rates, payment settings
-
-### Multi-Price System
-- Cost + Margin: cost × (1+margin%) = auto-calculated price
-- 3 tiers: margin1→price1, margin2→price2, margin3→price3(box)
-
 ### Other
-- Warehouse transfers with searchable products
-- Offline POS mode with localStorage sync
-- Order items store product_name for display
+- Multi-price (cost+margin), warehouse transfers, online orders with item details
+- Offline POS, exchange rates, payment settings
 
 ## Links
-- Admin: /admin | POS: /pos | Shop: /shop
+Admin: /admin | POS: /pos | Shop: /shop
 
 ## Credentials: admin / admin123
 
 ## Backlog
-- P2: Refactor App.js (4200+ lines) into components
+- P1: Print receipt/invoice (80mm + A4 CSS @media print)
+- P1: Barcode label printing
+- P1: UI/background design improvement
+- P2: Refactor App.js into components
 - P2: Refactor server.py into route modules
-- P3: Product images, barcode scanner, loyalty system
+- P3: Member/loyalty pricing
+- P3: Product images
