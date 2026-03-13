@@ -3567,7 +3567,7 @@ const POSPage = () => {
   };
 
   const updateQuantity = (productId, delta) => {
-    setCart(cart.map(i => {
+    setCart(prev => prev.map(i => {
       if (i.product_id === productId) {
         const newQty = i.quantity + delta;
         if (newQty <= 0) return null;
@@ -3579,7 +3579,7 @@ const POSPage = () => {
   };
 
   const changeItemPriceMode = (productId, newMode) => {
-    setCart(cart.map(i => {
+    setCart(prev => prev.map(i => {
       if (i.product_id === productId) {
         let newQty = i.quantity;
         const boxQty = i.product.box_quantity || 1;
