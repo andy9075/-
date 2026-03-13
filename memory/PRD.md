@@ -1,47 +1,39 @@
-# POS System - Product Requirements Document
-
-## Original Problem Statement
-Web-based POS system with admin backend, online store, and cashier frontend for Venezuelan retail businesses.
+# POS System - PRD
 
 ## Tech Stack
-- Backend: FastAPI + MongoDB | Frontend: React + TailwindCSS + Shadcn/UI | Auth: JWT
+Backend: FastAPI + MongoDB | Frontend: React + TailwindCSS + Shadcn/UI | Auth: JWT
 
 ## Implemented Features
 
-### Multi-Price System (Updated 2026-03-13)
-- Cost + Margin model: cost_price × (1 + margin%) = auto-calculated price
-- 3 price tiers: margin1→price1, margin2→price2, margin3→price3(整箱价)
-- Admin form: input cost + 3 margins, real-time price calculation
+### POS Cashier - Full Screen Layout (Updated 2026-03-13)
+- **Full-screen cart table**: columns #, 商品名称, 数量(±), 价格类型(↑↓), 单价, 金额
+- **Product search popup**: Search by barcode/name, category tabs (全部/分类), click to add
+- **Per-item price arrows**: ↑↓ cycle through 价格1→价格2→整箱
+- **Currency toggle**: Header ↑↓ arrows switch $/Bs., converts all prices
+- **Box calculation**: Shows detail e.g., "3×$12.00=$36.00"
 
-### POS Cashier - Per-Item Price Selection (Updated 2026-03-13)
-- Each cart item has independent price mode: 价格1 / 价格2 / 整箱
-- Box calculation: full boxes × price3 + remainder × price2
-- Global Bs./USD toggle for currency display
-- Different items in same cart can use different price tiers
+### Multi-Price System
+- Cost + Margin: cost × (1+margin%) = auto-calculated price
+- 3 tiers: margin1→price1, margin2→price2, margin3→price3(整箱价)
+- Admin form: input cost + 3 margins with real-time calculation
 
-### Warehouse Transfer (New 2026-03-13)
-- Admin page /admin/transfers for stock transfer between warehouses
-- Inventory overview: all products × all warehouses stock matrix
-- Transfer history with logs
-- API: POST /api/inventory/transfer, GET /api/transfer-logs
+### Warehouse Transfer
+- /admin/transfers: source→destination warehouse transfer
+- Inventory overview: product × warehouse stock matrix
+- Transfer history logs
 
-### Online Store Order Tracking
-- /shop/orders: customer lookup by order number or phone
-- Shows purchased items with product name, quantity, unit_price
+### Online Store
+- Product catalog, cart, checkout (Bank Transfer, Pago Móvil)
+- Order tracking: /shop/orders with full item details (product name, qty, price)
+- WhatsApp click-to-chat
 
-### Other Features
-- Admin Panel: dashboard, store/warehouse/product/category/customer/supplier CRUD
-- Exchange rate settings (manual), payment settings (Bank Transfer, Pago Móvil)
-- Online order management with payment confirmation
-- WhatsApp click-to-chat on order success
+### Admin Panel
+- Dashboard, store/warehouse/product/category/customer/supplier CRUD
+- Exchange rates, payment settings, online order management
 
-## Testing
-- iteration_4.json: 11/11 backend + full frontend verified
-- All test files: /app/backend/tests/
-
-## Credentials
-- Admin: username=admin, password=admin123
+## Testing: iteration_5.json - 57/57 backend + full frontend passed
+## Credentials: admin / admin123
 
 ## Backlog
-- P2: Refactor server.py and App.js into modules
-- P3: Product images, barcode scanner, customer loyalty
+- P2: Refactor server.py/App.js into modules
+- P3: Product images, barcode scanner, loyalty system
