@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Search, Edit, Trash2, Upload, Download } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Search, Edit, Trash2, Upload, Download, Printer, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import axios, { API } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
 import { toast } from "sonner";
+import { PriceLabelPrint } from "@/components/PriceLabelPrint";
 
 export default function ProductsPage() {
   const { t } = useLang();
@@ -31,6 +32,9 @@ export default function ProductsPage() {
   const [importMode, setImportMode] = useState("skip");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [selectedForLabels, setSelectedForLabels] = useState(new Set());
+  const [showLabelSelect, setShowLabelSelect] = useState(false);
+  const priceLabelRef = useRef(null);
 
   useEffect(() => { fetchProducts(); fetchCategories(); }, []);
 
@@ -87,6 +91,21 @@ export default function ProductsPage() {
     return Math.round(cost * catRate / sysRate * 100) / 100;
   };
 
+  const toggleLabelSelect = (productId) => {
+    setSelectedForLabels(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId); else next.add(productId);
+      return next;
+    });
+  };
+  const selectAllForLabels = () => { setSelectedForLabels(new Set(products.map(p => p.id))); };
+  const deselectAllForLabels = () => { setSelectedForLabels(new Set()); };
+  const handlePrintLabels = () => {
+    if (selectedForLabels.size === 0) { toast.error(t('selectProducts')); return; }
+    if (priceLabelRef.current) { priceLabelRef.current.style.display = 'block'; window.print(); priceLabelRef.current.style.display = 'none'; }
+  };
+  const selectedProducts = products.filter(p => selectedForLabels.has(p.id));
+
   const handleImport = async () => {
     if (!importFile) return;
     setImporting(true); setImportResult(null);
@@ -106,6 +125,9 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">{t('productManagement')}</h1>
         <div className="flex gap-2">
+          <Button onClick={() => { setShowLabelSelect(!showLabelSelect); if (!showLabelSelect) selectAllForLabels(); }} variant="outline" className="border-slate-600 text-slate-300" data-testid="price-labels-btn">
+            <Tag className="w-4 h-4 mr-2" /> {t('printPriceLabels')}
+          </Button>
           <Button onClick={() => { setShowImport(true); setImportResult(null); setImportFile(null); }} variant="outline" className="border-slate-600 text-slate-300" data-testid="import-products-btn">
             <Upload className="w-4 h-4 mr-2" /> {t('importProducts')}
           </Button>
@@ -122,10 +144,28 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      {showLabelSelect && (
+        <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-4">
+            <span className="text-white font-medium"><Tag className="w-4 h-4 inline mr-1" /> {t('printPriceLabels')}</span>
+            <span className="text-blue-400 text-sm">{selectedForLabels.size} {t('selectedCount')}</span>
+            <Button size="sm" variant="outline" onClick={selectAllForLabels} className="border-slate-600 text-slate-300 h-7 text-xs" data-testid="select-all-labels">{t('selectAll')}</Button>
+            <Button size="sm" variant="outline" onClick={deselectAllForLabels} className="border-slate-600 text-slate-300 h-7 text-xs" data-testid="deselect-all-labels">{t('deselectAll')}</Button>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handlePrintLabels} disabled={selectedForLabels.size === 0} className="bg-blue-500 hover:bg-blue-600" data-testid="print-labels-btn">
+              <Printer className="w-4 h-4 mr-2" /> {t('printSelected')} ({selectedForLabels.size})
+            </Button>
+            <Button variant="outline" onClick={() => { setShowLabelSelect(false); deselectAllForLabels(); }} className="border-slate-600 text-slate-300">X</Button>
+          </div>
+        </div>
+      )}
+
       <Card className="bg-slate-800 border-slate-700 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700">
+              {showLabelSelect && <TableHead className="text-slate-300 w-10"><input type="checkbox" checked={selectedForLabels.size === products.length && products.length > 0} onChange={(e) => e.target.checked ? selectAllForLabels() : deselectAllForLabels()} className="rounded" /></TableHead>}
               <TableHead className="text-slate-300">{t('productCode')}</TableHead>
               <TableHead className="text-slate-300">{t('productName')}</TableHead>
               <TableHead className="text-slate-300">{t('category')}</TableHead>
@@ -146,6 +186,7 @@ export default function ProductsPage() {
               const cat = categories.find(c => c.id === product.category_id);
               return (
                 <TableRow key={product.id} className="border-slate-700">
+                  {showLabelSelect && <TableCell><input type="checkbox" checked={selectedForLabels.has(product.id)} onChange={() => toggleLabelSelect(product.id)} className="rounded" data-testid={`label-check-${product.id}`} /></TableCell>}
                   <TableCell className="text-slate-300">{product.code}</TableCell>
                   <TableCell className="text-white font-medium">{product.name}</TableCell>
                   <TableCell className="text-slate-400 text-xs">{cat?.name || '-'}</TableCell>
@@ -296,6 +337,9 @@ export default function ProductsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden price label print */}
+      <PriceLabelPrint ref={priceLabelRef} products={selectedProducts} exchangeRates={exchangeRates} categories={categories} t={t} />
     </div>
   );
 }

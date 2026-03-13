@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   CreditCard, Search, Package, Plus, X, ChevronDown,
-  LogOut, Wifi, WifiOff, ShoppingBag
+  LogOut, Wifi, WifiOff, ShoppingBag, Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import axios, { API } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
 import { toast } from "sonner";
+import { ReceiptPrint } from "@/components/ReceiptPrint";
+import { InvoicePrint } from "@/components/InvoicePrint";
 
 export default function PosPage() {
   const { t, lang, changeLang } = useLang();
@@ -44,6 +46,11 @@ export default function PosPage() {
   const [showRefund, setShowRefund] = useState(false);
   const [refundOrderNo, setRefundOrderNo] = useState("");
   const [pricingMode, setPricingMode] = useState("local_based");
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastOrder, setLastOrder] = useState(null);
+  const [systemSettings, setSystemSettings] = useState({});
+  const receiptRef = useRef(null);
+  const invoiceRef = useRef(null);
 
   // Network detection
   useEffect(() => { const goOnline = () => setIsOnline(true); const goOffline = () => setIsOnline(false); window.addEventListener('online', goOnline); window.addEventListener('offline', goOffline); return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); }; }, []);
@@ -100,6 +107,7 @@ export default function PosPage() {
       ]);
       setProducts(productsRes.data); setCategories(categoriesRes.data); setStores(storesRes.data.filter(s => s.type === 'retail')); setExchangeRates(ratesRes.data);
       if (settingsRes.data?.pricing_mode) setPricingMode(settingsRes.data.pricing_mode);
+      setSystemSettings(settingsRes.data || {});
     } catch (e) { console.error(e); }
   };
 
@@ -195,18 +203,30 @@ export default function PosPage() {
   // === Payment ===
   const handlePayment = async () => {
     if (!shift) { toast.error(t('noShift')); return; }
-    const orderData = { store_id: selectedStore.id, customer_id: null, items: cart.map(i => ({ product_id: i.product_id, quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity, unit_price: i.unit_price, discount: safeDiscount, amount: i.amount * (1 - safeDiscount / 100) })), payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : "" };
+    const orderItems = cart.map(i => ({ product_id: i.product_id, product_name: i.product.name, quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity, unit_price: i.unit_price, discount: safeDiscount, amount: i.amount * (1 - safeDiscount / 100) }));
+    const orderData = { store_id: selectedStore.id, customer_id: null, items: orderItems, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : "" };
+    // Capture receipt data before clearing cart
+    const receiptData = { order_no: `SO${Date.now()}`, date: new Date().toISOString(), items: orderItems, subtotal: cartTotal, total_amount: finalTotal, discount: safeDiscount, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, cashier: user?.name || user?.username, store: selectedStore?.name };
     try {
-      if (isOnline) { await axios.post(`${API}/sales-orders`, orderData); }
+      if (isOnline) { const res = await axios.post(`${API}/sales-orders`, orderData); if (res.data?.order_no) receiptData.order_no = res.data.order_no; }
       else { const newPending = [...pendingOrders, { ...orderData, offline_id: Date.now().toString(), created_at: new Date().toISOString() }]; setPendingOrders(newPending); localStorage.setItem('pos_pending_orders', JSON.stringify(newPending)); }
       const updatedShift = { ...shift, sales: [...shift.sales, { amount: finalTotal, method: paymentMethod, time: new Date().toISOString() }], total_sales: shift.total_sales + finalTotal, total_cash: paymentMethod === 'cash' ? shift.total_cash + finalTotal : shift.total_cash };
       setShift(updatedShift); localStorage.setItem("pos_shift", JSON.stringify(updatedShift));
       toast.success(isOnline ? t('confirmPayment') + " OK" : t('offlineMode') + " - " + t('pendingSync'));
-      setCart([]); setShowPayment(false); setReceivedAmount("");
+      setLastOrder(receiptData); setShowReceipt(true);
+      setCart([]); setShowPayment(false); setReceivedAmount(""); setDiscountPercent(0);
     } catch (e) {
       const newPending = [...pendingOrders, { ...orderData, offline_id: Date.now().toString(), created_at: new Date().toISOString() }]; setPendingOrders(newPending); localStorage.setItem('pos_pending_orders', JSON.stringify(newPending));
-      toast.warning(t('offlineWarning')); setCart([]); setShowPayment(false); setReceivedAmount("");
+      setLastOrder(receiptData); setShowReceipt(true);
+      toast.warning(t('offlineWarning')); setCart([]); setShowPayment(false); setReceivedAmount(""); setDiscountPercent(0);
     }
+  };
+
+  const handlePrintReceipt = () => {
+    if (receiptRef.current) { receiptRef.current.style.display = 'block'; window.print(); receiptRef.current.style.display = 'none'; }
+  };
+  const handlePrintInvoice = () => {
+    if (invoiceRef.current) { invoiceRef.current.style.display = 'block'; window.print(); invoiceRef.current.style.display = 'none'; }
   };
 
   const filteredProducts = products.filter(p => {
@@ -353,6 +373,33 @@ export default function PosPage() {
           { key: "F11", label: t('refund'), action: () => setShowRefund(true), color: "bg-red-600 hover:bg-red-700" },
         ].map(btn => (<button key={btn.key} onClick={btn.action} disabled={btn.disabled} className={`${btn.color} text-white px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed`} data-testid={`toolbar-${btn.key.toLowerCase()}`}><kbd className="bg-white/20 px-1.5 py-0.5 rounded text-xs font-bold">{btn.key}</kbd><span>{btn.label}</span></button>))}</div>
       </div>
+
+      {/* Receipt Print Dialog */}
+      <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader><DialogTitle className="text-emerald-400">{t('confirmPayment')} - {lastOrder?.order_no}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 text-center">
+              <p className="text-3xl font-bold text-emerald-400">${lastOrder?.total_amount?.toFixed(2)}</p>
+              <p className="text-slate-400 text-sm mt-1">Bs.{((lastOrder?.total_amount || 0) * (exchangeRates?.usd_to_ves || 1)).toFixed(2)}</p>
+              <p className="text-slate-500 text-xs mt-2">{lastOrder?.payment_method === 'cash' ? t('cash') : lastOrder?.payment_method === 'card' ? t('card') : lastOrder?.payment_method || '-'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button onClick={handlePrintReceipt} className="bg-blue-500 hover:bg-blue-600" data-testid="print-receipt-btn">
+                <Printer className="w-4 h-4 mr-2" /> {t('printReceipt80mm')}
+              </Button>
+              <Button onClick={handlePrintInvoice} variant="outline" className="border-slate-600 text-slate-300" data-testid="print-invoice-btn">
+                <Printer className="w-4 h-4 mr-2" /> {t('printInvoiceA4')}
+              </Button>
+            </div>
+            <Button onClick={() => setShowReceipt(false)} variant="outline" className="w-full border-slate-600 text-slate-300" data-testid="close-receipt-btn">{t('close')}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hidden print components */}
+      <ReceiptPrint ref={receiptRef} order={lastOrder} settings={systemSettings} exchangeRates={exchangeRates} t={t} />
+      <InvoicePrint ref={invoiceRef} order={lastOrder} settings={systemSettings} exchangeRates={exchangeRates} t={t} />
     </div>
   );
 }
