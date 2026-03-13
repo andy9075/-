@@ -3,164 +3,170 @@
 **original_problem_statement:** The user is building a comprehensive, desktop-style POS application (秘奥软件) as a web-based system. The project has evolved through iterative requests.
 
 **Recent Core Requirements:**
-1.  **Multi-Level Pricing:** A flexible pricing system where product prices are automatically calculated from a cost price plus several configurable profit margin percentages ().
-2.  **POS UI/UX Overhaul:** A complete redesign of the Point of Sale interface to be a full-screen, order-focused layout with advanced search capabilities.
-3.  **Inventory Management:** The ability to transfer stock between a central warehouse and retail store branches.
-4.  **Complex POS Logic:**
-    *   Per-item price selection (Price 1, Price 2, Box Price).
-    *   Automatic box quantity calculation (e.g., entering '2' for quantity means 2 boxes).
-5.  **Reporting:** Detailed sales reports with filters for date ranges and stores.
-6.  **Multi-Language Support:** The entire application should be translatable into Chinese, English, and Spanish.
-7.  **Offline Mode:** The POS should function without an internet connection and sync sales data when it comes back online.
+1.  **POS Functionality:** Multi-user login, decimal quantity input, barcode scanner support, hold/recall orders, advanced payment modal with discounts, dual-currency display, and a specific shortcut key toolbar.
+2.  **Pricing Logic:** A complex multi-level pricing system (Price 1, Price 2, Box Price) that needs to be robust, especially when switching between price types.
+3.  **Admin Panel:** Comprehensive management of the system, including Products, Inventory, Employees (with permissions), System Settings (e.g., printer type, currency rates), Stock Alerts, and Stock-taking.
+4.  **Printing:** The ability to print receipts and invoices for sales and inventory transfers, with support for different paper sizes (80mm, A4).
+5.  **Wholesale Module:** A future requirement to support wholesale customers.
+6.  **Multi-Language Support:** The entire application should be translatable.
 
 **User's preferred language**: zh-CN
 
 **what currently exists?**
-A full-stack POS application with a FastAPI backend and a React frontend.
--   **Backend:** Manages products (with cost + margin pricing), categories, inventory, stores, sales, and inventory transfers. Includes an endpoint for detailed sales reporting.
--   **Admin Panel:** A comprehensive dashboard for managing products, stores, inventory transfers, viewing online orders, and configuring system settings.
--   **Online Store:** A basic customer-facing e-commerce shop.
--   **POS Cashier Frontend:** A heavily customized, full-screen POS interface. It features a large order entry table, a pop-up product search modal with a table layout, and per-item price selection.
--   **In-Progress Features:** Code has been added for multi-language support (context, translation files), offline POS capabilities (using ), a new sales report page, and box-based quantity logic, but these are incomplete and untested.
+A full-stack POS application with a FastAPI backend, React frontend, and MongoDB database.
+-   **Backend:** Manages products, categories, inventory, sales, transfers, and users. Recently expanded with APIs for system settings, employee management with permissions, refunds, and stock alerts.
+-   **Admin Panel:** A dashboard for managing core data. It includes sidebar links and routes for new, but currently empty, pages: Settings, Employees, Stock Alerts, and Stock-taking.
+-   **Online Store:** A customer-facing e-commerce shop featuring category filtering, search, and a language switcher.
+-   **POS Frontend:** A heavily customized, full-screen interface. It now supports multi-user cashier selection at login, decimal quantities in the cart, barcode scanner input, holding/recalling orders, a complex payment modal with discounts, and dual-currency display.
 
 **Last working item**:
--   Last item agent was working: The agent was implementing a large batch of four major features simultaneously, as requested by the user: 1) Box quantity logic, 2) Multi-language support, 3) Sales reports, and 4) Offline mode for the POS. The final action was adding logic to the  function in  to queue sales data in  when offline.
--   Status: IN PROGRESS
+-   Last item agent was working: The agent had just acknowledged a new request from the user to address two specific points: 1) Add a new shortcut key toolbar to the bottom of the POS page, based on a user-provided image. 2) Fix a recurring and critical bug where switching an item's price from box price back to a piece price messes up the quantity and total calculation.
+-   Status: NOT STARTED
 -   Agent Testing Done: N
--   Which testing method agent to use? both
+-   Which testing method agent to use? frontend testing agent
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   Issue 1: Complete and Stabilize the Four Major In-Progress Features (P0)
+-   Issue 1: POS price switching logic is buggy (P0, Recurring)
+-   Issue 2: Offline Mode sync logic is incomplete (P2)
 
 Issues Detail:
--   **Issue 1: Complete and Stabilize the Four Major In-Progress Features**
-    -   **Description:** The last development cycle attempted to implement four large, interconnected features at once without any testing. The code is in a fragile, incomplete state. The next agent must systematically complete, debug, and test each one.
-    -   **Attempted fixes:** The agent created multiple new files (, , i18n JSON files), added a new backend endpoint (), and heavily modified  with new hooks, state, and logic for all four features. The implementation is partial and untested.
+-   **Issue 1: POS price switching logic is buggy**
+    -   **Description:** When a cart item is switched from a box price back to a standard piece price (e.g., Price 1), the quantity and total amount are not updated correctly. For a product with 12 items/box, switching 1 box to Price 1 should result in a quantity of 12. The user has reported this bug multiple times.
+    -   **Attempted fixes:** This was supposedly fixed in a previous session by addressing stale state closures in . However, the bug has returned, indicating the fix was incomplete or has been broken by subsequent changes.
     -   **Next debug checklist:**
-        1.  **Multi-Language (P0):**
-            *   **File:** , , , .
-            *   **Action:** The context and provider are in place. The agent needs to apply the  hook and  function to all UI text across all components (Admin, POS, Shop) to make them fully translatable.
-        2.  **Box Quantity Logic (P1):**
-            *   **File:** .
-            *   **Action:** The logic where quantity input equals the number of boxes (e.g.,  = 2 boxes = 24 items) was added. Verify the  and  functions correctly calculate the total item count () and that this is reflected in the cart total and final sale.
-        3.  **Sales Report (P1):**
-            *   **Files:** , .
-            *   **Action:** The frontend page and backend endpoint exist. Test the end-to-end flow: fetching data with date and store filters, displaying detailed sales and product information in the report table, and ensuring the Print functionality works.
-        4.  **Offline Mode (P2):**
-            *   **File:** .
-            *   **Action:** This is the most incomplete feature. The agent added state and a  hook to queue offline sales in . The logic to **sync** these sales back to the server upon reconnection is missing. This needs to be implemented and tested thoroughly.
-    -   **Why fix this issue and what will be achieved with the fix?** These are critical features requested directly by the user to make the POS system viable for their business needs.
+        1.  Carefully inspect the  function in .
+        2.  Verify that when switching from a box mode to a piece mode, the new quantity is correctly calculated as .
+        3.  Ensure the state update for the cart uses a functional update ( ) to prevent using stale state.
+        4.  Confirm the item's total amount is recalculated based on the new quantity and new unit price.
+    -   **Why fix this issue and what will be achieved with the fix?** This is a critical bug in the core POS pricing logic that makes the application unreliable for sales. Fixing it is the highest priority.
     -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** frontend
+    -   **Blocked on other issue:** None
+
+-   **Issue 2: Offline Mode sync logic is incomplete**
+    -   **Description:** The POS can queue sales in  when offline, but the logic to automatically send these sales to the server upon reconnection is missing.
+    -   **Next debug checklist:**
+        1.  In , implement a  function.
+        2.  This function should read sales from , send them to the  endpoint one by one, and remove them from the queue on success.
+        3.  Trigger this function within the existing  that monitors the browser's online/offline status.
+    -   **Why fix this issue and what will be achieved with the fix?** It completes a major requested feature, making the POS more resilient to network issues.
+    -   **Status:** NOT STARTED
     -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** both
     -   **Blocked on other issue:** None.
 
 **In progress Task List**:
--   None separate from the major issue above.
+-   None.
 
 **Upcoming and Future Tasks**
--   None specified. The priority is to complete the current feature set.
+-   **Upcoming Tasks:**
+    *   **Task 1 (P0):** Add the new POS shortcut key toolbar. This involves creating a new UI component at the bottom of  that displays and links to functions like Search (F1), Payment (F9), Hold (F4), etc., matching the user's provided image.
+
+-   **Future Tasks:**
+    *   **Wholesale Module (P1):** Build a separate interface for wholesale customers.
+    *   **Receipt/Invoice Printing (P1):** Implement printing from sales and transfers, with options for 80mm and A4 formats.
+    *   **Enhanced Reporting (P2):** Add graphs and advanced filters to reports.
+    *   **UI/UX Improvements (P2):** Improve the application's background aesthetic.
+    *   **Code Refactoring (P2):** Break down the monolithic  and  files into smaller, manageable modules.
 
 **Completed work in this session**
--   **Multi-level Pricing with Margins:** Reworked the product pricing model to be based on , affecting the backend, admin product management page, and POS.
--   **POS UI Redesign:** Completely overhauled the  to feature a full-screen order table, replacing the product grid with a searchable pop-up modal that displays products in a detailed table format.
--   **Per-Item & Currency Toggling:** Implemented up/down arrow toggles for per-item price selection and currency switching ( vs ) in the new POS UI.
--   **Inventory Transfer Module:** Created a new 调货管理 () page allowing stock transfers between warehouses and stores, including a searchable product selector.
--   **Bug Fix: Loading Failed Toasts:** Resolved a critical bug causing auth-related errors on page load across the admin panel by removing  and implementing a global Axios error handler.
--   **UI/UX Refinements:**
-    *   Improved the box price display to show the full calculation (e.g., ).
-    *   Added a searchable product selector to the inventory transfer page.
+-   **Multi-User POS Login:** Implemented cashier selection on the POS login screen.
+-   **Decimal Quantity:** Enabled decimal value input for quantities in the POS cart.
+-   **Barcode Scanner & Hold/Recall:** Added support for barcode scanner input and functionality to hold/recall orders (F4/F10).
+-   **Advanced Payment Modal:** Created a new payment modal (triggered by F9) with multiple payment methods, shortcuts, and a discount field that prevents selling below cost.
+-   **Dual Currency Display:** The POS cart now shows totals in both  and .
+-   **Admin Panel Expansion:** Created backend APIs, frontend routes, and sidebar links for Settings, Employees, Stock Alerts, and Stock-taking.
+-   **Online Store Improvements:** Added a language switcher, category filtering, and a search bar.
+-   **Online Order Details:** Enabled viewing items within an order on the Online Orders page.
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
 
 **Known issue recurrence from previous fork**
--   None.
+-   **Issue recurrence in previous fork:** The POS price-switching logic (box price to piece price) is faulty.
+-   **Recurrence count:** 2
+-   **Status:** IN PROGRESS
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Frontend:** React, React Router, React Context API, TailwindCSS.
--   **Backend:** FastAPI, Pydantic.
--   **Database:** MongoDB.
--   **State Management:** , , .
--   **Internationalization (i18n):** A custom React Context-based system for translations.
--   **Offline First:** Using browser  to queue data during network outages.
+-   **Frontend:** React, React Router, React Context API, TailwindCSS
+-   **Backend:** FastAPI, Pydantic
+-   **Database:** MongoDB
+-   **State Management:** Heavy use of , , and . Stale state closure is a known risk area.
+-   **System Configuration:** Storing system-wide settings in the database via a dedicated API.
+-   **RBAC:** Basic Role-Based Access Control via a  field on user models.
 
 **key DB schema**
 -   **products**: 
+-   **users**: 
 -   **sales**: 
--   **transfers**: 
+-   **system_settings**: 
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   : Modified to add cost/margin fields and the  endpoint.
--   : Massively refactored and expanded with logic for the new UI, box quantity, and offline mode.
--   : New file for inventory transfer UI.
--   : New file for the sales report UI.
--   : New file for the translation system.
--   : New file for the translation hook.
--   : New directory containing , , .
--   : New file for the global Axios instance and error handling.
--   : Modified to add new routes and wrap the app in the .
--   : Modified to remove .
+-   : Heavily modified with new models and numerous API endpoints for settings, employees, refunds, and stock alerts.
+-   : Massively updated to handle multi-user login, decimal quantities, hold/recall orders, barcode input, a new payment modal, and dual-currency display. This is the primary file for the new bug and feature request.
+-   : Updated with new routes for the added admin pages.
+-   : Updated with new navigation links for the admin panel.
 
 **Areas that need refactoring**:
--   **:** This file is now extremely large and complex (over 1000 lines). It urgently needs to be broken down into smaller, manageable components and custom hooks (e.g., , , , ).
--   **:** Remains a single monolithic file. Refactoring into separate API routers (e.g., , , ) would significantly improve maintainability.
+-   **:** This monolithic file is over 1000 lines and urgently needs to be broken down into smaller components and custom hooks (e.g., , , ) to improve maintainability and reduce bugs.
+-   **:** The backend is a single file and should be refactored into separate API routers for better organization.
 
 **key api endpoints**
--    (Create/Update with cost/margin logic)
--   
--   
--    (New)
--   
--   
+-   : (New) Gets users with the 'cashier' role for the POS login screen.
+-   : (New) Manages system-wide settings.
+-   : (New) Manages employee users and their permissions.
+-   : The main endpoint for creating sales, updated to handle discounts.
 
 **Critical Info for New Agent**
--   **High Risk State:** The previous agent implemented four major features in one go without any testing. The codebase is likely unstable. Do not assume any of the new features work.
--   **Systematic Debugging Required:** Tackle one feature at a time from the pending list: Language, Box Quantity, Sales Report, and finally Offline Mode. Test each one thoroughly before moving to the next.
--   ** is the Hotspot:** This file contains the most complex and fragile logic. Be extremely careful when making changes here. Prioritize refactoring this page after the current features are stabilized.
--   **Auth Bug Fix:** A major bug causing toast errors was fixed by removing  and adding a global Axios error handler. Be aware of this change;  will now only run once on mount in development.
+-   **Fix the Bug First:** The absolute top priority is to fix the recurring price-switching bug in . The user is blocked by this. Do not start new features until this is resolved and thoroughly tested.
+-   **Next, Implement the Toolbar:** After the bug is fixed, the next task is to implement the new shortcut key toolbar at the bottom of the POS page, as requested by the user.
+-   **Beware of :** This file is extremely large, complex, and fragile. All changes must be made with caution. The price-switching bug is likely related to incorrect state management; use functional updates () to avoid stale closures.
+-   **Test the Fix Rigorously:** After fixing the bug, create a specific test case with the testing agent to verify the fix and prevent future regressions. The test should add an item, switch to box price, switch back to piece price, and assert that the quantity and total are correct.
 
 **documents and test reports created in this job**
 -   
 -   
--   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests multiple features: box price calculation should show , transfer page needs searchable products, POS product list should be a table.
-2.  **Agent:** Implements the three requests.
-3.  **User:** New batch of major requests: Box quantity (input '1' for 1 box), multi-language support (Chinese/English/Spanish), detailed sales reports (with print), and online/offline mode.
-4.  **User:** Clarifies box quantity: entering 2 for a box price means 2 boxes (24 items).
-5.  **User:** Clarifies offline mode: use browser storage and sync later.
-6.  **User:** Clarifies sales report: needs date range selection.
-7.  **User:** Clarifies language: when a language is selected, the whole UI should change.
-8.  **Agent:** Acknowledges the 4 major requirements and begins implementation.
-(The agent then proceeds with a massive, multi-file implementation of all four features without further user interaction before the session ends.)
+1.  **User:** Requests multi-user login, settings, printing, and decimal quantities.
+2.  **Agent:** Proposes a plan.
+3.  **User:** Approves plan, asks for more feature ideas.
+4.  **Agent:** Suggests wholesale, refunds, stock alerts, etc.
+5.  **User:** Approves all suggestions (你说的全部添加).
+6.  **Agent:** Implements a large batch of features.
+7.  **Agent:** Completes implementation and testing.
+8.  **User:** (LATEST PENDING) Reports two new issues: 1) Add a new shortcut toolbar to the POS page. 2) The box-price switching bug has returned.
+9.  **Agent:** Acknowledges the new requests.
+10. Session ends before work begins.
 
 **Project Health Check:**
--   **Broken:** Multi-language support, Offline Mode, Sales Report functionality, and Box Quantity logic are all partially implemented and non-functional.
--   **Functional:** Core Admin panel (product, store, customer management), Online Store, and the redesigned POS UI layout.
+-   **Broken:** The core POS price-switching logic is broken, which is a critical regression.
+-   **Functional:** Most of the application, including the large batch of recently added features (multi-user login, decimal quantity, hold/recall, new payment modal, admin page stubs), is functional according to the last test run.
 -   **Mocked:** None.
 
 **3rd Party Integrations**
--   **WhatsApp:** A click-to-chat link is generated on order completion. No API keys are used.
+-   **WhatsApp:** Click-to-chat link generation. No API keys.
+-   **Barcode Scanner:** Integrated as a standard keyboard input device.
+-   **Printer:** Groundwork laid in settings, but no printing logic has been implemented.
 
 **Testing status**
--   Testing agent used after significant changes: YES, but *before* the last batch of four major features was started.
+-   Testing agent used after significant changes: YES
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created:
     -   
--   Known regressions: The state of the four new features is unknown and likely regressed/broken.
+-   Known regressions: The POS price-switching logic has regressed.
 
 **Credentials to test flow:**
 -   Username: 
 -   Password: 
 
 **What agent forgot to execute**
--   The agent failed to test any of the four major features (multi-language, box quantity, sales report, offline mode) it was implementing. It committed a very large, complex, and untested set of changes across numerous files, leaving the application in a highly unstable state.</analysis>
+-   The agent did not start working on the user's latest request to fix the recurring price-switching bug and add the new POS toolbar. The previous fix for the bug was not robust enough, leading to a regression.</analysis>
