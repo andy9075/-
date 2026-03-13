@@ -4269,53 +4269,38 @@ const POSPage = () => {
 
   const getProductPrice = (product) => {
     const p1 = product.price1 || product.retail_price || 0;
-    if (!showBs) {
-      if (pricingMode === "local_based") {
-        // USD = selling_price × category_rate / system_rate
-        const cat = categories.find(c => c.id === product.category_id);
-        const catRate = cat?.exchange_rate;
-        if (catRate && catRate > 1) {
-          return p1 * catRate / (exchangeRates.usd_to_ves || 1);
-        }
-      }
-      return p1;
-    }
+    if (!showBs) return p1; // $ always shows stored USD price
     // Bs. mode
-    const cat = categories.find(c => c.id === product.category_id);
-    const catRate = cat?.exchange_rate;
-    if (pricingMode === "local_based" && catRate && catRate > 1) {
-      // Bs. = selling_price × category_rate
-      return p1 * catRate;
+    if (pricingMode === "local_based") {
+      const cat = categories.find(c => c.id === product.category_id);
+      const catRate = cat?.exchange_rate;
+      const sysRate = exchangeRates.usd_to_ves || 1;
+      if (catRate && catRate > 1) {
+        // Bs. = USD price × (category_rate / system_rate)
+        return p1 * catRate / sysRate;
+      }
     }
+    // foreign_direct: Bs. = USD × system_rate
     return p1 * (exchangeRates.usd_to_ves || 1);
   };
 
   const getPriceSymbol = () => showBs ? "Bs." : "$";
 
-  // Get the effective Bs. rate for a product
-  const getProductBsRate = (product) => {
-    if (pricingMode === "foreign_direct") return exchangeRates.usd_to_ves || 1;
-    const cat = categories.find(c => c.id === product.category_id);
-    const catRate = cat?.exchange_rate;
-    if (catRate && catRate > 1) return catRate;
-    return exchangeRates.usd_to_ves || 1;
+  // Get Bs. multiplier for a product
+  const getProductBsMultiplier = (product) => {
+    const sysRate = exchangeRates.usd_to_ves || 1;
+    if (pricingMode === "local_based") {
+      const cat = categories.find(c => c.id === product.category_id);
+      const catRate = cat?.exchange_rate;
+      if (catRate && catRate > 1) return catRate / sysRate;
+    }
+    return sysRate; // foreign_direct uses full system rate
   };
 
   // Convert a USD price to display value
   const toDisplayPrice = (usdPrice, product) => {
-    if (!showBs) {
-      if (pricingMode === "local_based") {
-        const rate = getProductBsRate(product);
-        if (rate !== (exchangeRates.usd_to_ves || 1)) {
-          // USD = usdPrice × category_rate / system_rate
-          return usdPrice * rate / (exchangeRates.usd_to_ves || 1);
-        }
-      }
-      return usdPrice;
-    }
-    // Bs. = selling_price × category_rate (or system_rate)
-    const rate = getProductBsRate(product);
-    return usdPrice * rate;
+    if (!showBs) return usdPrice; // $ stays as-is
+    return usdPrice * getProductBsMultiplier(product);
   };
 
   const getItemPriceByMode = (product, mode) => {
