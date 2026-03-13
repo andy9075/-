@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 
 class POSAPITester:
-    def __init__(self, base_url="https://shop-orders-6.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://inventory-sync-test-5.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
         self.tests_run = 0

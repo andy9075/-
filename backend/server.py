@@ -953,6 +953,99 @@ async def get_sales_orders(
     orders = await db.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [SalesOrderResponse(**o) for o in orders]
 
+
+@api_router.get("/sales-report")
+async def get_sales_report(
+    store_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if store_id:
+        query["store_id"] = store_id
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" in query:
+            query["created_at"]["$lte"] = end_date + "T23:59:59"
+        else:
+            query["created_at"] = {"$lte": end_date + "T23:59:59"}
+    
+    orders = await db.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    
+    # Enrich with product names and store names
+    products_map = {}
+    async for p in db.products.find({}, {"_id": 0, "id": 1, "name": 1, "code": 1}):
+        products_map[p["id"]] = p
+    
+    stores_map = {}
+    async for s in db.stores.find({}, {"_id": 0, "id": 1, "name": 1}):
+        stores_map[s["id"]] = s
+    
+    # Build report
+    store_summary = {}
+    product_summary = {}
+    total_sales = 0
+    total_orders = len(orders)
+    total_items = 0
+    
+    for order in orders:
+        store_name = stores_map.get(order.get("store_id"), {}).get("name", "Unknown")
+        order_total = order.get("total_amount", 0)
+        total_sales += order_total
+        
+        if store_name not in store_summary:
+            store_summary[store_name] = {"store_id": order.get("store_id", ""), "name": store_name, "total": 0, "orders": 0, "products": {}}
+        store_summary[store_name]["total"] += order_total
+        store_summary[store_name]["orders"] += 1
+        
+        for item in order.get("items", []):
+            pid = item.get("product_id", "")
+            pname = products_map.get(pid, {}).get("name", item.get("product_name", "Unknown"))
+            pcode = products_map.get(pid, {}).get("code", "")
+            qty = item.get("quantity", 0)
+            amt = item.get("amount", 0)
+            total_items += qty
+            
+            # Per-store product breakdown
+            if pid not in store_summary[store_name]["products"]:
+                store_summary[store_name]["products"][pid] = {"name": pname, "code": pcode, "quantity": 0, "amount": 0}
+            store_summary[store_name]["products"][pid]["quantity"] += qty
+            store_summary[store_name]["products"][pid]["amount"] += amt
+            
+            # Global product summary
+            if pid not in product_summary:
+                product_summary[pid] = {"name": pname, "code": pcode, "quantity": 0, "amount": 0}
+            product_summary[pid]["quantity"] += qty
+            product_summary[pid]["amount"] += amt
+    
+    # Convert to lists
+    store_list = []
+    for s in store_summary.values():
+        s["products"] = list(s["products"].values())
+        store_list.append(s)
+    
+    return {
+        "total_sales": total_sales,
+        "total_orders": total_orders,
+        "total_items": total_items,
+        "stores": store_list,
+        "products": list(product_summary.values()),
+        "orders": [{
+            "id": o.get("id"), "order_no": o.get("order_no"), "store_id": o.get("store_id"),
+            "store_name": stores_map.get(o.get("store_id"), {}).get("name", ""),
+            "total_amount": o.get("total_amount", 0), "payment_method": o.get("payment_method", ""),
+            "created_at": o.get("created_at", ""),
+            "items": [{
+                "product_name": products_map.get(it.get("product_id"), {}).get("name", it.get("product_name", "")),
+                "product_code": products_map.get(it.get("product_id"), {}).get("code", ""),
+                "quantity": it.get("quantity", 0), "unit_price": it.get("unit_price", 0), "amount": it.get("amount", 0)
+            } for it in o.get("items", [])]
+        } for o in orders]
+    }
+
+
 # ==================== Online Shop Routes ====================
 
 @api_router.get("/shop/products", response_model=List[dict])

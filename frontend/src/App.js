@@ -8,11 +8,12 @@ import {
   Settings, LogOut, Menu, X, Plus, Search, Edit, Trash2, 
   Home, Building2, Truck, CreditCard, Globe, ChevronDown,
   ShoppingBag, DollarSign, TrendingUp, AlertCircle, Check,
-  ArrowLeftRight
+  ArrowLeftRight, Printer, Wifi, WifiOff, FileText, Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LangProvider, useLang } from "@/context/LangContext";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -167,23 +168,25 @@ const LoginPage = () => {
 const AdminLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user, logout } = useAuth();
+  const { t, lang, changeLang } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
 
   const menuItems = [
-    { icon: Home, label: "仪表盘", path: "/admin" },
-    { icon: Building2, label: "门店管理", path: "/admin/stores" },
-    { icon: Warehouse, label: "仓库管理", path: "/admin/warehouses" },
-    { icon: Package, label: "商品管理", path: "/admin/products" },
-    { icon: ArrowLeftRight, label: "调货管理", path: "/admin/transfers" },
-    { icon: Users, label: "客户管理", path: "/admin/customers" },
-    { icon: Truck, label: "供应商", path: "/admin/suppliers" },
-    { icon: ShoppingCart, label: "采购管理", path: "/admin/purchases" },
-    { icon: CreditCard, label: "销售管理", path: "/admin/sales" },
-    { icon: Globe, label: "网店订单", path: "/admin/online-orders" },
-    { icon: BarChart3, label: "报表统计", path: "/admin/reports" },
-    { icon: DollarSign, label: "汇率设置", path: "/admin/exchange-rates" },
-    { icon: Settings, label: "支付设置", path: "/admin/payment-settings" },
+    { icon: Home, label: t('dashboard'), path: "/admin" },
+    { icon: Building2, label: t('storeManagement'), path: "/admin/stores" },
+    { icon: Warehouse, label: t('warehouseManagement'), path: "/admin/warehouses" },
+    { icon: Package, label: t('productManagement'), path: "/admin/products" },
+    { icon: ArrowLeftRight, label: t('transferManagement'), path: "/admin/transfers" },
+    { icon: Users, label: t('customerManagement'), path: "/admin/customers" },
+    { icon: Truck, label: t('supplierManagement'), path: "/admin/suppliers" },
+    { icon: ShoppingCart, label: t('purchaseManagement'), path: "/admin/purchases" },
+    { icon: CreditCard, label: t('salesManagement'), path: "/admin/sales" },
+    { icon: Globe, label: t('onlineOrders'), path: "/admin/online-orders" },
+    { icon: FileText, label: t('salesReport'), path: "/admin/sales-report" },
+    { icon: BarChart3, label: t('reports'), path: "/admin/reports" },
+    { icon: DollarSign, label: t('exchangeRates'), path: "/admin/exchange-rates" },
+    { icon: Settings, label: t('paymentSettings'), path: "/admin/payment-settings" },
   ];
 
   const handleLogout = () => {
@@ -231,7 +234,17 @@ const AdminLayout = ({ children }) => {
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-700">
+        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-700 space-y-2">
+          {sidebarOpen && (
+            <div className="flex gap-1 justify-center">
+              {[{k:'zh',l:'中'},{k:'en',l:'EN'},{k:'es',l:'ES'}].map(({k,l}) => (
+                <button key={k} onClick={() => changeLang(k)}
+                  className={`px-2 py-1 text-xs rounded ${lang === k ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                  data-testid={`lang-${k}`}
+                >{l}</button>
+              ))}
+            </div>
+          )}
           <Button 
             variant="ghost" 
             className="w-full justify-start text-slate-400 hover:text-red-400 hover:bg-red-500/10"
@@ -239,7 +252,7 @@ const AdminLayout = ({ children }) => {
             data-testid="logout-btn"
           >
             <LogOut className="w-5 h-5 mr-3" />
-            {sidebarOpen && "退出登录"}
+            {sidebarOpen && t('logout')}
           </Button>
         </div>
       </aside>
@@ -1687,6 +1700,197 @@ const SalesPage = () => {
 };
 
 // Reports
+
+// Sales Report Page
+const SalesReportPage = () => {
+  const { t } = useLang();
+  const [stores, setStores] = useState([]);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    store_id: "", start_date: "", end_date: ""
+  });
+
+  useEffect(() => {
+    axios.get(`${API}/stores`).then(r => setStores(r.data)).catch(() => {});
+  }, []);
+
+  const generateReport = async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (filters.store_id) params.store_id = filters.store_id;
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
+      const res = await axios.get(`${API}/sales-report`, { params });
+      setReport(res.data);
+    } catch (e) {
+      if (e.response?.status !== 401 && e.response?.status !== 403) toast.error("Failed to load report");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">{t('salesReportTitle')}</h1>
+        {report && (
+          <Button onClick={handlePrint} className="bg-blue-500 hover:bg-blue-600" data-testid="print-report-btn">
+            <Printer className="w-4 h-4 mr-2" /> {t('printReport')}
+          </Button>
+        )}
+      </div>
+
+      {/* Filters */}
+      <Card className="bg-slate-800 border-slate-700 print:hidden">
+        <CardContent className="pt-4">
+          <div className="flex gap-4 items-end flex-wrap">
+            <div>
+              <label className="text-sm text-slate-300 block mb-1">{t('storeFilter')}</label>
+              <Select value={filters.store_id} onValueChange={(v) => setFilters({...filters, store_id: v === "all" ? "" : v})}>
+                <SelectTrigger className="bg-slate-700 border-slate-600 w-48" data-testid="report-store-filter">
+                  <SelectValue placeholder={t('all')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('all')}</SelectItem>
+                  {stores.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-slate-300 block mb-1">{t('dateFrom')}</label>
+              <Input type="date" value={filters.start_date} onChange={(e) => setFilters({...filters, start_date: e.target.value})}
+                className="bg-slate-700 border-slate-600 w-44" data-testid="report-date-from" />
+            </div>
+            <div>
+              <label className="text-sm text-slate-300 block mb-1">{t('dateTo')}</label>
+              <Input type="date" value={filters.end_date} onChange={(e) => setFilters({...filters, end_date: e.target.value})}
+                className="bg-slate-700 border-slate-600 w-44" data-testid="report-date-to" />
+            </div>
+            <Button onClick={generateReport} className="bg-emerald-500 hover:bg-emerald-600" disabled={loading} data-testid="generate-report-btn">
+              <Search className="w-4 h-4 mr-2" /> {t('generateReport')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Report Content */}
+      {report && (
+        <div className="space-y-6 print:text-black" id="sales-report-content">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card className="bg-emerald-500/10 border-emerald-500/30 print:border print:border-gray-300">
+              <CardContent className="pt-4 text-center">
+                <p className="text-emerald-400 text-sm print:text-gray-600">{t('totalSales')}</p>
+                <p className="text-3xl font-bold text-white print:text-black">${report.total_sales.toFixed(2)}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-500/10 border-blue-500/30 print:border print:border-gray-300">
+              <CardContent className="pt-4 text-center">
+                <p className="text-blue-400 text-sm print:text-gray-600">{t('totalOrders')}</p>
+                <p className="text-3xl font-bold text-white print:text-black">{report.total_orders}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-yellow-500/10 border-yellow-500/30 print:border print:border-gray-300">
+              <CardContent className="pt-4 text-center">
+                <p className="text-yellow-400 text-sm print:text-gray-600">{t('totalItems')}</p>
+                <p className="text-3xl font-bold text-white print:text-black">{report.total_items}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Store Sales Detail */}
+          {report.stores.map(store => (
+            <Card key={store.store_id} className="bg-slate-800 border-slate-700 print:border print:border-gray-300">
+              <CardHeader>
+                <CardTitle className="text-white print:text-black flex justify-between">
+                  <span>{store.name}</span>
+                  <span className="text-emerald-400 print:text-gray-700">${store.total.toFixed(2)} ({store.orders} {t('items')})</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-700 print:border-gray-300">
+                      <TableHead className="text-slate-300 print:text-gray-600">{t('productCode')}</TableHead>
+                      <TableHead className="text-slate-300 print:text-gray-600">{t('productName')}</TableHead>
+                      <TableHead className="text-right text-slate-300 print:text-gray-600">{t('soldQuantity')}</TableHead>
+                      <TableHead className="text-right text-slate-300 print:text-gray-600">{t('salesAmount')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {store.products.map((p, i) => (
+                      <TableRow key={i} className="border-slate-700 print:border-gray-300">
+                        <TableCell className="text-slate-400 print:text-gray-500">{p.code}</TableCell>
+                        <TableCell className="text-white print:text-black">{p.name}</TableCell>
+                        <TableCell className="text-right text-blue-400 print:text-gray-700 font-medium">{p.quantity}</TableCell>
+                        <TableCell className="text-right text-emerald-400 print:text-gray-700 font-bold">${p.amount.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* Order List */}
+          {report.orders.length > 0 && (
+            <Card className="bg-slate-800 border-slate-700 print:border print:border-gray-300">
+              <CardHeader>
+                <CardTitle className="text-white print:text-black">{t('salesManagement')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-700">
+                      <TableHead className="text-slate-300">{t('orderNumber')}</TableHead>
+                      <TableHead className="text-slate-300">{t('storeFilter')}</TableHead>
+                      <TableHead className="text-slate-300">{t('productSalesDetail')}</TableHead>
+                      <TableHead className="text-right text-slate-300">{t('totalAmount')}</TableHead>
+                      <TableHead className="text-slate-300">{t('time')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report.orders.map(o => (
+                      <TableRow key={o.id} className="border-slate-700">
+                        <TableCell className="text-white font-mono text-xs">{o.order_no}</TableCell>
+                        <TableCell className="text-slate-300">{o.store_name}</TableCell>
+                        <TableCell className="text-slate-300 text-xs">
+                          {o.items.map((it, i) => (
+                            <div key={i}>{it.product_name} ×{it.quantity} ${it.amount.toFixed(2)}</div>
+                          ))}
+                        </TableCell>
+                        <TableCell className="text-right text-emerald-400 font-bold">${o.total_amount.toFixed(2)}</TableCell>
+                        <TableCell className="text-slate-400 text-xs">{new Date(o.created_at).toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {report.orders.length === 0 && (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="py-12 text-center">
+                <p className="text-slate-400">{t('noData')}</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const ReportsPage = () => {
   const [salesSummary, setSalesSummary] = useState(null);
   const [inventorySummary, setInventorySummary] = useState(null);
@@ -2805,7 +3009,7 @@ const ShopPage = () => {
 };
 
 // App
-function App() {
+function AppContent() {
   useEffect(() => {
     // Initialize data on first load
     axios.post(`${API}/init-data`).catch(console.error);
@@ -2866,6 +3070,11 @@ function App() {
           <Route path="/admin/online-orders" element={
             <ProtectedRoute>
               <AdminLayout><OnlineOrdersPage /></AdminLayout>
+          <Route path="/admin/sales-report" element={
+            <ProtectedRoute>
+              <AdminLayout><SalesReportPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
             </ProtectedRoute>
           } />
           <Route path="/admin/reports" element={
@@ -3070,6 +3279,7 @@ const ShopOrdersPage = () => {
 
 // POS Front Desk Page
 const POSPage = () => {
+  const { t, lang, changeLang } = useLang();
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -3089,6 +3299,42 @@ const POSPage = () => {
   const [exchangeRates, setExchangeRates] = useState({ usd_to_ves: 36.5 });
   const [showBs, setShowBs] = useState(false); // Bs. display toggle
   const [showProductSearch, setShowProductSearch] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingOrders, setPendingOrders] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pos_pending_orders') || '[]'); } catch { return []; }
+  });
+
+  // Network detection
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
+  }, []);
+
+  // Auto-sync when coming back online
+  useEffect(() => {
+    if (isOnline && pendingOrders.length > 0) {
+      syncPendingOrders();
+    }
+  }, [isOnline]);
+
+  const syncPendingOrders = async () => {
+    const remaining = [];
+    for (const order of pendingOrders) {
+      try {
+        await axios.post(`${API}/sales-orders`, order);
+      } catch {
+        remaining.push(order);
+      }
+    }
+    setPendingOrders(remaining);
+    localStorage.setItem('pos_pending_orders', JSON.stringify(remaining));
+    if (remaining.length === 0 && pendingOrders.length > 0) {
+      toast.success(t('syncSuccess'));
+    }
+  };
 
   useEffect(() => {
     const savedUser = localStorage.getItem("pos_user");
@@ -3147,15 +3393,19 @@ const POSPage = () => {
     const p3 = product.price3 || product.wholesale_price || p1;
     const boxQty = product.box_quantity || 1;
     if (mode === "box") {
-      if (boxQty > 1) {
-        const boxes = Math.floor(quantity / boxQty);
-        const remainder = quantity % boxQty;
-        return boxes * p3 + remainder * p2;
-      }
+      // quantity = number of boxes, each box has boxQty items
       return quantity * p3;
     }
     const unitPrice = mode === "price2" ? p2 : p1;
     return quantity * unitPrice;
+  };
+
+  const getActualItems = (item) => {
+    // For box mode, quantity represents boxes
+    if (item.price_mode === "box") {
+      return item.quantity * (item.product.box_quantity || 1);
+    }
+    return item.quantity;
   };
 
   const handlePriceModeChange = (mode) => {
@@ -3264,9 +3514,19 @@ const POSPage = () => {
   const changeItemPriceMode = (productId, newMode) => {
     setCart(cart.map(i => {
       if (i.product_id === productId) {
-        const amount = calcCartItemAmount(i.product, i.quantity, newMode);
+        let newQty = i.quantity;
+        const boxQty = i.product.box_quantity || 1;
+        // When switching to box mode, convert pieces to boxes (min 1)
+        if (newMode === "box" && i.price_mode !== "box") {
+          newQty = Math.max(1, Math.round(i.quantity / boxQty));
+        }
+        // When switching from box to pieces, convert boxes to pieces
+        if (newMode !== "box" && i.price_mode === "box") {
+          newQty = i.quantity * boxQty;
+        }
+        const amount = calcCartItemAmount(i.product, newQty, newMode);
         const unitPrice = getItemPriceByMode(i.product, newMode);
-        return {...i, price_mode: newMode, unit_price: unitPrice, amount};
+        return {...i, price_mode: newMode, quantity: newQty, unit_price: unitPrice, amount};
       }
       return i;
     }));
@@ -3283,27 +3543,34 @@ const POSPage = () => {
 
   const handlePayment = async () => {
     if (!shift) {
-      toast.error("Debe iniciar turno primero / 请先当班");
+      toast.error(t('noShift'));
       return;
     }
     
-    try {
-      const orderData = {
-        store_id: selectedStore.id,
-        customer_id: null,
-        items: cart.map(i => ({
-          product_id: i.product_id,
-          quantity: i.quantity,
-          unit_price: i.unit_price,
-          discount: 0,
-          amount: i.amount
-        })),
-        payment_method: paymentMethod,
-        paid_amount: parseFloat(receivedAmount) || cartTotal,
-        notes: ""
-      };
+    const orderData = {
+      store_id: selectedStore.id,
+      customer_id: null,
+      items: cart.map(i => ({
+        product_id: i.product_id,
+        quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity,
+        unit_price: i.unit_price,
+        discount: 0,
+        amount: i.amount
+      })),
+      payment_method: paymentMethod,
+      paid_amount: parseFloat(receivedAmount) || cartTotal,
+      notes: ""
+    };
 
-      await axios.post(`${API}/sales-orders`, orderData);
+    try {
+      if (isOnline) {
+        await axios.post(`${API}/sales-orders`, orderData);
+      } else {
+        // Offline mode: save to localStorage
+        const newPending = [...pendingOrders, { ...orderData, offline_id: Date.now().toString(), created_at: new Date().toISOString() }];
+        setPendingOrders(newPending);
+        localStorage.setItem('pos_pending_orders', JSON.stringify(newPending));
+      }
       
       // Update shift stats
       const updatedShift = {
@@ -3315,12 +3582,19 @@ const POSPage = () => {
       setShift(updatedShift);
       localStorage.setItem("pos_shift", JSON.stringify(updatedShift));
 
-      toast.success("¡Venta completada! / 销售完成");
+      toast.success(isOnline ? t('confirmPayment') + " ✓" : t('offlineMode') + " - " + t('pendingSync'));
       setCart([]);
       setShowPayment(false);
       setReceivedAmount("");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Error al procesar venta");
+      // If online fails, save offline
+      const newPending = [...pendingOrders, { ...orderData, offline_id: Date.now().toString(), created_at: new Date().toISOString() }];
+      setPendingOrders(newPending);
+      localStorage.setItem('pos_pending_orders', JSON.stringify(newPending));
+      toast.warning(t('offlineWarning'));
+      setCart([]);
+      setShowPayment(false);
+      setReceivedAmount("");
     }
   };
 
@@ -3614,8 +3888,7 @@ const POSPage = () => {
                   cart.map((item, idx) => {
                     const boxQty = item.product.box_quantity || 1;
                     const isBoxMode = item.price_mode === "box";
-                    const boxes = isBoxMode && boxQty > 1 ? Math.floor(item.quantity / boxQty) : (isBoxMode ? item.quantity : 0);
-                    const remainder = isBoxMode && boxQty > 1 ? item.quantity % boxQty : 0;
+                    const totalPieces = isBoxMode ? item.quantity * boxQty : item.quantity;
                     const displayAmount = showBs ? item.amount * (exchangeRates.usd_to_ves || 1) : item.amount;
                     const displayUnitPrice = showBs ? getItemPriceByMode(item.product, item.price_mode) * (exchangeRates.usd_to_ves || 1) : getItemPriceByMode(item.product, item.price_mode);
                     const priceModes = ["price1", "price2", "box"];
@@ -3632,21 +3905,10 @@ const POSPage = () => {
                           {isBoxMode && (() => {
                             const rate = exchangeRates.usd_to_ves || 1;
                             const p3 = item.product.price3 || item.product.wholesale_price || 0;
-                            const p2 = item.product.price2 || item.product.price1 || item.product.retail_price || 0;
-                            if (boxQty > 1) {
-                              const boxAmt = boxes * p3;
-                              const remAmt = remainder * p2;
-                              return (
-                                <p className="text-blue-300 text-xs mt-0.5">
-                                  {boxes > 0 && <span>{boxes}箱×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{(showBs ? boxAmt*rate : boxAmt).toFixed(2)}</span>}
-                                  {boxes > 0 && remainder > 0 && " + "}
-                                  {remainder > 0 && <span>{remainder}件×{getPriceSymbol()}{(showBs ? p2*rate : p2).toFixed(2)}={getPriceSymbol()}{(showBs ? remAmt*rate : remAmt).toFixed(2)}</span>}
-                                </p>
-                              );
-                            }
                             return (
                               <p className="text-blue-300 text-xs mt-0.5">
-                                {item.quantity}×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{displayAmount.toFixed(2)}
+                                {item.quantity}{t('boxes')}×{getPriceSymbol()}{(showBs ? p3*rate : p3).toFixed(2)}={getPriceSymbol()}{displayAmount.toFixed(2)}
+                                <span className="text-slate-400 ml-1">({totalPieces}{t('pieces')})</span>
                               </p>
                             );
                           })()}
@@ -3843,5 +4105,13 @@ const POSPage = () => {
     </div>
   );
 };
+
+function App() {
+  return (
+    <LangProvider>
+      <AppContent />
+    </LangProvider>
+  );
+}
 
 export default App;
