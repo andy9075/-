@@ -65,9 +65,11 @@ export default function PosPage() {
 
   const syncPendingOrders = async () => {
     const remaining = [];
-    for (const order of pendingOrders) { try { await axios.post(`${API}/sales-orders`, order); } catch { remaining.push(order); } }
+    let synced = 0;
+    for (const order of pendingOrders) { try { await axios.post(`${API}/sales-orders`, order); synced++; } catch { remaining.push(order); } }
     setPendingOrders(remaining); localStorage.setItem('pos_pending_orders', JSON.stringify(remaining));
-    if (remaining.length === 0 && pendingOrders.length > 0) toast.success(t('syncSuccess'));
+    if (synced > 0) toast.success(`${synced} ${t('pendingSync')} OK`);
+    if (remaining.length > 0) toast.warning(`${remaining.length} ${t('pendingSync')}`);
   };
 
   useEffect(() => {

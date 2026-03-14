@@ -26,6 +26,11 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+master_db = client[os.environ['DB_NAME']]  # Master DB for tenant management
+
+def get_tenant_db(tenant_id: str):
+    """Get tenant-specific database"""
+    return client[f"tenant_{tenant_id}"]
 
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'pos-system-secret-key-2024')
@@ -382,11 +387,12 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
-def create_token(user_id: str, username: str, role: str) -> str:
+def create_token(user_id: str, username: str, role: str, tenant_id: str = "") -> str:
     payload = {
         "user_id": user_id,
         "username": username,
         "role": role,
+        "tenant_id": tenant_id,
         "exp": datetime.now(timezone.utc) + timedelta(days=7)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -394,6 +400,9 @@ def create_token(user_id: str, username: str, role: str) -> str:
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        # If tenant_id exists, switch db context
+        if payload.get("tenant_id"):
+            payload["_db"] = get_tenant_db(payload["tenant_id"])
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token已过期")
@@ -2030,6 +2039,115 @@ async def get_import_template():
 @api_router.get("/")
 async def root():
     return {"message": "POS System API", "status": "running"}
+
+# ==================== Multi-Tenant Management ====================
+@api_router.post("/tenants")
+async def create_tenant(data: Dict, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin" or current_user.get("tenant_id"):
+        raise HTTPException(403, "Super admin only")
+    tenant_id = generate_id()[:8]
+    tenant = {
+        "id": tenant_id, "name": data.get("name", ""),
+        "contact_name": data.get("contact_name", ""),
+        "contact_phone": data.get("contact_phone", ""),
+        "plan": data.get("plan", "basic"),
+        "status": "active", "max_users": data.get("max_users", 5),
+        "max_stores": data.get("max_stores", 3),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await master_db.tenants.insert_one(tenant)
+    # Create default admin user for tenant
+    admin_password = data.get("admin_password", "admin123")
+    admin_username = data.get("admin_username", f"admin_{tenant_id}")
+    tenant_db = get_tenant_db(tenant_id)
+    admin_id = generate_id()
+    await tenant_db.users.insert_one({
+        "id": admin_id, "username": admin_username,
+        "password": hash_password(admin_password), "role": "admin",
+        "name": data.get("contact_name", "Admin"), "phone": data.get("contact_phone", ""),
+        "store_id": None, "permissions": {}, "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    # Create default store
+    store_id = generate_id()
+    await tenant_db.stores.insert_one({
+        "id": store_id, "code": "S001", "name": data.get("name", "Main Store"),
+        "type": "retail", "address": "", "phone": "", "warehouse_id": None,
+        "is_headquarters": True, "status": "active"
+    })
+    # Create default warehouse
+    wh_id = generate_id()
+    await tenant_db.warehouses.insert_one({
+        "id": wh_id, "code": "WH001", "name": "Main Warehouse",
+        "address": "", "is_main": True, "status": "active"
+    })
+    del tenant["_id"]
+    return {**tenant, "admin_username": admin_username, "admin_password": admin_password}
+
+@api_router.get("/tenants")
+async def get_tenants(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin" or current_user.get("tenant_id"):
+        raise HTTPException(403, "Super admin only")
+    tenants = await master_db.tenants.find({}, {"_id": 0}).to_list(500)
+    for t in tenants:
+        tdb = get_tenant_db(t["id"])
+        t["users_count"] = await tdb.users.count_documents({})
+        t["orders_count"] = await tdb.sales_orders.count_documents({})
+    return tenants
+
+@api_router.put("/tenants/{tenant_id}")
+async def update_tenant(tenant_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin" or current_user.get("tenant_id"):
+        raise HTTPException(403, "Super admin only")
+    data.pop("id", None); data.pop("_id", None)
+    result = await master_db.tenants.update_one({"id": tenant_id}, {"$set": data})
+    if result.matched_count == 0: raise HTTPException(404, "Tenant not found")
+    return await master_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+
+@api_router.put("/tenants/{tenant_id}/toggle")
+async def toggle_tenant(tenant_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin" or current_user.get("tenant_id"):
+        raise HTTPException(403, "Super admin only")
+    tenant = await master_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not tenant: raise HTTPException(404, "Tenant not found")
+    new_status = "inactive" if tenant.get("status") == "active" else "active"
+    await master_db.tenants.update_one({"id": tenant_id}, {"$set": {"status": new_status}})
+    return {"status": new_status}
+
+@api_router.post("/auth/tenant-login")
+async def tenant_login(data: Dict):
+    tenant_id = data.get("tenant_id", "")
+    username = data.get("username", "")
+    password = data.get("password", "")
+    if not tenant_id or not username or not password:
+        raise HTTPException(400, "Missing fields")
+    tenant = await master_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not tenant: raise HTTPException(404, "Tenant not found")
+    if tenant.get("status") != "active": raise HTTPException(403, "Tenant is inactive")
+    tenant_db = get_tenant_db(tenant_id)
+    user = await tenant_db.users.find_one({"username": username})
+    if not user or not verify_password(password, user["password"]):
+        raise HTTPException(401, "Invalid credentials")
+    token = create_token(user["id"], user["username"], user.get("role", "staff"), tenant_id)
+    return {
+        "token": token,
+        "user": {"id": user["id"], "username": user["username"], "role": user.get("role"), "name": user.get("name"), "tenant_id": tenant_id, "tenant_name": tenant.get("name")},
+        "tenant": {k: v for k, v in tenant.items() if k != "password"}
+    }
+
+@api_router.get("/tenants/{tenant_id}/stats")
+async def get_tenant_stats(tenant_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin" or current_user.get("tenant_id"):
+        raise HTTPException(403, "Super admin only")
+    tdb = get_tenant_db(tenant_id)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_orders = await tdb.sales_orders.find({"created_at": {"$gte": f"{today}T00:00:00"}}, {"_id": 0, "total_amount": 1}).to_list(10000)
+    return {
+        "users": await tdb.users.count_documents({}),
+        "products": await tdb.products.count_documents({}),
+        "stores": await tdb.stores.count_documents({}),
+        "total_orders": await tdb.sales_orders.count_documents({}),
+        "today_sales": round(sum(o.get("total_amount", 0) for o in today_orders), 2)
+    }
 
 # ==================== Commission Rules & Calculation ====================
 @api_router.get("/settings/commission-rules")

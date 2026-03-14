@@ -46,6 +46,8 @@ import PurchaseReturnsPage from "@/pages/admin/PurchaseReturnsPage";
 import BundlesPage from "@/pages/admin/BundlesPage";
 import NotificationsPage from "@/pages/admin/NotificationsPage";
 import CommissionPage from "@/pages/admin/CommissionPage";
+import TenantsPage from "@/pages/admin/TenantsPage";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 
 function AdminRoute({ children }) {
   return (
@@ -102,6 +104,7 @@ function AppContent() {
           <Route path="/admin/bundles" element={<AdminRoute><BundlesPage /></AdminRoute>} />
           <Route path="/admin/notifications" element={<AdminRoute><NotificationsPage /></AdminRoute>} />
           <Route path="/admin/commission" element={<AdminRoute><CommissionPage /></AdminRoute>} />
+          <Route path="/admin/tenants" element={<AdminRoute><TenantsPage /></AdminRoute>} />
 
           <Route path="/" element={<Navigate to="/shop" replace />} />
         </Routes>
@@ -113,6 +116,7 @@ function AppContent() {
 function App() {
   return (
     <LangProvider>
+      <PwaInstallPrompt />
       <AppContent />
     </LangProvider>
   );

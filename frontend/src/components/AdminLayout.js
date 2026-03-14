@@ -71,6 +71,7 @@ const AdminLayout = ({ children }) => {
       { icon: CreditCard, label: t('paymentSettings'), path: "/admin/payment-settings" },
       { icon: Settings, label: t('systemSettings'), path: "/admin/settings" },
       { icon: Shield, label: t('auditLog'), path: "/admin/audit-log" },
+      { icon: Building2, label: "SaaS商家", path: "/admin/tenants" },
     ]},
   ];
 
