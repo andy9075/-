@@ -3,142 +3,165 @@
 **original_problem_statement:** The user is building a comprehensive, desktop-style POS application (秘奥软件) as a web-based system. This has evolved into a multi-tenant SaaS platform named Sellox, which should be installable (as a PWA), support offline functionality, and be deployable to a production server.
 
 Recent requirements implemented:
-1.  **SaaS Transformation & Bug Fix:** Converted the application to a multi-tenant model and fixed a critical data isolation bug. The system is now fully tested and tenant-secure.
-2.  **Branding:** Rebranded the application to Sellox with a new name, logo, and UI theme.
-3.  **Tenant-Specific Online Shop:** Each tenant (customer) now gets their own isolated online storefront, accessible via a unique URL ().
-4.  **Advanced Permissions:** Implemented a granular, checkbox-based permission system, allowing the tenant admin to customize each employee's access rights (e.g., enabling/disabling the refund function).
-5.  **POS Inventory Lookup:** Added a new feature in the POS UI (shortcut F2) to quickly view stock levels across all warehouses.
-6.  **Deployment Package:** Created , , and a  guide to simplify production deployment.
-7.  **Backend Refactoring (Phase 1):** Began refactoring the monolithic  by extracting core logic into a  directory.
+1.  **SaaS Transformation & Branding:** Converted the application to a fully tested, multi-tenant Sellox brand.
+2.  **Advanced Features:** Implemented tenant-specific shops, granular permissions, POS inventory lookup, and improved refund workflows.
+3.  **Deployment & Refactoring:** Created a production deployment package and completed a major refactoring of the monolithic backend  into a modular router-based architecture.
+4.  **User Assistance Features:** Added role-specific user manuals, PDF export functionality, a system for creating time-limited trial accounts, and an automated video tutorial generation system using Playwright for realistic screen recordings.
+5.  **Tax & Printing Module:** Integrated a complex tax system for Venezuela (SENIAT), including support for specialized fiscal and dot-matrix printers, and a dedicated tax report.
+6.  **Latest Request:** The user now wants the automatically generated video tutorials to include voice-over narration.
 
 **User's preferred language**: zh-CN
 
 **what currently exists?**
-A fully functional, tested, and rebranded multi-tenant SaaS POS application named Sellox. The backend uses FastAPI with a database-per-tenant architecture. The core logic has been partially refactored out of the main  file. The frontend is a React application that supports super-admin management, tenant-specific administration, a tenant-specific online store, and a feature-rich POS interface with granular permissions and PWA/offline capabilities. Deployment files (, ) have been created.
+A stable, feature-rich, multi-tenant SaaS POS application (Sellox). The backend is a modular FastAPI application, and the frontend is a comprehensive React SPA. The system includes advanced features like granular permissions, a full tax and printing module, and a sophisticated video tutorial generator that uses Playwright to record real browser interactions. All major technical debt in the backend structure has been addressed.
 
 **Last working item**:
-*   Last item agent was working: The agent was fulfilling the user's request to create user manuals. It created the necessary files (, ) and added the routes in the frontend application. The next step is to populate these pages with content.
+*   Last item agent was working: The agent was starting to implement the user's request to add voice-over narration to the existing Playwright-based video tutorials. It had correctly identified the necessary components: a Text-to-Speech (TTS) service to generate audio, and  to merge the audio with the screen-recorded video. The agent was in the initial planning and environment-checking phase for this new feature.
 *   Status: IN PROGRESS
 *   Agent Testing Done: N
-*   Which testing method agent to use? Frontend testing agent to verify the help pages are rendered correctly with the appropriate content for both super-admin and tenant users.
+*   Which testing method agent to use? After implementation, the agent should first use  for the TTS integration. For testing, a manual check of a generated video file (to confirm it has audio) is required, followed by a full regression test using  to ensure the new video generation process hasn't introduced side effects.
 *   User Testing Done: N
 
 **All Pending/In progress Issue list**:
-There are no outstanding bugs or issues. The previously critical task of validating the SaaS architecture has been completed and verified.
+There are no outstanding bugs or issues. The current work is a new feature request.
 
 **In progress Task List**:
-*   **Task 1: Populate User Manuals (P0)**
-    *   **Description:** The user requested two separate how-to guides: one for the system owner (super-admin) and another for their customers (tenants). The placeholder pages and routes have been created.
-    *   **Where to resume:** Edit the following files to add the instructional content:
-        *   
-        *   
-    *   **What will be achieved with this?** The application will have built-in documentation, reducing the support burden for the system owner and their customers.
+*   **Task 1: Add Voice Narration to Video Tutorials (P0)**
+    *   **Description:** The user wants the automatically generated screen recording tutorials to include a spoken voice-over that explains the on-screen actions.
+    *   **Where to resume:** The agent needs to select and integrate a Text-to-Speech (TTS) service. The next logical step is to call the  tool to get a reliable implementation plan for a service like OpenAI TTS or ElevenLabs.
+    *   **What will be achieved with this?** The video tutorials will become significantly more helpful and professional, providing a guided, audible walkthrough for users.
     *   **Status:** IN PROGRESS
-    *   **Should Test frontend/backend/both after fix?** frontend
-    *   **Blocked on something:** No.
+    *   **Should Test frontend/backend/both after fix?** Both. The backend orchestrates the video/audio generation and merging. The frontend needs to correctly display and play the final video.
+    *   **Blocked on something:** No, but requires a TTS integration.
 
 **Upcoming and Future Tasks**
 *   **Upcoming Tasks:**
-    *   **P1: Complete Backend Refactoring:** The user has approved the plan to continue refactoring the backend. The monolithic  file, though smaller, still contains all API routes (~2600 lines). The next step is to break these routes down into a modular structure using FastAPI's  (e.g., , , etc.). This is critical for long-term maintainability.
+    *   **P1: Wholesale Module:** Build a dedicated module for B2B wholesale operations, potentially including features related to the dot-matrix printing already implemented.
+    *   **P2: Enhanced Reporting:** Introduce more complex reporting features, such as advanced filters, new data visualizations, and more export options.
 *   **Future Tasks:**
-    *   **P1: Wholesale Module:** A dedicated module for B2B sales.
-    *   **P2: Enhanced Reporting:** More complex filters, exports, and visualizations.
-    *   **P2: UI/UX Polish:** General improvements across the application.
+    *   **P2: UI/UX Polish:** General review and improvement of the user interface and experience across the application.
 
 **Completed work in this session**
--   **SaaS Architecture Verified:** Fixed a critical data isolation bug and used the testing agent to confirm the multi-tenant system is secure and stable.
--   **Full System Rebranding:** Renamed the app to Sellox, generated a logo, and applied the new branding across the entire application.
--   **Tenant-Aware Online Shop:** Made the e-commerce storefront unique to each tenant, accessible via a  URL.
--   **Advanced Permission System:** Implemented a highly flexible, checkbox-based UI for tenant admins to assign granular permissions to their employees.
--   **POS Inventory Lookup (F2):** Added a modal in the POS to view real-time stock levels for all products across different warehouses.
--   **Improved Refund Workflow:** The refund dialog now looks up and displays full order details. The refund action is now controlled by a specific user permission.
--   **Backend Refactoring (Phase 1):** Moved core database, authentication, and model logic from  into a new  directory.
--   **Deployment Package:** Created , , and  to facilitate production deployment.
--   **Privacy Feature:** Removed a feature that allowed the super-admin to view tenant revenue, per the user's request about privacy.
--   **UI Enhancements:** Added quick-access buttons in the admin sidebar to launch the POS and Online Shop.
+-   **Major Backend Refactoring:** Successfully broke down the monolithic  (2,800+ lines) into 17 modular router files within a  directory, reducing  to just 28 lines. Verified 100% test pass rate post-refactoring.
+-   **Realistic Video Tutorial Generation:** Implemented a system using Playwright to automatically record real browser interactions for 7 key features, generating high-quality video tutorials.
+-   **Venezuela Tax & Printing Module:** Built and integrated a comprehensive tax system with configurable rates, SENIAT fiscal printer settings, product-level tax assignment, and a new Tax Report page. Also added new print components for fiscal and dot-matrix printers.
+-   **User Manuals & Security:** Created separate, role-based help pages for super-admins and tenants, ensuring tenants cannot access super-admin content.
+-   **Trial Accounts & PDF Export:** Added functionality for super-admins to create time-limited trial tenants and for users to export help pages as PDFs.
+-   **Critical URL/Routing Fix:** Resolved a major bug where uploaded files (videos, images) were inaccessible due to incorrect URL routing in the Kubernetes environment. Corrected all paths to use the  prefix.
+-   **Authentication Fix:** Resolved a recurring login issue by resetting the super-admin's password hash in the database.
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
 
 **Known issue recurrence from previous fork**
--   None. The previously recurring POS price-switching logic issue has been resolved and did not reappear.
+-   None.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Multi-Tenancy:** A database-per-tenant model, now fully tested and validated for data isolation.
--   **Granular RBAC:** A flexible permission system where each user has a list of specific permissions (, , etc.) checked by a FastAPI dependency ().
--   **SaaS Plan Enforcement:** A  dependency that restricts access to endpoints based on the tenant's subscription plan (e.g., 'basic', 'pro').
--   **Incremental Refactoring:** A strategy used to safely refactor the large  by first extracting core logic into a separate module before tackling the larger task of splitting all routes.
+-   **Modular Routing (FastAPI ):** The entire backend is now built on a scalable, maintainable structure of modular routers.
+-   **Automated E2E Recording (Playwright):** Using Playwright to script, execute, and record real end-to-end user flows as video files.
+-   **Background Task Orchestration:** The video generation process is a long-running background task triggered by an API endpoint, involving shell commands and file system operations.
+-   **Text-to-Speech (TTS) Integration (Next Step):** The next feature requires integrating a TTS service to generate audio from text, which will then be merged with video.
 
 **key DB schema**
--   ****:
-    -   : Stores metadata for each tenant business.
-    -   : The global administrators for the entire SaaS platform.
--   **Tenant Databases ():**
-    -   : Each user document now contains a  field to store their specific access rights.
+-   ****: Added .
+-   **Tenant DBs ():**
+    -   : Added .
+    -   : Added , .
+    -   : Expanded significantly with  and .
+    -   : New collection to store tutorial video metadata .
+
+**changes in tech stack**
+-   **Playwright:** Added for browser automation and screen recording.
+-   **Upcoming:** A TTS SDK (e.g., usage: openai [-h] [-v] [-b API_BASE] [-k API_KEY] [-p PROXY [PROXY ...]]
+              [-o ORGANIZATION] [-t {openai,azure}]
+              [--api-version API_VERSION] [--azure-endpoint AZURE_ENDPOINT]
+              [--azure-ad-token AZURE_AD_TOKEN] [-V]
+              {api,tools,migrate,grit} ...
+
+positional arguments:
+  {api,tools,migrate,grit}
+    api                 Direct API calls
+    tools               Client side tools for convenience
+
+options:
+  -h, --help            show this help message and exit
+  -v, --verbose         Set verbosity.
+  -b API_BASE, --api-base API_BASE
+                        What API base url to use.
+  -k API_KEY, --api-key API_KEY
+                        What API key to use.
+  -p PROXY [PROXY ...], --proxy PROXY [PROXY ...]
+                        What proxy to use.
+  -o ORGANIZATION, --organization ORGANIZATION
+                        Which organization to run as (will use your default
+                        organization if not specified)
+  -t {openai,azure}, --api-type {openai,azure}
+                        The backend API to call, must be `openai` or `azure`
+  --api-version API_VERSION
+                        The Azure API version, e.g.
+                        'https://learn.microsoft.com/en-us/azure/ai-
+                        services/openai/reference#rest-api-versioning'
+  --azure-endpoint AZURE_ENDPOINT
+                        The Azure endpoint, e.g.
+                        'https://endpoint.openai.azure.com'
+  --azure-ad-token AZURE_AD_TOKEN
+                        A token from Azure Active Directory,
+                        https://www.microsoft.com/en-
+                        us/security/business/identity-access/microsoft-entra-
+                        id
+  -V, --version         show program's version number and exit, ) and  (for audio/video merging) will be required.
 
 **All files of reference**
--   **Task-related:**
-    -    (New, needs content)
-    -    (New, needs content)
-    -    (Updated with routes for the help pages)
--   **Refactoring-related:**
-    -    (The main target for the next phase of refactoring)
-    -    (Contains the new permission checking logic)
--   **Feature-related:**
-    -    (Contains the new granular permissions UI)
-    -    (Contains the F2 stock lookup modal)
--   **Deployment-related:**
-    -   
-    -   
-    -   
-
-**Areas that need refactoring**:
--   ** (CRITICAL):** This file is still a monolith of ~2,600 lines containing all API routes. The next major technical task (P1) is to break it down into a proper  package structure for maintainability.
-
-**key api endpoints**
--   : (New) Fetches order details for the refund UI.
--   : (Modified) Now checks for the  permission using the  dependency.
--   : (Modified) Updates the  list for an employee.
--   All shop endpoints (): (Modified) Now accept a  to ensure data is fetched for the correct tenant storefront.
+-   **Current Task:**
+    -   : Will need modification to orchestrate TTS and .
+    -   : The script that records video via Playwright.
+    -   : The tool to be used for TTS integration.
+-   **Refactoring:**
+    -    (The newly refactored, slim server file)
+    -    (The directory containing all modular API routes)
 
 **Critical Info for New Agent**
--   **Primary Goal:** Your immediate task is to populate the user manual pages:  and .
--   **Next Major Task (P1):** After completing the manuals, you must proceed with the approved backend refactoring. The goal is to break down  by moving its routes into separate files within a  directory.
--   **Permissions Model:** When implementing new features, ensure they are integrated with the existing permission system. Add a new permission key (e.g., ) and protect the relevant endpoint(s) with the  dependency.
+-   **Primary Goal:** Implement voice narration for the automated video tutorials.
+-   **Recommended Approach:**
+    1.  Use  to get a playbook for a TTS service (OpenAI TTS is a good candidate).
+    2.  For each tutorial, define the narration script.
+    3.  Modify the backend generation endpoint () to first generate an audio file for the script using the TTS service.
+    4.  Execute the Playwright script to record the video component.
+    5.  Use a shell command to run  to merge the generated audio and video files into a single output file.
+    6.  Save this final narrated video and update the database record.
+-   **User Expectation:** The final output must be a screen recording video file with a clear, spoken voice-over, not a slide-based or animated video.
 
 **documents and test reports created in this job**
--   
--   
+-    (Passed 100% after backend refactoring)
+-    (Passed 100% after video/trial/PDF features)
 -    (Updated)
--    (New)
--    (New)
--    (New)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Asks for a more flexible permission system instead of fixed roles.
-2.  **Agent:** Implements a granular, multi-select permission UI for employees.
-3.  **User:** Asks for a screenshot of the new permission UI. Agent provides it.
-4.  **User:** Asks for a list of all user accounts in the system. Agent provides it.
-5.  **User:** Asks for a full system security test.
-6.  **Agent:** Runs the testing agent, which finds and fixes two minor bugs and confirms no security vulnerabilities.
-7.  **User:** Requests two user manuals: one for the super-admin and one for their customers (tenants).
-8.  **Agent:** Creates the necessary files and routes for the help pages.
-9.  **Pending:** The agent needs to write the content for the two help pages.
+1.  User: Not this kind of video (rejecting the initial Canvas video).
+2.  Agent: Proposes using Playwright for more realistic screen recording.
+3.  User: Agrees to the Playwright approach.
+4.  Agent: Implements and shows the Playwright-generated videos.
+5.  User: Not this video.
+6.  Agent: Asks for clarification.
+7.  User: Video with voice-over commentary, the video should be like a screen recording.
+8.  Agent: Understands the new requirement and plans to add TTS + ffmpeg.
+-   **Pending:** The agent needs to implement the voice-over generation.
 
 **Project Health Check:**
-*   **Healthy:** The application is stable, secure, and has been thoroughly tested. The primary risk is technical debt in the backend, but a clear, user-approved plan is in place to address it.
+*   **Healthy:** The application is robust, well-structured, and feature-complete based on all prior requests. The current task is a significant enhancement, not a bug fix.
 
 **3rd Party Integrations**
 *   recharts
 *   lucide-react
+*   jspdf & html2canvas
+*   Playwright
+*   **Upcoming Requirement:** A Text-to-Speech (TTS) service (e.g., OpenAI TTS, ElevenLabs).
 
 **Testing status**
--   Testing agent used after significant changes: YES. The agent was run for a full regression and security audit after implementing the new permission system. It passed all 30 backend tests and all frontend tests.
--   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created: None.
+-   Testing agent used after significant changes: YES. Successfully used after the tax module implementation, video feature implementation, and the major backend refactoring, reporting 100% pass rates each time.
 -   Known regressions: None.
 
 **Credentials to test flow:**
@@ -146,10 +169,8 @@ There are no outstanding bugs or issues. The previously critical task of validat
     *   Username: 
     *   Password: 
     *   (Log in with the Tenant ID field empty)
-*   **Tenant Admin (Example):**
-    *   Tenant ID: 
-    *   Username: 
-    *   Password: 
+*   **Tenant Admin:**
+    *   Must be created via the Super Admin Tenants page.
 
 **What agent forgot to execute**
--   The agent has created the files and routes for the user manuals as requested but has not yet written the actual content for them. This is the next action to take.</analysis>
+-   The agent was actively working on the user's latest and most complex request (narrated videos) and had not forgotten any tasks. The work is in progress.</analysis>

@@ -15,7 +15,7 @@ import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://manual-preview-1.preview.emergentagent.com"
+    BASE_URL = "https://sellox-narration.preview.emergentagent.com"
 
 class TestTaxFiscalModule:
     """Tax and Fiscal Printer Module Tests"""
