@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   CreditCard, Search, Package, Plus, X, ChevronDown,
-  LogOut, Wifi, WifiOff, ShoppingBag, Printer, Users
+  LogOut, Wifi, WifiOff, ShoppingBag, Printer, Users, Warehouse
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,10 @@ export default function PosPage() {
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [pointsToUse, setPointsToUse] = useState(0);
+  const [showInventory, setShowInventory] = useState(false);
+  const [inventoryData, setInventoryData] = useState([]);
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [inventoryLoading, setInventoryLoading] = useState(false);
   const receiptRef = useRef(null);
   const invoiceRef = useRef(null);
 
@@ -95,17 +99,29 @@ export default function PosPage() {
     }
   }, []);
 
+  // Inventory lookup
+  const fetchInventoryData = async () => {
+    setInventoryLoading(true);
+    try {
+      const res = await axios.get(`${API}/inventory`);
+      setInventoryData(res.data);
+    } catch (e) { toast.error("Failed to load inventory"); }
+    setInventoryLoading(false);
+  };
+  const openInventory = () => { setShowInventory(true); fetchInventoryData(); };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (showLogin || !selectedStore) return;
       if (e.key === 'F1') { e.preventDefault(); setShowProductSearch(true); }
+      if (e.key === 'F2') { e.preventDefault(); openInventory(); }
       if (e.key === 'F3') { e.preventDefault(); clearCart(); }
       if (e.key === 'F4') { e.preventDefault(); holdCurrentOrder(); }
       if (e.key === 'F9') { e.preventDefault(); if (cart.length > 0 && shift) setShowPayment(true); }
       if (e.key === 'F10') { e.preventDefault(); setShowHeldOrders(true); }
       if (e.key === 'F11') { e.preventDefault(); setShowRefund(true); }
-      if (e.key === 'Escape') { setShowProductSearch(false); setShowPayment(false); setShowShiftModal(false); setShowHeldOrders(false); setShowRefund(false); }
+      if (e.key === 'Escape') { setShowProductSearch(false); setShowPayment(false); setShowShiftModal(false); setShowHeldOrders(false); setShowRefund(false); setShowInventory(false); }
       if (showPayment) {
         if (e.key === 'F5') { e.preventDefault(); setPaymentMethod('cash'); }
         if (e.key === 'F6') { e.preventDefault(); setPaymentMethod('card'); }
@@ -344,7 +360,7 @@ export default function PosPage() {
         <div className="flex items-center gap-3">
           <div className="flex gap-0.5">{[{k:'zh',l:'中'},{k:'en',l:'EN'},{k:'es',l:'ES'}].map(({k,l}) => (<button key={k} onClick={() => changeLang(k)} className={`px-1.5 py-0.5 text-xs rounded ${lang === k ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`} data-testid={`pos-lang-${k}`}>{l}</button>))}</div>
           <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`} data-testid="online-status">{isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}{isOnline ? t('online') : t('offline')}{pendingOrders.length > 0 && <Badge className="ml-1 bg-orange-500 text-white text-xs px-1 py-0">{pendingOrders.length}</Badge>}</div>
-          <div className="flex gap-1.5"><Button size="sm" variant="outline" onClick={holdCurrentOrder} className="border-slate-600 text-slate-300 h-7 text-xs" disabled={cart.length === 0} data-testid="hold-btn">F4 {t('holdOrder')}</Button><Button size="sm" variant="outline" onClick={() => setShowHeldOrders(true)} className="border-slate-600 text-slate-300 h-7 text-xs relative" data-testid="recall-btn">F10 {t('recallOrder')}{heldOrders.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-orange-500 rounded-full text-xs flex items-center justify-center">{heldOrders.length}</span>}</Button><Button size="sm" variant="outline" onClick={() => setShowRefund(true)} className="border-slate-600 text-slate-300 h-7 text-xs" data-testid="refund-btn">F11 {t('refund')}</Button></div>
+          <div className="flex gap-1.5"><Button size="sm" variant="outline" onClick={openInventory} className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10 h-7 text-xs" data-testid="inventory-btn">F2 Stock</Button><Button size="sm" variant="outline" onClick={holdCurrentOrder} className="border-slate-600 text-slate-300 h-7 text-xs" disabled={cart.length === 0} data-testid="hold-btn">F4 {t('holdOrder')}</Button><Button size="sm" variant="outline" onClick={() => setShowHeldOrders(true)} className="border-slate-600 text-slate-300 h-7 text-xs relative" data-testid="recall-btn">F10 {t('recallOrder')}{heldOrders.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-orange-500 rounded-full text-xs flex items-center justify-center">{heldOrders.length}</span>}</Button><Button size="sm" variant="outline" onClick={() => setShowRefund(true)} className="border-slate-600 text-slate-300 h-7 text-xs" data-testid="refund-btn">F11 {t('refund')}</Button></div>
           <div className="flex items-center gap-1 bg-slate-700 rounded-lg px-2 py-1"><span className="text-xs text-slate-400 mr-1">{t('currency')}</span><span className={`text-sm font-bold min-w-[36px] text-center ${showBs ? 'text-orange-400' : 'text-emerald-400'}`}>{showBs ? 'Bs.' : '$'}</span><div className="flex flex-col"><button onClick={() => !showPayment && setShowBs(!showBs)} className={`text-slate-400 hover:text-white leading-none ${showPayment ? 'opacity-30 cursor-not-allowed' : ''}`} data-testid="currency-up"><ChevronDown className="w-3 h-3 rotate-180" /></button><button onClick={() => !showPayment && setShowBs(!showBs)} className={`text-slate-400 hover:text-white leading-none ${showPayment ? 'opacity-30 cursor-not-allowed' : ''}`} data-testid="currency-down"><ChevronDown className="w-3 h-3" /></button></div></div>
           {shift ? <Badge className="bg-green-500/20 text-green-400 text-xs">{t('shiftSince')} {new Date(shift.start_time).toLocaleTimeString()}</Badge> : <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">{t('noShift')}</Badge>}
           {!shift ? <Button size="sm" onClick={handleStartShift} className="bg-green-600 hover:bg-green-700 h-7 text-xs" data-testid="start-shift-btn">{t('startShift')}</Button> : <Button size="sm" onClick={handleEndShift} className="bg-orange-600 hover:bg-orange-700 h-7 text-xs" data-testid="end-shift-btn">{t('endShift')}</Button>}
@@ -436,6 +452,74 @@ export default function PosPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Inventory Lookup (F2) */}
+      <Dialog open={showInventory} onOpenChange={setShowInventory}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-4xl max-h-[85vh]">
+          <DialogHeader><DialogTitle className="flex items-center gap-2 text-amber-400"><Package className="w-5 h-5" /> Stock Lookup (F2)</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Search product name / code..." value={inventorySearch} onChange={e => setInventorySearch(e.target.value)} className="bg-slate-700 border-slate-600" data-testid="inventory-search" autoFocus />
+            <div className="overflow-auto max-h-[55vh] rounded-lg border border-slate-700">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-900 sticky top-0">
+                  <tr>
+                    <th className="text-left text-slate-400 px-3 py-2 font-medium">Code</th>
+                    <th className="text-left text-slate-400 px-3 py-2 font-medium">Product</th>
+                    <th className="text-left text-slate-400 px-3 py-2 font-medium">Warehouse</th>
+                    <th className="text-right text-slate-400 px-3 py-2 font-medium">Qty</th>
+                    <th className="text-right text-slate-400 px-3 py-2 font-medium">Reserved</th>
+                    <th className="text-right text-slate-400 px-3 py-2 font-medium">Available</th>
+                    <th className="text-right text-slate-400 px-3 py-2 font-medium">Min</th>
+                    <th className="text-center text-slate-400 px-3 py-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  {inventoryLoading ? (
+                    <tr><td colSpan={8} className="text-center text-slate-400 py-8">Loading...</td></tr>
+                  ) : inventoryData
+                      .filter(inv => {
+                        if (!inventorySearch) return true;
+                        const s = inventorySearch.toLowerCase();
+                        return inv.product?.name?.toLowerCase().includes(s) || inv.product?.code?.toLowerCase().includes(s);
+                      })
+                      .map((inv, idx) => {
+                        const minStock = inv.product?.min_stock || 0;
+                        const isLow = inv.quantity <= minStock;
+                        const isOut = inv.available <= 0;
+                        return (
+                          <tr key={idx} className={`${isOut ? 'bg-red-500/10' : isLow ? 'bg-amber-500/10' : ''} hover:bg-slate-700/50`}>
+                            <td className="px-3 py-2 text-slate-400 font-mono text-xs">{inv.product?.code || '-'}</td>
+                            <td className="px-3 py-2 text-white">{inv.product?.name || '-'}</td>
+                            <td className="px-3 py-2 text-slate-300 text-xs">{inv.warehouse?.name || '-'}</td>
+                            <td className="px-3 py-2 text-right text-white font-medium">{inv.quantity}</td>
+                            <td className="px-3 py-2 text-right text-orange-400">{inv.reserved || 0}</td>
+                            <td className={`px-3 py-2 text-right font-bold ${isOut ? 'text-red-400' : isLow ? 'text-amber-400' : 'text-emerald-400'}`}>{inv.available}</td>
+                            <td className="px-3 py-2 text-right text-slate-500">{minStock}</td>
+                            <td className="px-3 py-2 text-center">
+                              {isOut ? <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded">OUT</span>
+                                : isLow ? <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">LOW</span>
+                                : <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">OK</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  {!inventoryLoading && inventoryData.length === 0 && (
+                    <tr><td colSpan={8} className="text-center text-slate-400 py-8">No inventory data</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span> Out of stock</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"></span> Low stock</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> OK</span>
+              </div>
+              <span>Total: {inventoryData.length} items</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* End Shift Modal */}
       <Dialog open={showShiftModal} onOpenChange={setShowShiftModal}><DialogContent className="bg-slate-800 border-slate-700 text-white"><DialogHeader><DialogTitle>{t('endShift')}</DialogTitle></DialogHeader>{shift && <div className="space-y-4"><div className="bg-slate-700/50 rounded-lg p-4 space-y-2"><div className="flex justify-between"><span className="text-slate-400">{t('username')}:</span><span className="text-white">{shift.user}</span></div><div className="flex justify-between"><span className="text-slate-400">{t('storeManagement')}:</span><span className="text-white">{shift.store}</span></div><div className="flex justify-between"><span className="text-slate-400">{t('shiftSince')}:</span><span className="text-white">{new Date(shift.start_time).toLocaleString()}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-600"><span className="text-slate-300">{t('totalSales')}:</span><span className="text-green-400">${shift.total_sales?.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-slate-400">{t('cash')}:</span><span className="text-white">${shift.total_cash?.toFixed(2)}</span></div></div><div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={() => setShowShiftModal(false)} className="border-slate-600">{t('cancel')}</Button><Button onClick={confirmEndShift} className="bg-orange-600 hover:bg-orange-700" data-testid="confirm-end-shift">{t('confirm')}</Button></div></div>}</DialogContent></Dialog>
 
@@ -449,6 +533,7 @@ export default function PosPage() {
       <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 z-30" data-testid="pos-toolbar">
         <div className="flex items-center justify-center gap-1 px-2 py-1.5">{[
           { key: "F1", label: t('search'), action: () => setShowProductSearch(true), color: "bg-blue-600 hover:bg-blue-700" },
+          { key: "F2", label: "Stock", action: () => openInventory(), color: "bg-amber-600 hover:bg-amber-700" },
           { key: "F3", label: t('clear'), action: () => clearCart(), color: "bg-orange-600 hover:bg-orange-700" },
           { key: "F4", label: t('holdOrder'), action: () => holdCurrentOrder(), color: "bg-yellow-600 hover:bg-yellow-700" },
           { key: "F9", label: t('checkout'), action: () => setShowPayment(true), color: "bg-green-600 hover:bg-green-700", disabled: cart.length === 0 || !shift },
