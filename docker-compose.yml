@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # MongoDB 数据库
+  mongodb:
+    image: mongo:7
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  # POS 应用
+  pos-app:
+    build:
+      context: .
+      args:
+        REACT_APP_BACKEND_URL: ""  # 留空 = 使用相对路径（同域名）
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=pos_master
+      - JWT_SECRET=your-secure-secret-key-change-this
+    depends_on:
+      - mongodb
+
+volumes:
+  mongo_data:
