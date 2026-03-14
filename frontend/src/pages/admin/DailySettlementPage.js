@@ -14,6 +14,7 @@ export default function DailySettlementPage() {
   const [stores, setStores] = useState([]);
   const [storeId, setStoreId] = useState("");
   const [report, setReport] = useState(null);
+  const [dailyCommission, setDailyCommission] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { axios.get(`${API}/stores`).then(r => setStores(r.data)).catch(() => {}); }, []);
@@ -24,8 +25,12 @@ export default function DailySettlementPage() {
     try {
       const params = { date };
       if (storeId) params.store_id = storeId;
-      const res = await axios.get(`${API}/reports/daily-settlement`, { params });
+      const [res, comm] = await Promise.all([
+        axios.get(`${API}/reports/daily-settlement`, { params }),
+        axios.get(`${API}/reports/daily-commission`, { params: { date } })
+      ]);
       setReport(res.data);
+      setDailyCommission(comm.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -98,6 +103,28 @@ export default function DailySettlementPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Daily Employee Commission */}
+          {dailyCommission && dailyCommission.employees?.length > 0 && (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader><CardTitle className="text-white">{t('commission')} - {date}</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader><TableRow className="border-slate-700"><TableHead className="text-slate-300">{t('employees')}</TableHead><TableHead className="text-right text-slate-300">{t('quantity')}</TableHead><TableHead className="text-right text-slate-300">{t('salesAmount')}</TableHead><TableHead className="text-right text-slate-300">{t('estimatedCommission')}</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {dailyCommission.employees.map((emp, idx) => (
+                      <TableRow key={idx} className="border-slate-700">
+                        <TableCell className="text-white font-medium">{emp.employee_name}</TableCell>
+                        <TableCell className="text-right text-slate-300">{emp.count}</TableCell>
+                        <TableCell className="text-right text-blue-400">${emp.sales.toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-emerald-400 font-bold">${emp.estimated_commission.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

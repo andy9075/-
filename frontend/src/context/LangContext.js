@@ -198,6 +198,10 @@ const translations = {
     overdueAccount: "逾期账款", pendingOrdersNotif: "待处理订单",
     uploadImage: "上传图片", deleteImage: "删除图片", restoreBackup: "恢复备份",
     restoreDesc: "从JSON备份文件恢复数据", restoreWarning: "恢复将覆盖现有数据",
+    commission: "员工提成", commissionRules: "提成规则", commissionReport: "提成报表",
+    baseTier: "基础", standardTier: "达标", excellentTier: "超额",
+    commissionRate: "提成比例", estimatedCommission: "预估提成",
+    totalCommission: "提成合计", tier: "等级", selectMonth: "选择月份",
   },
   en: {
     save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add",
@@ -366,6 +370,10 @@ const translations = {
     overdueAccount: "Overdue Account", pendingOrdersNotif: "Pending Orders",
     uploadImage: "Upload Image", deleteImage: "Delete Image", restoreBackup: "Restore Backup",
     restoreDesc: "Restore data from JSON backup", restoreWarning: "Restore will overwrite current data",
+    commission: "Commission", commissionRules: "Commission Rules", commissionReport: "Commission Report",
+    baseTier: "Base", standardTier: "Standard", excellentTier: "Excellent",
+    commissionRate: "Rate", estimatedCommission: "Est. Commission",
+    totalCommission: "Total Commission", tier: "Tier", selectMonth: "Select Month",
   },  es: {
     save: "Guardar", cancel: "Cancelar", delete: "Eliminar", edit: "Editar", add: "Agregar",
     search: "Buscar", loading: "Cargando...", confirm: "Confirmar", close: "Cerrar",
@@ -533,6 +541,10 @@ const translations = {
     overdueAccount: "Cuenta Vencida", pendingOrdersNotif: "Pedidos Pendientes",
     uploadImage: "Subir Imagen", deleteImage: "Eliminar Imagen", restoreBackup: "Restaurar Respaldo",
     restoreDesc: "Restaurar datos desde archivo JSON", restoreWarning: "Restaurar sobreescribira datos actuales",
+    commission: "Comision", commissionRules: "Reglas Comision", commissionReport: "Reporte Comision",
+    baseTier: "Base", standardTier: "Estandar", excellentTier: "Excelente",
+    commissionRate: "Tasa", estimatedCommission: "Comision Est.",
+    totalCommission: "Comision Total", tier: "Nivel", selectMonth: "Seleccionar Mes",
   }
 };
 

@@ -64,6 +64,7 @@ const AdminLayout = ({ children }) => {
     { key: "hr", label: t('employees'), items: [
       { icon: Users, label: t('employees'), path: "/admin/employees" },
       { icon: Clock, label: t('attendance'), path: "/admin/attendance" },
+      { icon: DollarSign, label: t('commission'), path: "/admin/commission" },
     ]},
     { key: "system", label: t('systemSettings'), items: [
       { icon: Store, label: t('storeManagement'), path: "/admin/stores" },

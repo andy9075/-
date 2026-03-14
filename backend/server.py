@@ -2031,6 +2031,117 @@ async def get_import_template():
 async def root():
     return {"message": "POS System API", "status": "running"}
 
+# ==================== Commission Rules & Calculation ====================
+@api_router.get("/settings/commission-rules")
+async def get_commission_rules(current_user: dict = Depends(get_current_user)):
+    rules = await db.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
+    if not rules:
+        return {"tiers": [
+            {"name": "base", "min_progress": 0, "rate": 3},
+            {"name": "standard", "min_progress": 60, "rate": 5},
+            {"name": "excellent", "min_progress": 100, "rate": 8}
+        ]}
+    return {k: v for k, v in rules.items() if k != "key"}
+
+@api_router.put("/settings/commission-rules")
+async def update_commission_rules(data: Dict, current_user: dict = Depends(get_current_user)):
+    data["key"] = "commission_rules"
+    await db.system_settings.update_one({"key": "commission_rules"}, {"$set": data}, upsert=True)
+    await log_audit(current_user["user_id"], current_user["username"], "update", "commission_rules", "", "Commission rules updated")
+    return {"message": "Commission rules updated"}
+
+@api_router.get("/reports/commission")
+async def get_commission_report(month: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    start = f"{month}-01T00:00:00"
+    end_dt = datetime.strptime(f"{month}-01", "%Y-%m-%d")
+    if end_dt.month == 12:
+        next_month = end_dt.replace(year=end_dt.year + 1, month=1)
+    else:
+        next_month = end_dt.replace(month=end_dt.month + 1)
+    end = next_month.strftime("%Y-%m-%dT00:00:00")
+    
+    rules_doc = await db.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
+    tiers = (rules_doc or {}).get("tiers", [
+        {"name": "base", "min_progress": 0, "rate": 3},
+        {"name": "standard", "min_progress": 60, "rate": 5},
+        {"name": "excellent", "min_progress": 100, "rate": 8}
+    ])
+    tiers.sort(key=lambda x: x["min_progress"], reverse=True)
+    
+    employees = await db.users.find({}, {"_id": 0}).to_list(200)
+    targets = await db.sales_targets.find({"start_date": {"$lte": end}, "end_date": {"$gte": start}}, {"_id": 0}).to_list(200)
+    target_map = {}
+    for t in targets:
+        if t.get("employee_id"):
+            target_map[t["employee_id"]] = t.get("target_amount", 0)
+    
+    orders = await db.sales_orders.find({"created_at": {"$gte": start, "$lt": end}}, {"_id": 0}).to_list(10000)
+    sales_by_emp = {}
+    for o in orders:
+        uid = o.get("created_by", "")
+        sales_by_emp[uid] = sales_by_emp.get(uid, 0) + o.get("total_amount", 0)
+    
+    result = []
+    total_commission = 0
+    for emp in employees:
+        eid = emp["id"]
+        sales = round(sales_by_emp.get(eid, 0), 2)
+        target = target_map.get(eid, 0)
+        progress = round(sales / target * 100, 1) if target > 0 else (100 if sales > 0 else 0)
+        rate = 0
+        tier_name = ""
+        for tier in tiers:
+            if progress >= tier["min_progress"]:
+                rate = tier["rate"]
+                tier_name = tier["name"]
+                break
+        commission = round(sales * rate / 100, 2)
+        total_commission += commission
+        result.append({
+            "employee_id": eid, "employee_name": emp.get("name") or emp.get("username"),
+            "role": emp.get("role", "staff"), "sales": sales, "target": target,
+            "progress": progress, "rate": rate, "tier": tier_name,
+            "commission": commission
+        })
+    result.sort(key=lambda x: x["commission"], reverse=True)
+    return {"month": month, "employees": result, "total_commission": round(total_commission, 2)}
+
+@api_router.get("/reports/daily-commission")
+async def get_daily_commission(date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    if not date:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    start = f"{date}T00:00:00"
+    end = f"{date}T23:59:59"
+    
+    rules_doc = await db.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
+    tiers = (rules_doc or {}).get("tiers", [
+        {"name": "base", "min_progress": 0, "rate": 3},
+        {"name": "standard", "min_progress": 60, "rate": 5},
+        {"name": "excellent", "min_progress": 100, "rate": 8}
+    ])
+    base_rate = min(t["rate"] for t in tiers) if tiers else 3
+    
+    employees = await db.users.find({}, {"_id": 0}).to_list(200)
+    emp_map = {e["id"]: e.get("name") or e.get("username") for e in employees}
+    
+    orders = await db.sales_orders.find({"created_at": {"$gte": start, "$lte": end}}, {"_id": 0}).to_list(10000)
+    daily = {}
+    for o in orders:
+        uid = o.get("created_by", "")
+        if uid not in daily:
+            daily[uid] = {"employee_name": emp_map.get(uid, "?"), "sales": 0, "count": 0}
+        daily[uid]["sales"] += o.get("total_amount", 0)
+        daily[uid]["count"] += 1
+    
+    result = []
+    for uid, data in daily.items():
+        est_commission = round(data["sales"] * base_rate / 100, 2)
+        result.append({**data, "employee_id": uid, "sales": round(data["sales"], 2), "estimated_commission": est_commission})
+    result.sort(key=lambda x: x["sales"], reverse=True)
+    return {"date": date, "employees": result}
+
 # ==================== 1. VIP Auto-Upgrade ====================
 @api_router.get("/settings/vip-rules")
 async def get_vip_rules(current_user: dict = Depends(get_current_user)):

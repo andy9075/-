@@ -45,6 +45,7 @@ import SalesTargetsPage from "@/pages/admin/SalesTargetsPage";
 import PurchaseReturnsPage from "@/pages/admin/PurchaseReturnsPage";
 import BundlesPage from "@/pages/admin/BundlesPage";
 import NotificationsPage from "@/pages/admin/NotificationsPage";
+import CommissionPage from "@/pages/admin/CommissionPage";
 
 function AdminRoute({ children }) {
   return (
@@ -100,6 +101,7 @@ function AppContent() {
           <Route path="/admin/purchase-returns" element={<AdminRoute><PurchaseReturnsPage /></AdminRoute>} />
           <Route path="/admin/bundles" element={<AdminRoute><BundlesPage /></AdminRoute>} />
           <Route path="/admin/notifications" element={<AdminRoute><NotificationsPage /></AdminRoute>} />
+          <Route path="/admin/commission" element={<AdminRoute><CommissionPage /></AdminRoute>} />
 
           <Route path="/" element={<Navigate to="/shop" replace />} />
         </Routes>
