@@ -10,7 +10,7 @@ import {
   Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight,
   Tag, Calendar, RotateCcw, TrendingUp, Shield, Megaphone, Banknote,
   ChevronDown, ChevronRight, Clock, Target, Box, Bell, Monitor, ShoppingBag,
-  HelpCircle, Receipt
+  HelpCircle, Receipt, Video
 } from "lucide-react";
 
 const AdminLayout = ({ children }) => {
@@ -77,6 +77,7 @@ const AdminLayout = ({ children }) => {
       { icon: Shield, label: t('auditLog'), path: "/admin/audit-log" },
       ...(isSuperAdmin ? [{ icon: Building2, label: "SaaS商家管理", path: "/admin/tenants" }] : []),
       ...(isSuperAdmin ? [{ icon: HelpCircle, label: "管理员手册", path: "/admin/super-admin-help" }] : []),
+      { icon: Video, label: "视频教程", path: "/admin/video-tutorials" },
       { icon: HelpCircle, label: "使用手册", path: "/admin/help" },
     ]},
   ];

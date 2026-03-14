@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Building2, Plus, Power, Copy, ExternalLink, Eye } from "lucide-react";
+import { Building2, Plus, Power, Copy, ExternalLink, Eye, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ export default function TenantsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState(null);
-  const [form, setForm] = useState({ name: "", contact_name: "", contact_phone: "", plan: "basic", max_users: 5, max_stores: 3, admin_username: "", admin_password: "admin123" });
+  const [form, setForm] = useState({ name: "", contact_name: "", contact_phone: "", plan: "basic", max_users: 5, max_stores: 3, admin_username: "", admin_password: "admin123", is_trial: false, trial_days: 7 });
 
   const fetchTenants = async () => {
     try { const res = await axios.get(`${API}/tenants`); setTenants(res.data); }
@@ -51,12 +51,12 @@ export default function TenantsPage() {
     <div className="space-y-6" data-testid="tenants-page">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Building2 className="w-6 h-6 text-blue-400" /> Tenant Management</h1>
-        <Button onClick={() => { setForm({ name: "", contact_name: "", contact_phone: "", plan: "basic", max_users: 5, max_stores: 3, admin_username: "", admin_password: "admin123" }); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-tenant-btn">
+        <Button onClick={() => { setForm({ name: "", contact_name: "", contact_phone: "", plan: "basic", max_users: 5, max_stores: 3, admin_username: "", admin_password: "admin123", is_trial: false, trial_days: 7 }); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-tenant-btn">
           <Plus className="w-4 h-4 mr-2" /> Add Tenant
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
           <CardContent className="p-6"><p className="text-blue-300 text-sm">Total Tenants</p><p className="text-3xl font-bold text-white mt-1">{tenants.length}</p></CardContent>
         </Card>
@@ -65,6 +65,9 @@ export default function TenantsPage() {
         </Card>
         <Card className="bg-gradient-to-br from-red-500/20 to-red-600/10 border-red-500/30">
           <CardContent className="p-6"><p className="text-red-300 text-sm">Inactive</p><p className="text-3xl font-bold text-white mt-1">{tenants.filter(t => t.status !== 'active').length}</p></CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
+          <CardContent className="p-6"><p className="text-amber-300 text-sm">Trial</p><p className="text-3xl font-bold text-white mt-1">{tenants.filter(t => t.is_trial).length}</p></CardContent>
         </Card>
       </div>
 
@@ -93,7 +96,13 @@ export default function TenantsPage() {
                   <TableCell className="text-slate-300">{tenant.contact_name || '-'}</TableCell>
                   <TableCell><Badge className={PLAN_COLORS[tenant.plan] || ""}>{tenant.plan}</Badge></TableCell>
                   <TableCell className="text-slate-400 text-sm">{tenant.created_at?.substring(0, 10) || '-'}</TableCell>
-                  <TableCell><Badge className={tenant.status === 'active' ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}>{tenant.status}</Badge></TableCell>
+                  <TableCell><Badge className={tenant.status === 'active' ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}>{tenant.status}</Badge>
+                    {tenant.is_trial && (
+                      <Badge className={tenant.trial_expired ? "bg-red-500/20 text-red-400 ml-1" : "bg-amber-500/20 text-amber-400 ml-1"}>
+                        <Clock className="w-3 h-3 mr-1" />{tenant.trial_expired ? "已过期" : `试用${tenant.trial_days_left || 0}天`}
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button size="sm" variant="ghost" onClick={() => { setSelectedTenant(tenant); setShowDetail(true); }} className="text-blue-400" title="Details"><Eye className="w-4 h-4" /></Button>
@@ -126,6 +135,25 @@ export default function TenantsPage() {
               <option value="enterprise">Enterprise (Unlimited)</option>
             </select>
             <hr className="border-slate-700" />
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-300">试用账号</span>
+              <button onClick={() => setForm({...form, is_trial: !form.is_trial})} className={`w-12 h-6 rounded-full transition-colors ${form.is_trial ? 'bg-amber-500' : 'bg-slate-600'}`} data-testid="trial-toggle">
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${form.is_trial ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            {form.is_trial && (
+              <div>
+                <label className="text-xs text-amber-400">试用天数</label>
+                <select value={form.trial_days} onChange={e => setForm({...form, trial_days: parseInt(e.target.value)})} className="w-full bg-slate-700 border border-amber-500/30 text-white rounded-md px-3 py-2" data-testid="trial-days-select">
+                  <option value={7}>7 天</option>
+                  <option value={14}>14 天</option>
+                  <option value={30}>30 天</option>
+                  <option value={60}>60 天</option>
+                  <option value={90}>90 天</option>
+                </select>
+              </div>
+            )}
+            <hr className="border-slate-700" />
             <p className="text-sm text-slate-400">Admin account for tenant</p>
             <div className="grid grid-cols-2 gap-2">
               <Input placeholder="Username" value={form.admin_username} onChange={e => setForm({...form, admin_username: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="tenant-admin-username" />
@@ -150,6 +178,11 @@ export default function TenantsPage() {
                 <p>Contact: {selectedTenant.contact_name || '-'} {selectedTenant.contact_phone || ''}</p>
                 <p>Plan: <Badge className={PLAN_COLORS[selectedTenant.plan] || ""}>{selectedTenant.plan}</Badge></p>
                 <p>Created: {selectedTenant.created_at?.substring(0, 10) || '-'}</p>
+                {selectedTenant.is_trial && (
+                  <p>Trial: <Badge className={selectedTenant.trial_expired ? "bg-red-500/20 text-red-400" : "bg-amber-500/20 text-amber-400"}>
+                    {selectedTenant.trial_expired ? "已过期" : `剩余 ${selectedTenant.trial_days_left || 0} 天`}
+                  </Badge> (到期: {selectedTenant.trial_expires_at?.substring(0, 10) || '-'})</p>
+                )}
               </div>
               <div className="border-t border-slate-700 pt-3">
                 <p className="text-xs text-slate-400 mb-1">Shop URL:</p>

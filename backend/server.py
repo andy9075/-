@@ -1818,8 +1818,14 @@ async def create_tenant(data: Dict, current_user: dict = Depends(get_current_use
         "plan": data.get("plan", "basic"),
         "status": "active", "max_users": data.get("max_users", 5),
         "max_stores": data.get("max_stores", 3),
+        "is_trial": data.get("is_trial", False),
+        "trial_days": data.get("trial_days", 0),
+        "trial_expires_at": "",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+    if tenant["is_trial"] and tenant["trial_days"] > 0:
+        from datetime import timedelta
+        tenant["trial_expires_at"] = (datetime.now(timezone.utc) + timedelta(days=tenant["trial_days"])).isoformat()
     await master_db.tenants.insert_one(tenant)
     # Create default admin user for tenant
     admin_password = data.get("admin_password", "admin123")
@@ -1859,6 +1865,15 @@ async def get_tenants(current_user: dict = Depends(get_current_user)):
         tdb = get_tenant_db(t["id"])
         t["users_count"] = await tdb.users.count_documents({})
         t["orders_count"] = await tdb.sales_orders.count_documents({})
+        # Check trial expiry
+        if t.get("is_trial") and t.get("trial_expires_at"):
+            try:
+                expires = datetime.fromisoformat(t["trial_expires_at"].replace("Z", "+00:00"))
+                t["trial_expired"] = datetime.now(timezone.utc) > expires
+                t["trial_days_left"] = max(0, (expires - datetime.now(timezone.utc)).days)
+            except Exception:
+                t["trial_expired"] = False
+                t["trial_days_left"] = 0
     return tenants
 
 @api_router.put("/tenants/{tenant_id}")
@@ -2100,6 +2115,73 @@ async def delete_product_image(product_id: str, current_user: dict = Depends(get
         if filepath.exists(): filepath.unlink()
     await udb.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
     return {"message": "Image deleted"}
+
+# ==================== Video Tutorial Management ====================
+@api_router.post("/videos/upload")
+async def upload_video(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ("admin",):
+        raise HTTPException(403, "Admin only")
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "webm"
+    if ext not in ("webm", "mp4", "mov", "avi"):
+        raise HTTPException(400, "Invalid video format. Use webm, mp4, mov, or avi")
+    video_id = generate_id()[:12]
+    filename = f"{video_id}.{ext}"
+    filepath = UPLOAD_DIR / "videos" / filename
+    content = await file.read()
+    max_size = 200 * 1024 * 1024  # 200MB limit
+    if len(content) > max_size:
+        raise HTTPException(400, "File too large. Max 200MB")
+    with open(filepath, "wb") as f:
+        f.write(content)
+    video_url = f"/uploads/videos/{filename}"
+    udb = get_user_db(current_user)
+    video_doc = {
+        "id": video_id,
+        "title": file.filename.rsplit(".", 1)[0],
+        "url": video_url,
+        "filename": filename,
+        "size": len(content),
+        "duration": 0,
+        "category": "general",
+        "created_by": current_user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await udb.videos.insert_one(video_doc)
+    del video_doc["_id"]
+    return video_doc
+
+@api_router.get("/videos")
+async def get_videos(current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
+    videos = await udb.videos.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return videos
+
+@api_router.put("/videos/{video_id}")
+async def update_video(video_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ("admin",):
+        raise HTTPException(403, "Admin only")
+    udb = get_user_db(current_user)
+    update = {}
+    for key in ("title", "category", "description"):
+        if key in data:
+            update[key] = data[key]
+    if update:
+        await udb.videos.update_one({"id": video_id}, {"$set": update})
+    return {"message": "Updated"}
+
+@api_router.delete("/videos/{video_id}")
+async def delete_video(video_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ("admin",):
+        raise HTTPException(403, "Admin only")
+    udb = get_user_db(current_user)
+    video = await udb.videos.find_one({"id": video_id}, {"_id": 0})
+    if not video:
+        raise HTTPException(404, "Video not found")
+    filepath = UPLOAD_DIR / "videos" / video.get("filename", "")
+    if filepath.exists():
+        filepath.unlink()
+    await udb.videos.delete_one({"id": video_id})
+    return {"message": "Deleted"}
 
 # ==================== 3. Wholesale Module ====================
 @api_router.post("/wholesale-orders")

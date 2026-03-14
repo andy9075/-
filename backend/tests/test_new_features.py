@@ -1,375 +1,282 @@
 """
-Backend API Tests for Iteration 9 - New POS Features
-Tests: System Settings, Employees, Stock Alerts, Stock Taking, Refunds, Daily Settlement, Bestsellers, Cashier List
+Test Suite: Sellox New Features - Video Tutorials, PDF Export, Trial Tenants
+Tests: Video CRUD, Trial tenant creation, Tenant with trial expiry
 """
 import pytest
 import requests
 import os
+import json
+from datetime import datetime, timedelta
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-class TestCashierList:
-    """Test /api/auth/cashiers - public endpoint for POS login"""
+class TestVideoTutorials:
+    """Video tutorial management - upload, list, update, delete"""
     
-    def test_get_cashiers_list(self):
-        """GET /api/auth/cashiers should return list of users without passwords"""
-        response = requests.get(f"{BASE_URL}/api/auth/cashiers")
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        
+    @pytest.fixture(scope='class')
+    def admin_token(self):
+        """Login as super admin (admin/admin123)"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "username": "admin",
+            "password": "admin123"
+        })
+        assert response.status_code == 200, f"Admin login failed: {response.text}"
         data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        print(f"Found {len(data)} cashiers")
-        
-        # Verify structure of each cashier
-        for cashier in data:
-            assert "id" in cashier, "Cashier should have id"
-            assert "username" in cashier, "Cashier should have username"
-            assert "password" not in cashier, "Cashier should NOT have password exposed"
-        print("✓ Cashiers endpoint returns correct structure without passwords")
-
-
-class TestAuthentication:
-    """Test authentication and get token for other tests"""
+        return data.get("token")
     
-    @pytest.fixture(scope="class")
-    def auth_token(self):
-        """Login and get token"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin",
-            "password": "admin123"
-        })
-        assert response.status_code == 200, f"Login failed: {response.text}"
-        token = response.json().get("token")
-        assert token, "Token should be present"
-        print("✓ Login successful, token obtained")
-        return token
+    @pytest.fixture(scope='class')
+    def auth_headers(self, admin_token):
+        """Auth headers with admin token"""
+        return {"Authorization": f"Bearer {admin_token}"}
     
-    def test_login_admin(self, auth_token):
-        """Verify admin can login"""
-        assert auth_token is not None
-        print(f"✓ Token: {auth_token[:20]}...")
-
-
-class TestSystemSettings:
-    """Test /api/settings/system endpoints"""
+    def test_get_videos_empty(self, auth_headers):
+        """GET /api/videos - should return list (may be empty initially)"""
+        response = requests.get(f"{BASE_URL}/api/videos", headers=auth_headers)
+        assert response.status_code == 200, f"GET videos failed: {response.text}"
+        data = response.json()
+        assert isinstance(data, list), "Videos response should be a list"
+        print(f"SUCCESS: GET /api/videos returned {len(data)} videos")
     
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin",
-            "password": "admin123"
-        })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
-    
-    def test_get_system_settings(self, auth_headers):
-        """GET /api/settings/system should return settings"""
-        response = requests.get(f"{BASE_URL}/api/settings/system", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        print(f"✓ System settings retrieved: {list(response.json().keys())}")
-    
-    def test_update_system_settings(self, auth_headers):
-        """PUT /api/settings/system should save settings"""
-        settings = {
-            "company_name": "TEST_Company Inc",
-            "company_tax_id": "J-123456",
-            "company_address": "Test Address 123",
-            "company_phone": "+1234567890",
-            "invoice_footer": "Thank you!",
-            "default_print_format": "80mm",
-            "auto_print_receipt": True,
-            "receipt_copies": 1,
-            "barcode_scanner_enabled": True,
-            "scanner_input_delay": 50,
-            "wholesale_enabled": True,
-            "wholesale_min_quantity": 10,
-            "wholesale_discount_percent": 5
+    def test_upload_video(self, auth_headers):
+        """POST /api/videos/upload - upload a test video file"""
+        # Create a small test video file (valid MP4 header)
+        # Minimal MP4 file structure
+        test_content = b'\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom\x00\x00\x00\x08free'
+        files = {
+            'file': ('test_video.mp4', test_content, 'video/mp4')
         }
-        response = requests.put(f"{BASE_URL}/api/settings/system", json=settings, headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        print("✓ System settings updated successfully")
+        response = requests.post(
+            f"{BASE_URL}/api/videos/upload",
+            headers=auth_headers,
+            files=files
+        )
+        assert response.status_code == 200, f"Upload video failed: {response.text}"
+        data = response.json()
         
-        # Verify persistence with GET
-        get_response = requests.get(f"{BASE_URL}/api/settings/system", headers=auth_headers)
-        saved = get_response.json()
-        assert saved.get("company_name") == "TEST_Company Inc", "Company name not persisted"
-        print("✓ System settings verified via GET")
-
-
-class TestEmployees:
-    """Test /api/employees CRUD endpoints"""
+        # Verify response structure
+        assert "id" in data, "Response should have id"
+        assert "url" in data, "Response should have url"
+        assert "title" in data, "Response should have title"
+        assert data["title"] == "test_video", "Title should be filename without extension"
+        assert data["category"] == "general", "Default category should be general"
+        print(f"SUCCESS: Video uploaded with id={data['id']}, url={data['url']}")
+        
+        # Store video_id for later tests
+        self.__class__.test_video_id = data["id"]
+        return data
     
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
+    def test_get_videos_after_upload(self, auth_headers):
+        """GET /api/videos - verify uploaded video appears in list"""
+        response = requests.get(f"{BASE_URL}/api/videos", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should have at least one video now
+        assert len(data) >= 1, "Should have at least 1 video after upload"
+        
+        # Find our test video
+        video_id = getattr(self.__class__, 'test_video_id', None)
+        if video_id:
+            found = any(v.get("id") == video_id for v in data)
+            assert found, f"Uploaded video {video_id} should appear in list"
+            print(f"SUCCESS: Video {video_id} found in video list")
+    
+    def test_update_video(self, auth_headers):
+        """PUT /api/videos/{id} - update video title and category"""
+        video_id = getattr(self.__class__, 'test_video_id', None)
+        if not video_id:
+            pytest.skip("No video_id available - upload test may have failed")
+        
+        response = requests.put(
+            f"{BASE_URL}/api/videos/{video_id}",
+            headers=auth_headers,
+            json={"title": "Updated Tutorial", "category": "pos"}
+        )
+        assert response.status_code == 200, f"Update video failed: {response.text}"
+        print(f"SUCCESS: Video {video_id} updated")
+        
+        # Verify update persisted
+        get_response = requests.get(f"{BASE_URL}/api/videos", headers=auth_headers)
+        videos = get_response.json()
+        updated_video = next((v for v in videos if v.get("id") == video_id), None)
+        if updated_video:
+            assert updated_video.get("title") == "Updated Tutorial", "Title should be updated"
+            assert updated_video.get("category") == "pos", "Category should be updated"
+            print("SUCCESS: Video update verified via GET")
+    
+    def test_delete_video(self, auth_headers):
+        """DELETE /api/videos/{id} - delete test video"""
+        video_id = getattr(self.__class__, 'test_video_id', None)
+        if not video_id:
+            pytest.skip("No video_id available")
+        
+        response = requests.delete(
+            f"{BASE_URL}/api/videos/{video_id}",
+            headers=auth_headers
+        )
+        assert response.status_code == 200, f"Delete video failed: {response.text}"
+        print(f"SUCCESS: Video {video_id} deleted")
+        
+        # Verify deletion
+        get_response = requests.get(f"{BASE_URL}/api/videos", headers=auth_headers)
+        videos = get_response.json()
+        found = any(v.get("id") == video_id for v in videos)
+        assert not found, "Deleted video should not appear in list"
+        print("SUCCESS: Video deletion verified - video no longer in list")
+
+
+class TestTrialTenants:
+    """Trial tenant creation and management"""
+    
+    @pytest.fixture(scope='class')
+    def admin_token(self):
+        """Login as super admin"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "admin",
             "password": "admin123"
         })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
+        assert response.status_code == 200, f"Admin login failed: {response.text}"
+        return response.json().get("token")
     
-    def test_get_employees_list(self, auth_headers):
-        """GET /api/employees should return list of users"""
-        response = requests.get(f"{BASE_URL}/api/employees", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        
+    @pytest.fixture(scope='class')
+    def auth_headers(self, admin_token):
+        return {"Authorization": f"Bearer {admin_token}"}
+    
+    def test_get_tenants_initially(self, auth_headers):
+        """GET /api/tenants - list existing tenants"""
+        response = requests.get(f"{BASE_URL}/api/tenants", headers=auth_headers)
+        assert response.status_code == 200, f"GET tenants failed: {response.text}"
         data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        print(f"✓ Found {len(data)} employees")
+        assert isinstance(data, list), "Tenants response should be a list"
+        print(f"SUCCESS: GET /api/tenants returned {len(data)} tenants")
+        self.__class__.initial_tenant_count = len(data)
     
-    def test_create_employee(self, auth_headers):
-        """POST /api/employees should create new employee"""
-        employee = {
-            "username": "TEST_cashier1",
-            "password": "pass123",
-            "name": "Test Cashier",
-            "phone": "123456789",
-            "role": "cashier",
-            "store_id": "",
-            "permissions": {
-                "can_discount": True,
-                "can_refund": False,
-                "max_discount": 10
-            }
+    def test_create_trial_tenant(self, auth_headers):
+        """POST /api/tenants with is_trial=true - create trial tenant"""
+        tenant_data = {
+            "name": "TEST_TrialBusiness",
+            "contact_name": "Test Contact",
+            "contact_phone": "123456789",
+            "plan": "basic",
+            "max_users": 5,
+            "max_stores": 3,
+            "admin_username": "trialadmin",
+            "admin_password": "trial123",
+            "is_trial": True,
+            "trial_days": 7
         }
-        response = requests.post(f"{BASE_URL}/api/employees", json=employee, headers=auth_headers)
-        # Could be 200 or already exists 400
-        if response.status_code == 400:
-            print(f"Note: Employee may already exist: {response.text}")
-            return
-        assert response.status_code in [200, 201], f"Expected 200/201, got {response.status_code}: {response.text}"
         
+        response = requests.post(
+            f"{BASE_URL}/api/tenants",
+            headers=auth_headers,
+            json=tenant_data
+        )
+        assert response.status_code == 200, f"Create trial tenant failed: {response.text}"
         data = response.json()
-        assert "id" in data, "Created employee should have id"
-        assert data.get("username") == "TEST_cashier1"
-        print(f"✓ Employee created with id: {data['id']}")
-    
-    def test_employee_appears_in_list(self, auth_headers):
-        """Verify created employee appears in list"""
-        response = requests.get(f"{BASE_URL}/api/employees", headers=auth_headers)
-        employees = response.json()
-        usernames = [e.get("username") for e in employees]
-        # Either new or existing should be there
-        print(f"✓ Employees: {usernames}")
-
-
-class TestStockAlerts:
-    """Test /api/stock-alerts endpoint"""
-    
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin",
-            "password": "admin123"
-        })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
-    
-    def test_get_stock_alerts(self, auth_headers):
-        """GET /api/stock-alerts should return low stock products"""
-        response = requests.get(f"{BASE_URL}/api/stock-alerts", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         
-        data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        print(f"✓ Stock alerts: {len(data)} products with low stock")
+        # Verify response structure
+        assert "id" in data, "Response should have tenant id"
+        assert data.get("is_trial") == True, "is_trial should be True"
+        assert data.get("trial_days") == 7, "trial_days should be 7"
+        assert "trial_expires_at" in data, "Should have trial_expires_at"
+        assert data.get("admin_username") == "trialadmin", "admin_username should match"
         
-        # Verify structure if any alerts exist
-        for alert in data[:3]:
-            assert "product_id" in alert
-            assert "product_name" in alert
-            assert "current_stock" in alert
-            assert "min_stock" in alert
-            assert "level" in alert  # 'critical' or 'warning'
-            print(f"  - {alert['product_name']}: {alert['current_stock']}/{alert['min_stock']} ({alert['level']})")
-
-
-class TestStockTaking:
-    """Test /api/stock-taking and /api/stock-takings endpoints"""
-    
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin",
-            "password": "admin123"
-        })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
-    
-    @pytest.fixture(scope="class")
-    def warehouse_id(self, auth_headers):
-        """Get first warehouse for testing"""
-        response = requests.get(f"{BASE_URL}/api/warehouses", headers=auth_headers)
-        warehouses = response.json()
-        if warehouses:
-            return warehouses[0]["id"]
-        return None
-    
-    @pytest.fixture(scope="class")
-    def product_id(self, auth_headers):
-        """Get first product for testing"""
-        response = requests.get(f"{BASE_URL}/api/products", headers=auth_headers)
-        products = response.json()
-        if products:
-            return products[0]["id"]
-        return None
-    
-    def test_get_stock_takings_history(self, auth_headers):
-        """GET /api/stock-takings should return history"""
-        response = requests.get(f"{BASE_URL}/api/stock-takings", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        # Verify trial_expires_at is ~7 days from now
+        if data.get("trial_expires_at"):
+            expires = datetime.fromisoformat(data["trial_expires_at"].replace("Z", "+00:00"))
+            days_until_expiry = (expires - datetime.now().replace(tzinfo=expires.tzinfo)).days
+            assert 6 <= days_until_expiry <= 8, f"Trial should expire in ~7 days, got {days_until_expiry}"
         
-        data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        print(f"✓ Stock taking history: {len(data)} records")
+        print(f"SUCCESS: Trial tenant created with id={data['id']}, expires_at={data.get('trial_expires_at')}")
+        self.__class__.test_tenant_id = data["id"]
+        return data
     
-    def test_create_stock_taking_draft(self, auth_headers, warehouse_id, product_id):
-        """POST /api/stock-taking should create draft"""
-        if not warehouse_id or not product_id:
-            pytest.skip("No warehouse or product available for testing")
+    def test_get_tenants_shows_trial_info(self, auth_headers):
+        """GET /api/tenants - verify trial info in response"""
+        response = requests.get(f"{BASE_URL}/api/tenants", headers=auth_headers)
+        assert response.status_code == 200
+        tenants = response.json()
         
-        stock_taking = {
-            "warehouse_id": warehouse_id,
-            "items": [
-                {
-                    "product_id": product_id,
-                    "system_qty": 10,
-                    "actual_qty": 10,
-                    "difference": 0
-                }
-            ],
-            "status": "draft",
-            "notes": "TEST stock taking"
+        tenant_id = getattr(self.__class__, 'test_tenant_id', None)
+        if not tenant_id:
+            pytest.skip("No test_tenant_id available")
+        
+        # Find our trial tenant
+        trial_tenant = next((t for t in tenants if t.get("id") == tenant_id), None)
+        assert trial_tenant is not None, f"Trial tenant {tenant_id} should be in list"
+        
+        # Verify trial fields
+        assert trial_tenant.get("is_trial") == True, "is_trial should be True"
+        assert "trial_expired" in trial_tenant, "Should have trial_expired field"
+        assert "trial_days_left" in trial_tenant, "Should have trial_days_left field"
+        assert trial_tenant.get("trial_expired") == False, "New trial should not be expired"
+        assert trial_tenant.get("trial_days_left") >= 6, f"Should have ~7 days left, got {trial_tenant.get('trial_days_left')}"
+        
+        print(f"SUCCESS: Trial tenant shows trial_expired={trial_tenant.get('trial_expired')}, trial_days_left={trial_tenant.get('trial_days_left')}")
+    
+    def test_create_non_trial_tenant(self, auth_headers):
+        """POST /api/tenants with is_trial=false - create regular tenant"""
+        tenant_data = {
+            "name": "TEST_RegularBusiness",
+            "contact_name": "Regular Contact",
+            "contact_phone": "987654321",
+            "plan": "pro",
+            "max_users": 15,
+            "max_stores": 10,
+            "admin_username": "regularadmin",
+            "admin_password": "regular123",
+            "is_trial": False,
+            "trial_days": 0
         }
-        response = requests.post(f"{BASE_URL}/api/stock-taking", json=stock_taking, headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
+        response = requests.post(
+            f"{BASE_URL}/api/tenants",
+            headers=auth_headers,
+            json=tenant_data
+        )
+        assert response.status_code == 200, f"Create non-trial tenant failed: {response.text}"
         data = response.json()
-        assert "id" in data
-        assert "taking_no" in data
-        print(f"✓ Stock taking created: {data['taking_no']}")
+        
+        assert data.get("is_trial") == False, "is_trial should be False"
+        assert data.get("trial_days") == 0 or data.get("trial_days") is None or not data.get("trial_expires_at"), "Non-trial should have no trial expiry"
+        
+        print(f"SUCCESS: Non-trial tenant created with id={data['id']}")
+        self.__class__.non_trial_tenant_id = data["id"]
 
 
-class TestRefunds:
-    """Test /api/refunds endpoints"""
+class TestHealthAndBasics:
+    """Basic API health checks"""
     
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
+    def test_api_health(self):
+        """Check API is responding"""
+        response = requests.get(f"{BASE_URL}/api/health")
+        assert response.status_code == 200, f"Health check failed: {response.text}"
+        print("SUCCESS: /api/health returns 200")
+    
+    def test_admin_login(self):
+        """Verify admin login works"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "admin",
             "password": "admin123"
         })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
-    
-    def test_get_refunds_list(self, auth_headers):
-        """GET /api/refunds should return list"""
-        response = requests.get(f"{BASE_URL}/api/refunds", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        
+        assert response.status_code == 200, f"Admin login failed: {response.text}"
         data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        print(f"✓ Refunds list: {len(data)} refunds")
-    
-    def test_create_refund_invalid_order(self, auth_headers):
-        """POST /api/refunds with invalid order should return 404"""
-        response = requests.post(f"{BASE_URL}/api/refunds", 
-            params={"order_no": "INVALID-ORDER", "reason": "Test refund"},
-            json=[],
-            headers=auth_headers)
-        # Should be 404 for invalid order
-        assert response.status_code == 404, f"Expected 404 for invalid order, got {response.status_code}"
-        print("✓ Refund correctly rejects invalid order_no")
+        assert "token" in data, "Response should have token"
+        assert "user" in data, "Response should have user"
+        print(f"SUCCESS: Admin login successful, role={data['user'].get('role')}")
 
 
-class TestDailySettlement:
-    """Test /api/reports/daily-settlement endpoint"""
+class TestVideoRequiresAdmin:
+    """Verify video endpoints require admin role"""
     
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin",
-            "password": "admin123"
-        })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
-    
-    def test_get_daily_settlement(self, auth_headers):
-        """GET /api/reports/daily-settlement should return report"""
-        response = requests.get(f"{BASE_URL}/api/reports/daily-settlement", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        
-        data = response.json()
-        # Check expected fields
-        assert "date" in data or "total_sales" in data or isinstance(data, dict)
-        print(f"✓ Daily settlement report: {data}")
-    
-    def test_daily_settlement_with_date(self, auth_headers):
-        """GET /api/reports/daily-settlement with date param"""
-        response = requests.get(f"{BASE_URL}/api/reports/daily-settlement?date=2025-01-01", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        print("✓ Daily settlement with date filter works")
-
-
-class TestBestsellers:
-    """Test /api/reports/bestsellers endpoint"""
-    
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin",
-            "password": "admin123"
-        })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
-    
-    def test_get_bestsellers(self, auth_headers):
-        """GET /api/reports/bestsellers should return top/bottom products"""
-        response = requests.get(f"{BASE_URL}/api/reports/bestsellers", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        
-        data = response.json()
-        assert "bestsellers" in data, "Response should have bestsellers"
-        assert "slowsellers" in data, "Response should have slowsellers"
-        assert isinstance(data["bestsellers"], list)
-        assert isinstance(data["slowsellers"], list)
-        print(f"✓ Bestsellers: {len(data['bestsellers'])}, Slowsellers: {len(data['slowsellers'])}")
-    
-    def test_bestsellers_with_params(self, auth_headers):
-        """GET /api/reports/bestsellers with days and limit params"""
-        response = requests.get(f"{BASE_URL}/api/reports/bestsellers?days=7&limit=5", headers=auth_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        
-        data = response.json()
-        # Limit should be respected
-        assert len(data["bestsellers"]) <= 5
-        print(f"✓ Bestsellers with limit=5: {len(data['bestsellers'])} products")
-
-
-class TestCleanup:
-    """Clean up test data"""
-    
-    @pytest.fixture(scope="class")
-    def auth_headers(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "username": "admin",
-            "password": "admin123"
-        })
-        token = response.json()["token"]
-        return {"Authorization": f"Bearer {token}"}
-    
-    def test_cleanup_test_employee(self, auth_headers):
-        """Delete test employee if exists"""
-        # Get employees
-        response = requests.get(f"{BASE_URL}/api/employees", headers=auth_headers)
-        employees = response.json()
-        
-        # Find test employees
-        for emp in employees:
-            if emp.get("username", "").startswith("TEST_"):
-                del_response = requests.delete(f"{BASE_URL}/api/employees/{emp['id']}", headers=auth_headers)
-                if del_response.status_code == 200:
-                    print(f"✓ Cleaned up test employee: {emp['username']}")
+    def test_video_upload_requires_auth(self):
+        """POST /api/videos/upload without auth should fail"""
+        test_content = b'\x00\x00\x00\x18ftypmp42'
+        files = {'file': ('test.mp4', test_content, 'video/mp4')}
+        response = requests.post(f"{BASE_URL}/api/videos/upload", files=files)
+        # Should return 401 (no auth) or 403 (forbidden)
+        assert response.status_code in [401, 403, 422], f"Should require auth, got {response.status_code}"
+        print(f"SUCCESS: Video upload without auth returns {response.status_code}")
 
 
 if __name__ == "__main__":

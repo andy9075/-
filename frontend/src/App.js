@@ -27,6 +27,7 @@ import OnlineOrdersPage from "@/pages/admin/OnlineOrdersPage";
 import SalesReportPage from "@/pages/admin/SalesReportPage";
 import ReportsPage from "@/pages/admin/ReportsPage";
 import TaxReportPage from "@/pages/admin/TaxReportPage";
+import VideoTutorialsPage from "@/pages/admin/VideoTutorialsPage";
 import ExchangeRatesPage from "@/pages/admin/ExchangeRatesPage";
 import PaymentSettingsPage from "@/pages/admin/PaymentSettingsPage";
 import SystemSettingsPage from "@/pages/admin/SystemSettingsPage";
@@ -111,6 +112,7 @@ function AppContent() {
           <Route path="/admin/tenants" element={<AdminRoute><TenantsPage /></AdminRoute>} />
           <Route path="/admin/super-admin-help" element={<AdminRoute><SuperAdminHelpPage /></AdminRoute>} />
           <Route path="/admin/help" element={<AdminRoute><TenantHelpPage /></AdminRoute>} />
+          <Route path="/admin/video-tutorials" element={<AdminRoute><VideoTutorialsPage /></AdminRoute>} />
 
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>

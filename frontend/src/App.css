@@ -32,3 +32,15 @@
         transform: rotate(360deg);
     }
 }
+
+
+/* Print styles for manual/help pages */
+@media print {
+  nav, aside, .print\\:hidden, [data-testid="admin-sidebar"] { display: none !important; }
+  main { margin: 0 !important; padding: 20px !important; }
+  .bg-slate-800, .bg-slate-900 { background: white !important; border-color: #ddd !important; }
+  .text-white, .text-slate-300, .text-slate-400 { color: #333 !important; }
+  .text-emerald-400, .text-blue-400, .text-amber-400, .text-red-400, .text-purple-400 { color: #555 !important; }
+  button { border: 1px solid #ccc !important; }
+  body { background: white !important; }
+}

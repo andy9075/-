@@ -1,6 +1,8 @@
-import React, { useState } from "react";
-import { ChevronDown, ChevronRight, Monitor, Package, Warehouse, Users, ShoppingCart, BarChart3, Settings, Globe, DollarSign, FileText, RotateCcw, Shield, CreditCard, Tag, Box, AlertCircle, ArrowLeftRight, Calendar, TrendingUp, Megaphone, Banknote, ClipboardList, Target, Clock, Bell } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ChevronDown, ChevronRight, Monitor, Package, Warehouse, Users, ShoppingCart, BarChart3, Settings, Globe, DollarSign, FileText, RotateCcw, Shield, CreditCard, Tag, Box, AlertCircle, ArrowLeftRight, Calendar, TrendingUp, Megaphone, Banknote, ClipboardList, Target, Clock, Bell, Video, Play, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import axios, { API } from "@/lib/api";
 
 const Section = ({ icon: Icon, title, color, children }) => {
   const [open, setOpen] = useState(false);
@@ -26,15 +28,62 @@ const Step = ({ n, children }) => (
 const Key = ({ children }) => <kbd className="px-1.5 py-0.5 bg-slate-700 border border-slate-600 rounded text-xs text-emerald-400 font-mono">{children}</kbd>;
 
 export default function TenantHelpPage() {
+  const [videos, setVideos] = useState([]);
+  const [playVideo, setPlayVideo] = useState(null);
+  const printRef = useRef(null);
+
+  useEffect(() => { axios.get(`${API}/videos`).then(r => setVideos(r.data)).catch(() => {}); }, []);
+
+  const handleExportPDF = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-4" data-testid="tenant-help-page">
       <div className="flex items-center gap-3 mb-6">
         <img src="/sellox-logo.png" alt="Sellox" className="w-10 h-10 rounded-xl" />
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-white">Sellox 使用手册</h1>
           <p className="text-slate-400 text-sm">门店操作指南 — 适用于商家管理员和员工</p>
         </div>
+        <Button onClick={handleExportPDF} variant="outline" className="border-slate-600 text-slate-300 print:hidden" data-testid="export-manual-pdf">
+          <Download className="w-4 h-4 mr-2" /> 导出PDF
+        </Button>
       </div>
+
+      {/* Video Tutorials Section */}
+      {videos.length > 0 && (
+        <div className="print:hidden">
+          <p className="text-xs text-red-400 font-medium uppercase tracking-wide mb-2">视频教程</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+            {videos.map(v => (
+              <Card key={v.id} className="bg-slate-800 border-slate-700 overflow-hidden group cursor-pointer hover:border-slate-600 transition-colors" onClick={() => setPlayVideo(v)} data-testid={`help-video-${v.id}`}>
+                <div className="relative aspect-video bg-slate-900 flex items-center justify-center">
+                  <video src={`${API.replace('/api', '')}${v.url}`} className="w-full h-full object-cover" preload="metadata" />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Play className="w-10 h-10 text-white fill-white" />
+                  </div>
+                </div>
+                <CardContent className="p-2">
+                  <p className="text-white text-sm font-medium truncate">{v.title}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          {/* Video player modal */}
+          {playVideo && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPlayVideo(null)}>
+              <div className="max-w-4xl w-full bg-slate-900 rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                <video src={`${API.replace('/api', '')}${playVideo.url}`} controls autoPlay className="w-full" />
+                <div className="p-3 flex items-center justify-between">
+                  <span className="text-white font-medium">{playVideo.title}</span>
+                  <Button size="sm" variant="ghost" onClick={() => setPlayVideo(null)} className="text-slate-400">关闭</Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ===== POS收银 ===== */}
       <p className="text-xs text-emerald-400 font-medium uppercase tracking-wide">收银操作</p>

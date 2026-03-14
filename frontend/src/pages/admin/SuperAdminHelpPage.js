@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Building2, Shield, Settings, Users, Monitor, DollarSign, BarChart3, Globe } from "lucide-react";
+import { ChevronDown, ChevronRight, Building2, Shield, Settings, Users, Monitor, DollarSign, BarChart3, Globe, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 
 const Section = ({ icon: Icon, title, color, children }) => {
@@ -34,10 +35,13 @@ export default function SuperAdminHelpPage() {
     <div className="space-y-4" data-testid="super-admin-help-page">
       <div className="flex items-center gap-3 mb-6">
         <img src="/sellox-logo.png" alt="Sellox" className="w-10 h-10 rounded-xl" />
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-white">Sellox 系统管理员手册</h1>
           <p className="text-slate-400 text-sm">SaaS 平台管理指南 — 适用于系统拥有者</p>
         </div>
+        <Button onClick={() => window.print()} variant="outline" className="border-slate-600 text-slate-300 print:hidden" data-testid="export-admin-manual-pdf">
+          <Download className="w-4 h-4 mr-2" /> 导出PDF
+        </Button>
       </div>
 
       <p className="text-xs text-amber-400 font-medium uppercase tracking-wide">平台管理</p>
