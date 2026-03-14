@@ -224,6 +224,13 @@ const translations = {
     superAdmin: "超级管理员",
     shops: "商家管理",
     shop: "网店",
+    changePassword: "修改密码",
+    oldPassword: "旧密码",
+    newPassword: "新密码",
+    confirmNewPassword: "确认新密码",
+    passwordChanged: "密码修改成功",
+    passwordMismatch: "两次密码不一致",
+    taxReport: "税务报表",
   },
   en: {
     save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add",
@@ -418,6 +425,13 @@ const translations = {
     superAdmin: "Super Admin",
     shops: "Shops",
     shop: "Shop",
+    changePassword: "Change Password",
+    oldPassword: "Old Password",
+    newPassword: "New Password",
+    confirmNewPassword: "Confirm Password",
+    passwordChanged: "Password changed",
+    passwordMismatch: "Passwords do not match",
+    taxReport: "Tax Report",
   },  es: {
     save: "Guardar", cancel: "Cancelar", delete: "Eliminar", edit: "Editar", add: "Agregar",
     search: "Buscar", loading: "Cargando...", confirm: "Confirmar", close: "Cerrar",
@@ -611,6 +625,13 @@ const translations = {
     superAdmin: "Super Admin",
     shops: "Tiendas",
     shop: "Tienda",
+    changePassword: "Cambiar Contraseña",
+    oldPassword: "Contraseña Actual",
+    newPassword: "Nueva Contraseña",
+    confirmNewPassword: "Confirmar Contraseña",
+    passwordChanged: "Contraseña cambiada",
+    passwordMismatch: "Las contraseñas no coinciden",
+    taxReport: "Reporte Fiscal",
   }
 };
 

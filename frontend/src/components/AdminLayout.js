@@ -4,14 +4,18 @@ import { useLang } from "@/context/LangContext";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Store, Package, Warehouse, Users, ShoppingCart, BarChart3,
   Settings, LogOut, Menu, X, Home, Building2, Truck, CreditCard,
   Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight,
   Tag, Calendar, RotateCcw, TrendingUp, Shield, Megaphone, Banknote,
   ChevronDown, ChevronRight, Clock, Target, Box, Bell, Monitor, ShoppingBag,
-  HelpCircle, Receipt, Video
+  HelpCircle, Receipt, Video, KeyRound
 } from "lucide-react";
+import axios, { API } from "@/lib/api";
+import { toast } from "sonner";
 
 const AdminLayout = ({ children }) => {
   const { t, lang, setLang } = useLang();
@@ -20,6 +24,28 @@ const AdminLayout = ({ children }) => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState({});
+  const [showChangePwd, setShowChangePwd] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ old_password: "", new_password: "", confirm: "" });
+  const [pwdLoading, setPwdLoading] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!pwdForm.old_password || !pwdForm.new_password) return;
+    if (pwdForm.new_password !== pwdForm.confirm) {
+      toast.error(t('passwordMismatch'));
+      return;
+    }
+    setPwdLoading(true);
+    try {
+      await axios.put(`${API}/auth/change-password`, { old_password: pwdForm.old_password, new_password: pwdForm.new_password });
+      toast.success(t('passwordChanged'));
+      setShowChangePwd(false);
+      setPwdForm({ old_password: "", new_password: "", confirm: "" });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Error");
+    } finally {
+      setPwdLoading(false);
+    }
+  };
 
   const toggleGroup = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -59,7 +85,7 @@ const AdminLayout = ({ children }) => {
     ]},
     { key: "finance", label: t('reports'), items: [
       { icon: BarChart3, label: t('reports'), path: "/admin/reports" },
-      { icon: Receipt, label: "Reporte Fiscal", path: "/admin/tax-report" },
+      { icon: Receipt, label: t('taxReport'), path: "/admin/tax-report" },
       { icon: TrendingUp, label: t('profitAnalysis'), path: "/admin/profit-analysis" },
       { icon: Target, label: t('salesTarget'), path: "/admin/sales-targets" },
       { icon: Banknote, label: t('accountsReceivable'), path: "/admin/accounts" },
@@ -146,6 +172,7 @@ const AdminLayout = ({ children }) => {
         <select value={lang} onChange={(e) => setLang(e.target.value)} className="w-full bg-slate-700 border-slate-600 text-white rounded px-2 py-1.5 text-sm" data-testid="lang-select">
           <option value="zh">中文</option><option value="en">English</option><option value="es">Español</option>
         </select>
+        <Button variant="ghost" onClick={() => setShowChangePwd(true)} className="w-full justify-start text-slate-300 hover:bg-slate-700 hover:text-white" data-testid="change-password-btn"><KeyRound className="w-4 h-4 mr-2" />{t('changePassword')}</Button>
         <Button variant="ghost" onClick={() => { logout(); navigate("/login"); }} className="w-full justify-start text-red-400 hover:bg-red-500/10 hover:text-red-300" data-testid="logout-btn"><LogOut className="w-4 h-4 mr-2" />{t('logout')}</Button>
       </div>
     </div>
@@ -170,6 +197,22 @@ const AdminLayout = ({ children }) => {
           {children}
         </div>
       </main>
+
+      {/* Change Password Dialog */}
+      <Dialog open={showChangePwd} onOpenChange={setShowChangePwd}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-sm">
+          <DialogHeader><DialogTitle>{t('changePassword')}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><label className="text-xs text-slate-400">{t('oldPassword')}</label><Input type="password" value={pwdForm.old_password} onChange={e => setPwdForm({...pwdForm, old_password: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="old-password-input" /></div>
+            <div><label className="text-xs text-slate-400">{t('newPassword')}</label><Input type="password" value={pwdForm.new_password} onChange={e => setPwdForm({...pwdForm, new_password: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="new-password-input" /></div>
+            <div><label className="text-xs text-slate-400">{t('confirmNewPassword')}</label><Input type="password" value={pwdForm.confirm} onChange={e => setPwdForm({...pwdForm, confirm: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="confirm-password-input" /></div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowChangePwd(false)} className="border-slate-600">{t('cancel')}</Button>
+              <Button onClick={handleChangePassword} disabled={pwdLoading} className="bg-emerald-500 hover:bg-emerald-600" data-testid="change-password-submit">{t('save')}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

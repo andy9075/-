@@ -57,6 +57,23 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         user["tenant_id"] = current_user["tenant_id"]
     return user
 
+@router.put("/auth/change-password")
+async def change_password(data: Dict, current_user: dict = Depends(get_current_user)):
+    """Change current user's password"""
+    old_password = data.get("old_password", "")
+    new_password = data.get("new_password", "")
+    if not old_password or not new_password:
+        raise HTTPException(400, "请填写旧密码和新密码")
+    if len(new_password) < 4:
+        raise HTTPException(400, "新密码至少4位")
+    udb = get_user_db(current_user)
+    user = await udb.users.find_one({"id": current_user["user_id"]})
+    if not user or not verify_password(old_password, user["password"]):
+        raise HTTPException(400, "旧密码错误")
+    await udb.users.update_one({"id": current_user["user_id"]}, {"$set": {"password": hash_password(new_password)}})
+    return {"message": "密码修改成功"}
+
+
 @router.get("/auth/cashiers")
 async def get_cashiers(current_user: dict = Depends(get_current_user)):
     """List users for POS login selection"""
