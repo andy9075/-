@@ -53,4 +53,5 @@ async def log_audit(user_id, username, action, target_type, target_id="", detail
         "detail": detail,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await (audit_db or db).audit_logs.insert_one(doc)
+    target_db = audit_db if audit_db is not None else db
+    await target_db.audit_logs.insert_one(doc)

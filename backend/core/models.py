@@ -23,7 +23,7 @@ class UserResponse(BaseModel):
     name: str
     phone: str
     permissions: Dict = {}
-    created_at: str
+    created_at: Optional[str] = None
 
 # Store
 class StoreCreate(BaseModel):
@@ -46,7 +46,7 @@ class StoreResponse(BaseModel):
     warehouse_id: Optional[str]
     is_headquarters: bool
     status: str
-    created_at: str
+    created_at: Optional[str] = None
 
 # Warehouse
 class WarehouseCreate(BaseModel):
@@ -63,7 +63,7 @@ class WarehouseResponse(BaseModel):
     address: str
     is_main: bool
     store_id: Optional[str]
-    created_at: str
+    created_at: Optional[str] = None
 
 # Supplier
 class SupplierCreate(BaseModel):
