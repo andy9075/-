@@ -11,7 +11,7 @@ Build a comprehensive POS application as a multi-tenant SaaS system. Branded as 
 - Voice Narration: OpenAI TTS via emergentintegrations (Emergent LLM Key)
 - Audio/Video Processing: ffmpeg
 
-## Architecture (Refactored)
+## Architecture
 ```
 backend/
 ├── server.py                     (28 lines - app setup)
@@ -19,28 +19,35 @@ backend/
 ├── generate_narrated_tutorials.py (TTS + Playwright + ffmpeg pipeline)
 ├── narration_scripts.py          (Chinese narration text for 7 tutorials)
 ├── core/                         (DB, auth, models)
-├── routers/                      (17 modules, ~3070 lines)
+├── routers/                      (17 modules)
 │   ├── auth, stores, warehouses, suppliers
 │   ├── customers, categories, products, inventory
 │   ├── purchases, sales, shop, reports
 │   ├── settings, employees, tenants, crm, misc
-├── uploads/videos/               (Recorded tutorial videos)
+├── uploads/videos/
 ```
 
-## Completed Features
-- Core POS, Multi-currency, Online Store, i18n
+## Completed Features (as of 2026-03-14)
+- Core POS, Multi-currency, Online Store, i18n (zh/en/es)
 - Printing: 80mm thermal, A4, SENIAT fiscal, dot matrix wholesale
 - Tax/IVA Module: multi-rate, tax reports
 - User Manuals with PDF export
-- **Narrated Video Tutorials**: Playwright auto-records 7 tutorials + OpenAI TTS Chinese voice-over + ffmpeg merge
+- Narrated Video Tutorials: Playwright + OpenAI TTS + ffmpeg
 - Trial Accounts, Multi-Tenant SaaS, PWA Offline
 - Backend fully modularized (17 routers)
+- **Change Password**: sidebar button + dialog for all users
+- **Wholesale Module (upgraded)**:
+  - Stats dashboard (total orders, pending, revenue, items)
+  - Order CRUD with status management (pending→completed→delivered→cancelled)
+  - Payment tracking (partial payments, unpaid balance)
+  - Order detail view with item breakdown
+  - Print support (dot-matrix compatible receipt)
+  - Status filter tabs
+  - Delivery address + notes fields
+  - Inventory auto-deduction on order / auto-restore on cancel
 
 ## Credentials
 - Super Admin: username=admin, password=admin123
-
-## P1 - Upcoming Tasks
-- Wholesale Module (B2B operations)
 
 ## P2 - Future Tasks
 - Enhanced Reporting (advanced filters, visualizations, export)
