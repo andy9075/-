@@ -47,8 +47,20 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const tenantLogin = async (tenantId, username, password) => {
+    const res = await axios.post(`${API}/auth/tenant-login`, { tenant_id: tenantId, username, password });
+    const { token: newToken, user: userData, tenant } = res.data;
+    userData.tenant_id = tenantId;
+    userData.tenant_name = tenant?.name || '';
+    localStorage.setItem("token", newToken);
+    axios.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
+    setToken(newToken);
+    setUser(userData);
+    return { user: userData, tenant };
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, tenantLogin, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

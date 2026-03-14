@@ -32,6 +32,11 @@ def get_tenant_db(tenant_id: str):
     """Get tenant-specific database"""
     return client[f"tenant_{tenant_id}"]
 
+
+def get_user_db(current_user: dict):
+    """Return tenant DB if user is a tenant user, otherwise master DB"""
+    return current_user.get("_db", db)
+
 # JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'pos-system-secret-key-2024')
 JWT_ALGORITHM = "HS256"
@@ -443,56 +448,65 @@ async def login(user: UserLogin):
 
 @api_router.get("/auth/me", response_model=dict)
 async def get_me(current_user: dict = Depends(get_current_user)):
-    user = await db.users.find_one({"id": current_user["user_id"]}, {"_id": 0, "password": 0})
+    udb = get_user_db(current_user)
+    user = await udb.users.find_one({"id": current_user["user_id"]}, {"_id": 0, "password": 0})
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if current_user.get("tenant_id"):
+        user["tenant_id"] = current_user["tenant_id"]
     return user
 
 @api_router.get("/auth/cashiers")
-async def get_cashiers():
-    """List users for POS login selection (public, no passwords)"""
-    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(100)
+async def get_cashiers(current_user: dict = Depends(get_current_user)):
+    """List users for POS login selection"""
+    udb = get_user_db(current_user)
+    users = await udb.users.find({}, {"_id": 0, "password": 0}).to_list(100)
     return [{"id": u["id"], "username": u["username"], "name": u.get("name", ""), "role": u.get("role", "staff")} for u in users]
 
 # ==================== Store Routes ====================
 
 @api_router.post("/stores", response_model=StoreResponse)
 async def create_store(store: StoreCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     store_id = generate_id()
     store_doc = {
         "id": store_id,
         **store.model_dump(),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.stores.insert_one(store_doc)
+    await udb.stores.insert_one(store_doc)
     return StoreResponse(**store_doc)
 
 @api_router.get("/stores", response_model=List[StoreResponse])
 async def get_stores(type: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     query = {}
     if type:
         query["type"] = type
-    stores = await db.stores.find(query, {"_id": 0}).to_list(1000)
+    stores = await udb.stores.find(query, {"_id": 0}).to_list(1000)
     return [StoreResponse(**s) for s in stores]
 
 @api_router.get("/stores/{store_id}", response_model=StoreResponse)
 async def get_store(store_id: str, current_user: dict = Depends(get_current_user)):
-    store = await db.stores.find_one({"id": store_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    store = await udb.stores.find_one({"id": store_id}, {"_id": 0})
     if not store:
         raise HTTPException(status_code=404, detail="门店不存在")
     return StoreResponse(**store)
 
 @api_router.put("/stores/{store_id}", response_model=StoreResponse)
 async def update_store(store_id: str, store: StoreCreate, current_user: dict = Depends(get_current_user)):
-    result = await db.stores.update_one({"id": store_id}, {"$set": store.model_dump()})
+    udb = get_user_db(current_user)
+    result = await udb.stores.update_one({"id": store_id}, {"$set": store.model_dump()})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="门店不存在")
-    updated = await db.stores.find_one({"id": store_id}, {"_id": 0})
+    updated = await udb.stores.find_one({"id": store_id}, {"_id": 0})
     return StoreResponse(**updated)
 
 @api_router.delete("/stores/{store_id}")
 async def delete_store(store_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.stores.delete_one({"id": store_id})
+    udb = get_user_db(current_user)
+    result = await udb.stores.delete_one({"id": store_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="门店不存在")
     return {"message": "删除成功"}
@@ -501,30 +515,34 @@ async def delete_store(store_id: str, current_user: dict = Depends(get_current_u
 
 @api_router.post("/warehouses", response_model=WarehouseResponse)
 async def create_warehouse(warehouse: WarehouseCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     warehouse_id = generate_id()
     warehouse_doc = {
         "id": warehouse_id,
         **warehouse.model_dump(),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.warehouses.insert_one(warehouse_doc)
+    await udb.warehouses.insert_one(warehouse_doc)
     return WarehouseResponse(**warehouse_doc)
 
 @api_router.get("/warehouses", response_model=List[WarehouseResponse])
 async def get_warehouses(current_user: dict = Depends(get_current_user)):
-    warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(1000)
+    udb = get_user_db(current_user)
+    warehouses = await udb.warehouses.find({}, {"_id": 0}).to_list(1000)
     return [WarehouseResponse(**w) for w in warehouses]
 
 @api_router.get("/warehouses/{warehouse_id}", response_model=WarehouseResponse)
 async def get_warehouse(warehouse_id: str, current_user: dict = Depends(get_current_user)):
-    warehouse = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    warehouse = await udb.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
     if not warehouse:
         raise HTTPException(status_code=404, detail="仓库不存在")
     return WarehouseResponse(**warehouse)
 
 @api_router.get("/warehouses/main/info", response_model=WarehouseResponse)
 async def get_main_warehouse(current_user: dict = Depends(get_current_user)):
-    warehouse = await db.warehouses.find_one({"is_main": True}, {"_id": 0})
+    udb = get_user_db(current_user)
+    warehouse = await udb.warehouses.find_one({"is_main": True}, {"_id": 0})
     if not warehouse:
         raise HTTPException(status_code=404, detail="总部仓库不存在")
     return WarehouseResponse(**warehouse)
@@ -533,31 +551,35 @@ async def get_main_warehouse(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/suppliers", response_model=SupplierResponse)
 async def create_supplier(supplier: SupplierCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     supplier_id = generate_id()
     supplier_doc = {
         "id": supplier_id,
         **supplier.model_dump(),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.suppliers.insert_one(supplier_doc)
+    await udb.suppliers.insert_one(supplier_doc)
     return SupplierResponse(**supplier_doc)
 
 @api_router.get("/suppliers", response_model=List[SupplierResponse])
 async def get_suppliers(current_user: dict = Depends(get_current_user)):
-    suppliers = await db.suppliers.find({}, {"_id": 0}).to_list(1000)
+    udb = get_user_db(current_user)
+    suppliers = await udb.suppliers.find({}, {"_id": 0}).to_list(1000)
     return [SupplierResponse(**s) for s in suppliers]
 
 @api_router.put("/suppliers/{supplier_id}", response_model=SupplierResponse)
 async def update_supplier(supplier_id: str, supplier: SupplierCreate, current_user: dict = Depends(get_current_user)):
-    result = await db.suppliers.update_one({"id": supplier_id}, {"$set": supplier.model_dump()})
+    udb = get_user_db(current_user)
+    result = await udb.suppliers.update_one({"id": supplier_id}, {"$set": supplier.model_dump()})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="供应商不存在")
-    updated = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    updated = await udb.suppliers.find_one({"id": supplier_id}, {"_id": 0})
     return SupplierResponse(**updated)
 
 @api_router.delete("/suppliers/{supplier_id}")
 async def delete_supplier(supplier_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.suppliers.delete_one({"id": supplier_id})
+    udb = get_user_db(current_user)
+    result = await udb.suppliers.delete_one({"id": supplier_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="供应商不存在")
     return {"message": "删除成功"}
@@ -566,17 +588,19 @@ async def delete_supplier(supplier_id: str, current_user: dict = Depends(get_cur
 
 @api_router.post("/customers", response_model=CustomerResponse)
 async def create_customer(customer: CustomerCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     customer_id = generate_id()
     customer_doc = {
         "id": customer_id,
         **customer.model_dump(),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.customers.insert_one(customer_doc)
+    await udb.customers.insert_one(customer_doc)
     return CustomerResponse(**customer_doc)
 
 @api_router.get("/customers", response_model=List[CustomerResponse])
 async def get_customers(search: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     query = {}
     if search:
         query["$or"] = [
@@ -584,53 +608,59 @@ async def get_customers(search: Optional[str] = None, current_user: dict = Depen
             {"phone": {"$regex": search, "$options": "i"}},
             {"code": {"$regex": search, "$options": "i"}}
         ]
-    customers = await db.customers.find(query, {"_id": 0}).to_list(1000)
+    customers = await udb.customers.find(query, {"_id": 0}).to_list(1000)
     return [CustomerResponse(**c) for c in customers]
 
 @api_router.get("/customers/{customer_id}", response_model=CustomerResponse)
 async def get_customer(customer_id: str, current_user: dict = Depends(get_current_user)):
-    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    customer = await udb.customers.find_one({"id": customer_id}, {"_id": 0})
     if not customer:
         raise HTTPException(status_code=404, detail="客户不存在")
     return CustomerResponse(**customer)
 
 @api_router.put("/customers/{customer_id}", response_model=CustomerResponse)
 async def update_customer(customer_id: str, customer: CustomerCreate, current_user: dict = Depends(get_current_user)):
-    result = await db.customers.update_one({"id": customer_id}, {"$set": customer.model_dump()})
+    udb = get_user_db(current_user)
+    result = await udb.customers.update_one({"id": customer_id}, {"$set": customer.model_dump()})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="客户不存在")
-    updated = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    updated = await udb.customers.find_one({"id": customer_id}, {"_id": 0})
     return CustomerResponse(**updated)
 
 # ==================== Category Routes ====================
 
 @api_router.post("/categories", response_model=CategoryResponse)
 async def create_category(category: CategoryCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     category_id = generate_id()
     category_doc = {
         "id": category_id,
         **category.model_dump(),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.categories.insert_one(category_doc)
+    await udb.categories.insert_one(category_doc)
     return CategoryResponse(**category_doc)
 
 @api_router.get("/categories", response_model=List[CategoryResponse])
 async def get_categories(current_user: dict = Depends(get_current_user)):
-    categories = await db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(1000)
+    udb = get_user_db(current_user)
+    categories = await udb.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(1000)
     return [CategoryResponse(**c) for c in categories]
 
 @api_router.put("/categories/{category_id}", response_model=CategoryResponse)
 async def update_category(category_id: str, category: CategoryCreate, current_user: dict = Depends(get_current_user)):
-    result = await db.categories.update_one({"id": category_id}, {"$set": category.model_dump()})
+    udb = get_user_db(current_user)
+    result = await udb.categories.update_one({"id": category_id}, {"$set": category.model_dump()})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="分类不存在")
-    updated = await db.categories.find_one({"id": category_id}, {"_id": 0})
+    updated = await udb.categories.find_one({"id": category_id}, {"_id": 0})
     return CategoryResponse(**updated)
 
 @api_router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.categories.delete_one({"id": category_id})
+    udb = get_user_db(current_user)
+    result = await udb.categories.delete_one({"id": category_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="分类不存在")
     return {"message": "删除成功"}
@@ -639,6 +669,7 @@ async def delete_category(category_id: str, current_user: dict = Depends(get_cur
 
 @api_router.post("/products", response_model=ProductResponse)
 async def create_product(product: ProductCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     product_id = generate_id()
     product_data = product.model_dump()
     # Auto-calculate prices from cost_price and margins
@@ -658,7 +689,7 @@ async def create_product(product: ProductCreate, current_user: dict = Depends(ge
         **product_data,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.products.insert_one(product_doc)
+    await udb.products.insert_one(product_doc)
     return ProductResponse(**product_doc)
 
 @api_router.get("/products", response_model=List[ProductResponse])
@@ -668,6 +699,7 @@ async def get_products(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if category_id:
         query["category_id"] = category_id
@@ -679,18 +711,20 @@ async def get_products(
             {"code": {"$regex": search, "$options": "i"}},
             {"barcode": {"$regex": search, "$options": "i"}}
         ]
-    products = await db.products.find(query, {"_id": 0}).to_list(1000)
+    products = await udb.products.find(query, {"_id": 0}).to_list(1000)
     return [ProductResponse(**p) for p in products]
 
 @api_router.get("/products/{product_id}", response_model=ProductResponse)
 async def get_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    product = await udb.products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
     return ProductResponse(**product)
 
 @api_router.put("/products/{product_id}", response_model=ProductResponse)
 async def update_product(product_id: str, product: ProductCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     product_data = product.model_dump()
     # Auto-calculate prices from cost_price and margins
     cost = product_data.get("cost_price", 0)
@@ -704,24 +738,25 @@ async def update_product(product_id: str, product: ProductCreate, current_user: 
     # Sync compatibility fields
     product_data["retail_price"] = product_data.get("price1", 0)
     product_data["wholesale_price"] = product_data.get("price3", 0)
-    result = await db.products.update_one({"id": product_id}, {"$set": product_data})
+    result = await udb.products.update_one({"id": product_id}, {"$set": product_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="商品不存在")
     # Track cost price changes
-    old_product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    old_product = await udb.products.find_one({"id": product_id}, {"_id": 0})
     if old_product and cost > 0:
-        await db.cost_history.insert_one({
+        await udb.cost_history.insert_one({
             "id": generate_id(), "product_id": product_id,
             "cost_price": cost, "price1": product_data.get("price1", 0),
             "changed_by": current_user["user_id"],
             "created_at": datetime.now(timezone.utc).isoformat()
         })
-    updated = await db.products.find_one({"id": product_id}, {"_id": 0})
+    updated = await udb.products.find_one({"id": product_id}, {"_id": 0})
     return ProductResponse(**updated)
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.products.delete_one({"id": product_id})
+    udb = get_user_db(current_user)
+    result = await udb.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="商品不存在")
     return {"message": "删除成功"}
@@ -735,18 +770,19 @@ async def get_inventory(
     low_stock: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if warehouse_id:
         query["warehouse_id"] = warehouse_id
     if product_id:
         query["product_id"] = product_id
     
-    inventory = await db.inventory.find(query, {"_id": 0}).to_list(10000)
+    inventory = await udb.inventory.find(query, {"_id": 0}).to_list(10000)
     
     result = []
     for inv in inventory:
-        product = await db.products.find_one({"id": inv["product_id"]}, {"_id": 0})
-        warehouse = await db.warehouses.find_one({"id": inv["warehouse_id"]}, {"_id": 0})
+        product = await udb.products.find_one({"id": inv["product_id"]}, {"_id": 0})
+        warehouse = await udb.warehouses.find_one({"id": inv["warehouse_id"]}, {"_id": 0})
         inv["product"] = product
         inv["warehouse"] = warehouse
         inv["available"] = inv["quantity"] - inv.get("reserved", 0)
@@ -760,7 +796,8 @@ async def get_inventory(
 
 @api_router.post("/inventory/adjust")
 async def adjust_inventory(adjust: InventoryAdjust, current_user: dict = Depends(get_current_user)):
-    existing = await db.inventory.find_one({
+    udb = get_user_db(current_user)
+    existing = await udb.inventory.find_one({
         "product_id": adjust.product_id,
         "warehouse_id": adjust.warehouse_id
     })
@@ -769,14 +806,14 @@ async def adjust_inventory(adjust: InventoryAdjust, current_user: dict = Depends
         new_qty = existing["quantity"] + adjust.quantity
         if new_qty < 0:
             raise HTTPException(status_code=400, detail="库存不足")
-        await db.inventory.update_one(
+        await udb.inventory.update_one(
             {"product_id": adjust.product_id, "warehouse_id": adjust.warehouse_id},
             {"$set": {"quantity": new_qty, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
     else:
         if adjust.quantity < 0:
             raise HTTPException(status_code=400, detail="库存不足")
-        await db.inventory.insert_one({
+        await udb.inventory.insert_one({
             "id": generate_id(),
             "product_id": adjust.product_id,
             "warehouse_id": adjust.warehouse_id,
@@ -786,7 +823,7 @@ async def adjust_inventory(adjust: InventoryAdjust, current_user: dict = Depends
         })
     
     # Record adjustment log
-    await db.inventory_logs.insert_one({
+    await udb.inventory_logs.insert_one({
         "id": generate_id(),
         "product_id": adjust.product_id,
         "warehouse_id": adjust.warehouse_id,
@@ -807,7 +844,8 @@ async def transfer_inventory(
     current_user: dict = Depends(get_current_user)
 ):
     # Check source inventory
-    source = await db.inventory.find_one({
+    udb = get_user_db(current_user)
+    source = await udb.inventory.find_one({
         "product_id": product_id,
         "warehouse_id": from_warehouse_id
     })
@@ -816,24 +854,24 @@ async def transfer_inventory(
         raise HTTPException(status_code=400, detail="源仓库库存不足")
     
     # Decrease source
-    await db.inventory.update_one(
+    await udb.inventory.update_one(
         {"product_id": product_id, "warehouse_id": from_warehouse_id},
         {"$inc": {"quantity": -quantity}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     
     # Increase destination
-    dest = await db.inventory.find_one({
+    dest = await udb.inventory.find_one({
         "product_id": product_id,
         "warehouse_id": to_warehouse_id
     })
     
     if dest:
-        await db.inventory.update_one(
+        await udb.inventory.update_one(
             {"product_id": product_id, "warehouse_id": to_warehouse_id},
             {"$inc": {"quantity": quantity}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
         )
     else:
-        await db.inventory.insert_one({
+        await udb.inventory.insert_one({
             "id": generate_id(),
             "product_id": product_id,
             "warehouse_id": to_warehouse_id,
@@ -843,7 +881,7 @@ async def transfer_inventory(
         })
     
     # Record transfer log
-    await db.transfer_logs.insert_one({
+    await udb.transfer_logs.insert_one({
         "id": generate_id(),
         "product_id": product_id,
         "from_warehouse_id": from_warehouse_id,
@@ -858,7 +896,8 @@ async def transfer_inventory(
 
 @api_router.get("/transfer-logs")
 async def get_transfer_logs(current_user: dict = Depends(get_current_user)):
-    logs = await db.transfer_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    udb = get_user_db(current_user)
+    logs = await udb.transfer_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return logs
 
 
@@ -866,6 +905,7 @@ async def get_transfer_logs(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/purchase-orders", response_model=PurchaseOrderResponse)
 async def create_purchase_order(order: PurchaseOrderCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     order_id = generate_id()
     order_no = generate_order_no("PO")
     
@@ -884,7 +924,7 @@ async def create_purchase_order(order: PurchaseOrderCreate, current_user: dict =
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    await db.purchase_orders.insert_one(order_doc)
+    await udb.purchase_orders.insert_one(order_doc)
     return PurchaseOrderResponse(**order_doc)
 
 @api_router.get("/purchase-orders", response_model=List[PurchaseOrderResponse])
@@ -893,18 +933,20 @@ async def get_purchase_orders(
     supplier_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if status:
         query["status"] = status
     if supplier_id:
         query["supplier_id"] = supplier_id
     
-    orders = await db.purchase_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    orders = await udb.purchase_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [PurchaseOrderResponse(**o) for o in orders]
 
 @api_router.put("/purchase-orders/{order_id}/receive")
 async def receive_purchase_order(order_id: str, current_user: dict = Depends(get_current_user)):
-    order = await db.purchase_orders.find_one({"id": order_id})
+    udb = get_user_db(current_user)
+    order = await udb.purchase_orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="采购单不存在")
     
@@ -913,18 +955,18 @@ async def receive_purchase_order(order_id: str, current_user: dict = Depends(get
     
     # Update inventory
     for item in order["items"]:
-        existing = await db.inventory.find_one({
+        existing = await udb.inventory.find_one({
             "product_id": item["product_id"],
             "warehouse_id": order["warehouse_id"]
         })
         
         if existing:
-            await db.inventory.update_one(
+            await udb.inventory.update_one(
                 {"product_id": item["product_id"], "warehouse_id": order["warehouse_id"]},
                 {"$inc": {"quantity": item["quantity"]}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
             )
         else:
-            await db.inventory.insert_one({
+            await udb.inventory.insert_one({
                 "id": generate_id(),
                 "product_id": item["product_id"],
                 "warehouse_id": order["warehouse_id"],
@@ -934,7 +976,7 @@ async def receive_purchase_order(order_id: str, current_user: dict = Depends(get
             })
     
     # Update order status
-    await db.purchase_orders.update_one(
+    await udb.purchase_orders.update_one(
         {"id": order_id},
         {"$set": {"status": "received", "received_at": datetime.now(timezone.utc).isoformat()}}
     )
@@ -945,6 +987,7 @@ async def receive_purchase_order(order_id: str, current_user: dict = Depends(get
 
 @api_router.post("/sales-orders", response_model=SalesOrderResponse)
 async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     order_id = generate_id()
     order_no = generate_order_no("SO")
     
@@ -952,12 +995,12 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
     discount_amount = sum(item.discount for item in order.items)
     
     # Points redemption: 100 points = $1 (configurable via system settings)
-    sys_settings = await db.system_settings.find_one({"key": "system"}, {"_id": 0}) or {}
+    sys_settings = await udb.system_settings.find_one({"key": "system"}, {"_id": 0}) or {}
     points_per_dollar = sys_settings.get("points_per_dollar", 1)  # earn rate
     points_value_rate = sys_settings.get("points_value_rate", 100)  # 100 points = $1
     points_discount = 0.0
     if order.points_used > 0 and order.customer_id:
-        customer = await db.customers.find_one({"id": order.customer_id}, {"_id": 0})
+        customer = await udb.customers.find_one({"id": order.customer_id}, {"_id": 0})
         if not customer or customer.get("points", 0) < order.points_used:
             raise HTTPException(400, "Insufficient points")
         points_discount = order.points_used / points_value_rate
@@ -967,21 +1010,21 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
     final_total = total_amount - points_discount
     
     # Get store's warehouse
-    store = await db.stores.find_one({"id": order.store_id})
+    store = await udb.stores.find_one({"id": order.store_id})
     warehouse_id = store.get("warehouse_id") if store else None
     
     # Check and deduct inventory
     if warehouse_id:
         for item in order.items:
-            inv = await db.inventory.find_one({
+            inv = await udb.inventory.find_one({
                 "product_id": item.product_id,
                 "warehouse_id": warehouse_id
             })
             if not inv or inv["quantity"] < item.quantity:
-                product = await db.products.find_one({"id": item.product_id})
+                product = await udb.products.find_one({"id": item.product_id})
                 raise HTTPException(status_code=400, detail=f"商品 {product['name'] if product else item.product_id} 库存不足")
             
-            await db.inventory.update_one(
+            await udb.inventory.update_one(
                 {"product_id": item.product_id, "warehouse_id": warehouse_id},
                 {"$inc": {"quantity": -item.quantity}}
             )
@@ -990,7 +1033,7 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
     order_items = []
     for item in order.items:
         item_dict = item.model_dump()
-        product = await db.products.find_one({"id": item.product_id})
+        product = await udb.products.find_one({"id": item.product_id})
         if product:
             item_dict["product_name"] = product["name"]
         order_items.append(item_dict)
@@ -1014,7 +1057,7 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    await db.sales_orders.insert_one(order_doc)
+    await udb.sales_orders.insert_one(order_doc)
     
     # Update customer points if applicable
     points_earned = 0
@@ -1022,13 +1065,13 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
         points_earned = int(final_total * points_per_dollar)
         net_points = points_earned - order.points_used
         if net_points != 0:
-            await db.customers.update_one(
+            await udb.customers.update_one(
                 {"id": order.customer_id},
                 {"$inc": {"points": net_points}}
             )
         # Log points earned
         if points_earned > 0:
-            await db.points_log.insert_one({
+            await udb.points_log.insert_one({
                 "id": generate_id(), "customer_id": order.customer_id,
                 "type": "earn", "amount": points_earned,
                 "reason": f"Purchase {order_no}",
@@ -1037,7 +1080,7 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
             })
         # Log points redeemed
         if order.points_used > 0:
-            await db.points_log.insert_one({
+            await udb.points_log.insert_one({
                 "id": generate_id(), "customer_id": order.customer_id,
                 "type": "redeem", "amount": -order.points_used,
                 "reason": f"Redeem at {order_no} (-${points_discount:.2f})",
@@ -1050,17 +1093,17 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
     
     # Auto-upgrade customer VIP level
     if order.customer_id:
-        rules_doc = await db.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
+        rules_doc = await udb.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
         vip_levels = (rules_doc or {}).get("levels", [
             {"name": "normal", "min_spent": 0}, {"name": "silver", "min_spent": 200},
             {"name": "gold", "min_spent": 500}, {"name": "vip", "min_spent": 1000}
         ])
         vip_levels.sort(key=lambda x: x["min_spent"], reverse=True)
-        all_orders = await db.sales_orders.find({"customer_id": order.customer_id}, {"_id": 0, "total_amount": 1}).to_list(10000)
+        all_orders = await udb.sales_orders.find({"customer_id": order.customer_id}, {"_id": 0, "total_amount": 1}).to_list(10000)
         total_spent = sum(o.get("total_amount", 0) for o in all_orders)
         for lv in vip_levels:
             if total_spent >= lv["min_spent"]:
-                await db.customers.update_one({"id": order.customer_id}, {"$set": {"member_level": lv["name"]}})
+                await udb.customers.update_one({"id": order.customer_id}, {"$set": {"member_level": lv["name"]}})
                 break
     
     return SalesOrderResponse(**{k: v for k, v in order_doc.items() if k in SalesOrderResponse.model_fields})
@@ -1073,6 +1116,7 @@ async def get_sales_orders(
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if status:
         query["status"] = status
@@ -1086,7 +1130,7 @@ async def get_sales_orders(
         else:
             query["created_at"] = {"$lte": end_date}
     
-    orders = await db.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    orders = await udb.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [SalesOrderResponse(**o) for o in orders]
 
 
@@ -1097,6 +1141,7 @@ async def get_sales_report(
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if store_id:
         query["store_id"] = store_id
@@ -1108,15 +1153,15 @@ async def get_sales_report(
         else:
             query["created_at"] = {"$lte": end_date + "T23:59:59"}
     
-    orders = await db.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    orders = await udb.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
     
     # Enrich with product names and store names
     products_map = {}
-    async for p in db.products.find({}, {"_id": 0, "id": 1, "name": 1, "code": 1}):
+    async for p in udb.products.find({}, {"_id": 0, "id": 1, "name": 1, "code": 1}):
         products_map[p["id"]] = p
     
     stores_map = {}
-    async for s in db.stores.find({}, {"_id": 0, "id": 1, "name": 1}):
+    async for s in udb.stores.find({}, {"_id": 0, "id": 1, "name": 1}):
         stores_map[s["id"]] = s
     
     # Build report
@@ -1291,13 +1336,14 @@ async def get_online_orders(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if customer_id:
         query["customer_id"] = customer_id
     if status:
         query["order_status"] = status
     
-    orders = await db.online_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    orders = await udb.online_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [OnlineOrderResponse(**o) for o in orders]
 
 @api_router.put("/shop/orders/{order_id}/pay")
@@ -1345,7 +1391,8 @@ async def lookup_order(order_no: Optional[str] = None, phone: Optional[str] = No
 
 @api_router.put("/shop/orders/{order_id}/ship")
 async def ship_online_order(order_id: str, current_user: dict = Depends(get_current_user)):
-    order = await db.online_orders.find_one({"id": order_id})
+    udb = get_user_db(current_user)
+    order = await udb.online_orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
     
@@ -1354,12 +1401,12 @@ async def ship_online_order(order_id: str, current_user: dict = Depends(get_curr
     
     # Deduct inventory from warehouse
     for item in order["items"]:
-        await db.inventory.update_one(
+        await udb.inventory.update_one(
             {"product_id": item["product_id"], "warehouse_id": order["warehouse_id"]},
             {"$inc": {"quantity": -item["quantity"], "reserved": -item["quantity"]}}
         )
     
-    await db.online_orders.update_one(
+    await udb.online_orders.update_one(
         {"id": order_id},
         {"$set": {"order_status": "shipped", "shipped_at": datetime.now(timezone.utc).isoformat()}}
     )
@@ -1396,6 +1443,7 @@ async def get_sales_summary(
     store_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if store_id:
         query["store_id"] = store_id
@@ -1407,8 +1455,8 @@ async def get_sales_summary(
         else:
             query["created_at"] = {"$lte": end_date}
     
-    sales_orders = await db.sales_orders.find(query, {"_id": 0}).to_list(10000)
-    online_orders = await db.online_orders.find(
+    sales_orders = await udb.sales_orders.find(query, {"_id": 0}).to_list(10000)
+    online_orders = await udb.online_orders.find(
         {"order_status": "completed"} if not query else {**query, "order_status": "completed"},
         {"_id": 0}
     ).to_list(10000)
@@ -1438,11 +1486,12 @@ async def get_inventory_summary(
     warehouse_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if warehouse_id:
         query["warehouse_id"] = warehouse_id
     
-    inventory = await db.inventory.find(query, {"_id": 0}).to_list(10000)
+    inventory = await udb.inventory.find(query, {"_id": 0}).to_list(10000)
     
     total_items = len(inventory)
     total_quantity = sum(i["quantity"] for i in inventory)
@@ -1450,7 +1499,7 @@ async def get_inventory_summary(
     low_stock_items = []
     
     for inv in inventory:
-        product = await db.products.find_one({"id": inv["product_id"]}, {"_id": 0})
+        product = await udb.products.find_one({"id": inv["product_id"]}, {"_id": 0})
         if product:
             total_value += inv["quantity"] * product.get("cost_price", 0)
             if inv["quantity"] <= product.get("min_stock", 0):
@@ -1475,6 +1524,7 @@ async def get_top_products(
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if start_date:
         query["created_at"] = {"$gte": start_date}
@@ -1484,7 +1534,7 @@ async def get_top_products(
         else:
             query["created_at"] = {"$lte": end_date}
     
-    sales_orders = await db.sales_orders.find(query, {"_id": 0}).to_list(10000)
+    sales_orders = await udb.sales_orders.find(query, {"_id": 0}).to_list(10000)
     
     product_sales = {}
     for order in sales_orders:
@@ -1500,7 +1550,7 @@ async def get_top_products(
     
     result = []
     for pid, stats in sorted_products:
-        product = await db.products.find_one({"id": pid}, {"_id": 0})
+        product = await udb.products.find_one({"id": pid}, {"_id": 0})
         if product:
             result.append({
                 "product": product,
@@ -1513,9 +1563,10 @@ async def get_top_products(
 # ==================== Exchange Rate Settings ====================
 
 @api_router.get("/exchange-rates")
-async def get_exchange_rates():
+async def get_exchange_rates(current_user: dict = Depends(get_current_user)):
     """Get system exchange rates"""
-    settings = await db.settings.find_one({"type": "exchange_rates"}, {"_id": 0})
+    udb = get_user_db(current_user)
+    settings = await udb.settings.find_one({"type": "exchange_rates"}, {"_id": 0})
     if not settings:
         settings = {
             "type": "exchange_rates",
@@ -1536,6 +1587,7 @@ async def update_exchange_rates(
     local_currency_symbol: str = "Bs.",
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     """Update system exchange rates"""
     settings_doc = {
         "type": "exchange_rates",
@@ -1546,7 +1598,7 @@ async def update_exchange_rates(
         "local_currency_symbol": local_currency_symbol,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.settings.update_one(
+    await udb.settings.update_one(
         {"type": "exchange_rates"},
         {"$set": settings_doc},
         upsert=True
@@ -1556,9 +1608,10 @@ async def update_exchange_rates(
 # ==================== Payment Settings Routes ====================
 
 @api_router.get("/payment-settings")
-async def get_payment_settings():
-    """Get payment settings - public endpoint for shop"""
-    settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
+async def get_payment_settings(current_user: dict = Depends(get_current_user)):
+    """Get payment settings"""
+    udb = get_user_db(current_user)
+    settings = await udb.settings.find_one({"type": "payment"}, {"_id": 0})
     if not settings:
         # Default settings for Venezuela
         settings = {
@@ -1578,13 +1631,14 @@ async def get_payment_settings():
 
 @api_router.put("/payment-settings")
 async def update_payment_settings(settings: PaymentSettingsUpdate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     """Update payment settings - admin only"""
     settings_doc = {
         "type": "payment",
         **settings.model_dump(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.settings.update_one(
+    await udb.settings.update_one(
         {"type": "payment"},
         {"$set": settings_doc},
         upsert=True
@@ -1593,12 +1647,13 @@ async def update_payment_settings(settings: PaymentSettingsUpdate, current_user:
 
 @api_router.put("/shop/orders/{order_id}/confirm-payment")
 async def confirm_order_payment(order_id: str, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     """Admin confirms payment received"""
-    order = await db.online_orders.find_one({"id": order_id})
+    order = await udb.online_orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
     
-    await db.online_orders.update_one(
+    await udb.online_orders.update_one(
         {"id": order_id},
         {"$set": {
             "payment_status": "paid",
@@ -1614,17 +1669,18 @@ async def confirm_order_payment(order_id: str, current_user: dict = Depends(get_
 
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     
     # Today's sales
-    today_sales = await db.sales_orders.find({"created_at": {"$gte": today}}, {"_id": 0}).to_list(1000)
-    today_online = await db.online_orders.find({"created_at": {"$gte": today}}, {"_id": 0}).to_list(1000)
+    today_sales = await udb.sales_orders.find({"created_at": {"$gte": today}}, {"_id": 0}).to_list(1000)
+    today_online = await udb.online_orders.find({"created_at": {"$gte": today}}, {"_id": 0}).to_list(1000)
     
     # Counts
-    products_count = await db.products.count_documents({})
-    customers_count = await db.customers.count_documents({})
-    stores_count = await db.stores.count_documents({})
-    pending_orders = await db.online_orders.count_documents({"order_status": "pending"})
+    products_count = await udb.products.count_documents({})
+    customers_count = await udb.customers.count_documents({})
+    stores_count = await udb.stores.count_documents({})
+    pending_orders = await udb.online_orders.count_documents({"order_status": "pending"})
     
     return {
         "today_sales_amount": sum(o["total_amount"] for o in today_sales),
@@ -1641,28 +1697,32 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/settings/system")
 async def get_system_settings(current_user: dict = Depends(get_current_user)):
-    settings = await db.system_settings.find_one({"key": "system"}, {"_id": 0})
+    udb = get_user_db(current_user)
+    settings = await udb.system_settings.find_one({"key": "system"}, {"_id": 0})
     if not settings:
         return SystemSettings().model_dump()
     return {k: v for k, v in settings.items() if k != "key"}
 
 @api_router.put("/settings/system")
 async def update_system_settings(settings: SystemSettings, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     data = settings.model_dump()
     data["key"] = "system"
-    await db.system_settings.update_one({"key": "system"}, {"$set": data}, upsert=True)
+    await udb.system_settings.update_one({"key": "system"}, {"$set": data}, upsert=True)
     return {"message": "Settings updated"}
 
 # ==================== Employee Management ====================
 
 @api_router.get("/employees", response_model=List[UserResponse])
 async def get_employees(current_user: dict = Depends(get_current_user)):
-    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    udb = get_user_db(current_user)
+    users = await udb.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
     return users
 
 @api_router.post("/employees")
 async def create_employee(user: UserCreate, current_user: dict = Depends(get_current_user)):
-    existing = await db.users.find_one({"username": user.username})
+    udb = get_user_db(current_user)
+    existing = await udb.users.find_one({"username": user.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username exists")
     user_id = generate_id()
@@ -1677,32 +1737,35 @@ async def create_employee(user: UserCreate, current_user: dict = Depends(get_cur
         "permissions": user.permissions,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.users.insert_one(user_doc)
+    await udb.users.insert_one(user_doc)
     return {k: v for k, v in user_doc.items() if k not in ("password", "_id")}
 
 @api_router.put("/employees/{user_id}")
 async def update_employee(user_id: str, user: UserCreate, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     update_data = {
         "name": user.name, "phone": user.phone, "role": user.role,
         "store_id": user.store_id, "permissions": user.permissions
     }
     if user.password:
         update_data["password"] = hash_password(user.password)
-    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    await udb.users.update_one({"id": user_id}, {"$set": update_data})
     return {"message": "Employee updated"}
 
 @api_router.delete("/employees/{user_id}")
 async def delete_employee(user_id: str, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     if current_user.get("user_id", current_user.get("id")) == user_id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
-    await db.users.delete_one({"id": user_id})
+    await udb.users.delete_one({"id": user_id})
     return {"message": "Employee deleted"}
 
 # ==================== Refund/Return ====================
 
 @api_router.post("/refunds")
 async def create_refund(order_no: str = "", items: List[Dict] = [], reason: str = "", current_user: dict = Depends(get_current_user)):
-    order = await db.sales_orders.find_one({"order_no": order_no}, {"_id": 0})
+    udb = get_user_db(current_user)
+    order = await udb.sales_orders.find_one({"order_no": order_no}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
@@ -1722,13 +1785,13 @@ async def create_refund(order_no: str = "", items: List[Dict] = [], reason: str 
         "created_by": current_user.get("user_id", current_user.get("id")),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.refunds.insert_one(refund_doc)
+    await udb.refunds.insert_one(refund_doc)
     
     # Restore inventory
     for item in items:
-        warehouse = await db.warehouses.find_one({"store_id": order.get("store_id")})
+        warehouse = await udb.warehouses.find_one({"store_id": order.get("store_id")})
         if warehouse:
-            await db.inventory.update_one(
+            await udb.inventory.update_one(
                 {"product_id": item["product_id"], "warehouse_id": warehouse["id"]},
                 {"$inc": {"quantity": item.get("quantity", 0)}}
             )
@@ -1737,17 +1800,19 @@ async def create_refund(order_no: str = "", items: List[Dict] = [], reason: str 
 
 @api_router.get("/refunds")
 async def get_refunds(current_user: dict = Depends(get_current_user)):
-    refunds = await db.refunds.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    udb = get_user_db(current_user)
+    refunds = await udb.refunds.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return refunds
 
 # ==================== Stock Alerts ====================
 
 @api_router.get("/stock-alerts")
 async def get_stock_alerts(current_user: dict = Depends(get_current_user)):
-    products = await db.products.find({"status": "active"}, {"_id": 0}).to_list(5000)
+    udb = get_user_db(current_user)
+    products = await udb.products.find({"status": "active"}, {"_id": 0}).to_list(5000)
     alerts = []
     for p in products:
-        inv_docs = await db.inventory.find({"product_id": p["id"]}, {"_id": 0}).to_list(100)
+        inv_docs = await udb.inventory.find({"product_id": p["id"]}, {"_id": 0}).to_list(100)
         total_stock = sum(i.get("quantity", 0) for i in inv_docs)
         min_stock = p.get("min_stock", 0)
         if min_stock > 0 and total_stock <= min_stock:
@@ -1762,8 +1827,9 @@ async def get_stock_alerts(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/reports/bestsellers")
 async def get_bestsellers(days: int = 30, limit: int = 20, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    orders = await db.sales_orders.find({"created_at": {"$gte": since}}, {"_id": 0}).to_list(10000)
+    orders = await udb.sales_orders.find({"created_at": {"$gte": since}}, {"_id": 0}).to_list(10000)
     
     product_sales = {}
     for o in orders:
@@ -1784,6 +1850,7 @@ async def get_bestsellers(days: int = 30, limit: int = 20, current_user: dict = 
 
 @api_router.post("/stock-taking")
 async def create_stock_taking(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     taking_id = generate_id()
     taking_doc = {
         "id": taking_id,
@@ -1795,14 +1862,14 @@ async def create_stock_taking(data: Dict, current_user: dict = Depends(get_curre
         "created_by": current_user.get("user_id", current_user.get("id")),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.stock_takings.insert_one(taking_doc)
+    await udb.stock_takings.insert_one(taking_doc)
     
     # If confirmed, adjust inventory
     if data.get("status") == "confirmed":
         for item in data.get("items", []):
             diff = item.get("actual_qty", 0) - item.get("system_qty", 0)
             if diff != 0:
-                await db.inventory.update_one(
+                await udb.inventory.update_one(
                     {"product_id": item["product_id"], "warehouse_id": data["warehouse_id"]},
                     {"$inc": {"quantity": diff}}
                 )
@@ -1811,13 +1878,15 @@ async def create_stock_taking(data: Dict, current_user: dict = Depends(get_curre
 
 @api_router.get("/stock-takings")
 async def get_stock_takings(current_user: dict = Depends(get_current_user)):
-    takings = await db.stock_takings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    udb = get_user_db(current_user)
+    takings = await udb.stock_takings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return takings
 
 # ==================== Daily Settlement ====================
 
 @api_router.get("/reports/daily-settlement")
 async def daily_settlement(date: Optional[str] = None, store_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     start = f"{target_date}T00:00:00"
     end = f"{target_date}T23:59:59"
@@ -1826,8 +1895,8 @@ async def daily_settlement(date: Optional[str] = None, store_id: Optional[str] =
     if store_id:
         query["store_id"] = store_id
     
-    sales = await db.sales_orders.find(query, {"_id": 0}).to_list(10000)
-    refunds = await db.refunds.find({"created_at": {"$gte": start, "$lte": end}}, {"_id": 0}).to_list(1000)
+    sales = await udb.sales_orders.find(query, {"_id": 0}).to_list(10000)
+    refunds = await udb.refunds.find({"created_at": {"$gte": start, "$lte": end}}, {"_id": 0}).to_list(1000)
     
     by_method = {}
     for s in sales:
@@ -1841,7 +1910,7 @@ async def daily_settlement(date: Optional[str] = None, store_id: Optional[str] =
     total_cost = 0
     for s in sales:
         for item in s.get("items", []):
-            product = await db.products.find_one({"id": item.get("product_id")})
+            product = await udb.products.find_one({"id": item.get("product_id")})
             if product:
                 total_cost += product.get("cost_price", 0) * item.get("quantity", 0)
     
@@ -1897,7 +1966,8 @@ async def init_data():
 
 # Product Import
 @api_router.post("/products/import")
-async def import_products(file: UploadFile = File(...), mode: str = Query("skip", regex="^(skip|overwrite)$")):
+async def import_products(file: UploadFile = File(...), mode: str = Query("skip", regex="^(skip|overwrite)$"), current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     content = await file.read()
     filename = file.filename.lower()
     items = []
@@ -1976,7 +2046,7 @@ async def import_products(file: UploadFile = File(...), mode: str = Query("skip"
                         item[num_field] = 0
 
             code = item.get('code', '')
-            existing = await db.products.find_one({"code": code}, {"_id": 0}) if code else None
+            existing = await udb.products.find_one({"code": code}, {"_id": 0}) if code else None
 
             product_data = {
                 "code": item.get('code', ''),
@@ -2004,7 +2074,7 @@ async def import_products(file: UploadFile = File(...), mode: str = Query("skip"
 
             if existing:
                 if mode == 'overwrite':
-                    await db.products.update_one({"code": code}, {"$set": {**product_data, "updated_at": datetime.now(timezone.utc).isoformat()}})
+                    await udb.products.update_one({"code": code}, {"$set": {**product_data, "updated_at": datetime.now(timezone.utc).isoformat()}})
                     updated += 1
                 else:
                     skipped += 1
@@ -2013,7 +2083,7 @@ async def import_products(file: UploadFile = File(...), mode: str = Query("skip"
                 product_data["stock"] = 0
                 product_data["created_at"] = datetime.now(timezone.utc).isoformat()
                 product_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-                await db.products.insert_one(product_data)
+                await udb.products.insert_one(product_data)
                 created += 1
         except Exception as e:
             failed += 1
@@ -2072,13 +2142,15 @@ async def create_tenant(data: Dict, current_user: dict = Depends(get_current_use
     await tenant_db.stores.insert_one({
         "id": store_id, "code": "S001", "name": data.get("name", "Main Store"),
         "type": "retail", "address": "", "phone": "", "warehouse_id": None,
-        "is_headquarters": True, "status": "active"
+        "is_headquarters": True, "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat()
     })
     # Create default warehouse
     wh_id = generate_id()
     await tenant_db.warehouses.insert_one({
         "id": wh_id, "code": "WH001", "name": "Main Warehouse",
-        "address": "", "is_main": True, "status": "active"
+        "address": "", "is_main": True, "status": "active",
+        "store_id": None, "created_at": datetime.now(timezone.utc).isoformat()
     })
     del tenant["_id"]
     return {**tenant, "admin_username": admin_username, "admin_password": admin_password}
@@ -2152,7 +2224,8 @@ async def get_tenant_stats(tenant_id: str, current_user: dict = Depends(get_curr
 # ==================== Commission Rules & Calculation ====================
 @api_router.get("/settings/commission-rules")
 async def get_commission_rules(current_user: dict = Depends(get_current_user)):
-    rules = await db.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
+    udb = get_user_db(current_user)
+    rules = await udb.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
     if not rules:
         return {"tiers": [
             {"name": "base", "min_progress": 0, "rate": 3},
@@ -2163,13 +2236,15 @@ async def get_commission_rules(current_user: dict = Depends(get_current_user)):
 
 @api_router.put("/settings/commission-rules")
 async def update_commission_rules(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     data["key"] = "commission_rules"
-    await db.system_settings.update_one({"key": "commission_rules"}, {"$set": data}, upsert=True)
-    await log_audit(current_user["user_id"], current_user["username"], "update", "commission_rules", "", "Commission rules updated")
+    await udb.system_settings.update_one({"key": "commission_rules"}, {"$set": data}, upsert=True)
+    await log_audit(current_user["user_id"], current_user["username"], "update", "commission_rules", "", "Commission rules updated", audit_db=udb)
     return {"message": "Commission rules updated"}
 
 @api_router.get("/reports/commission")
 async def get_commission_report(month: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     if not month:
         month = datetime.now(timezone.utc).strftime("%Y-%m")
     start = f"{month}-01T00:00:00"
@@ -2180,7 +2255,7 @@ async def get_commission_report(month: Optional[str] = None, current_user: dict 
         next_month = end_dt.replace(month=end_dt.month + 1)
     end = next_month.strftime("%Y-%m-%dT00:00:00")
     
-    rules_doc = await db.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
+    rules_doc = await udb.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
     tiers = (rules_doc or {}).get("tiers", [
         {"name": "base", "min_progress": 0, "rate": 3},
         {"name": "standard", "min_progress": 60, "rate": 5},
@@ -2188,14 +2263,14 @@ async def get_commission_report(month: Optional[str] = None, current_user: dict 
     ])
     tiers.sort(key=lambda x: x["min_progress"], reverse=True)
     
-    employees = await db.users.find({}, {"_id": 0}).to_list(200)
-    targets = await db.sales_targets.find({"start_date": {"$lte": end}, "end_date": {"$gte": start}}, {"_id": 0}).to_list(200)
+    employees = await udb.users.find({}, {"_id": 0}).to_list(200)
+    targets = await udb.sales_targets.find({"start_date": {"$lte": end}, "end_date": {"$gte": start}}, {"_id": 0}).to_list(200)
     target_map = {}
     for t in targets:
         if t.get("employee_id"):
             target_map[t["employee_id"]] = t.get("target_amount", 0)
     
-    orders = await db.sales_orders.find({"created_at": {"$gte": start, "$lt": end}}, {"_id": 0}).to_list(10000)
+    orders = await udb.sales_orders.find({"created_at": {"$gte": start, "$lt": end}}, {"_id": 0}).to_list(10000)
     sales_by_emp = {}
     for o in orders:
         uid = o.get("created_by", "")
@@ -2228,12 +2303,13 @@ async def get_commission_report(month: Optional[str] = None, current_user: dict 
 
 @api_router.get("/reports/daily-commission")
 async def get_daily_commission(date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     if not date:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     start = f"{date}T00:00:00"
     end = f"{date}T23:59:59"
     
-    rules_doc = await db.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
+    rules_doc = await udb.system_settings.find_one({"key": "commission_rules"}, {"_id": 0})
     tiers = (rules_doc or {}).get("tiers", [
         {"name": "base", "min_progress": 0, "rate": 3},
         {"name": "standard", "min_progress": 60, "rate": 5},
@@ -2241,10 +2317,10 @@ async def get_daily_commission(date: Optional[str] = None, current_user: dict = 
     ])
     base_rate = min(t["rate"] for t in tiers) if tiers else 3
     
-    employees = await db.users.find({}, {"_id": 0}).to_list(200)
+    employees = await udb.users.find({}, {"_id": 0}).to_list(200)
     emp_map = {e["id"]: e.get("name") or e.get("username") for e in employees}
     
-    orders = await db.sales_orders.find({"created_at": {"$gte": start, "$lte": end}}, {"_id": 0}).to_list(10000)
+    orders = await udb.sales_orders.find({"created_at": {"$gte": start, "$lte": end}}, {"_id": 0}).to_list(10000)
     daily = {}
     for o in orders:
         uid = o.get("created_by", "")
@@ -2263,7 +2339,8 @@ async def get_daily_commission(date: Optional[str] = None, current_user: dict = 
 # ==================== 1. VIP Auto-Upgrade ====================
 @api_router.get("/settings/vip-rules")
 async def get_vip_rules(current_user: dict = Depends(get_current_user)):
-    rules = await db.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
+    udb = get_user_db(current_user)
+    rules = await udb.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
     if not rules:
         return {"levels": [
             {"name": "normal", "label": "普通会员", "min_spent": 0, "points_multiplier": 1, "discount_percent": 0},
@@ -2275,22 +2352,24 @@ async def get_vip_rules(current_user: dict = Depends(get_current_user)):
 
 @api_router.put("/settings/vip-rules")
 async def update_vip_rules(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     data["key"] = "vip_rules"
-    await db.system_settings.update_one({"key": "vip_rules"}, {"$set": data}, upsert=True)
+    await udb.system_settings.update_one({"key": "vip_rules"}, {"$set": data}, upsert=True)
     return {"message": "VIP rules updated"}
 
 @api_router.post("/customers/check-upgrades")
 async def check_customer_upgrades(current_user: dict = Depends(get_current_user)):
-    rules_doc = await db.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
+    udb = get_user_db(current_user)
+    rules_doc = await udb.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
     levels = (rules_doc or {}).get("levels", [
         {"name": "normal", "min_spent": 0}, {"name": "silver", "min_spent": 200},
         {"name": "gold", "min_spent": 500}, {"name": "vip", "min_spent": 1000}
     ])
     levels.sort(key=lambda x: x["min_spent"], reverse=True)
-    customers = await db.customers.find({}, {"_id": 0}).to_list(10000)
+    customers = await udb.customers.find({}, {"_id": 0}).to_list(10000)
     upgraded = 0
     for cust in customers:
-        orders = await db.sales_orders.find({"customer_id": cust["id"]}, {"_id": 0, "total_amount": 1}).to_list(10000)
+        orders = await udb.sales_orders.find({"customer_id": cust["id"]}, {"_id": 0, "total_amount": 1}).to_list(10000)
         total_spent = sum(o.get("total_amount", 0) for o in orders)
         new_level = "normal"
         for lv in levels:
@@ -2298,14 +2377,15 @@ async def check_customer_upgrades(current_user: dict = Depends(get_current_user)
                 new_level = lv["name"]
                 break
         if new_level != cust.get("member_level", "normal"):
-            await db.customers.update_one({"id": cust["id"]}, {"$set": {"member_level": new_level}})
+            await udb.customers.update_one({"id": cust["id"]}, {"$set": {"member_level": new_level}})
             upgraded += 1
     return {"upgraded": upgraded, "total": len(customers)}
 
 # ==================== 2. Product Image Upload ====================
 @api_router.post("/products/{product_id}/image")
 async def upload_product_image(product_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    product = await db.products.find_one({"id": product_id})
+    udb = get_user_db(current_user)
+    product = await udb.products.find_one({"id": product_id})
     if not product: raise HTTPException(404, "Product not found")
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
     if ext not in ("jpg", "jpeg", "png", "webp"): raise HTTPException(400, "Invalid image format")
@@ -2315,23 +2395,25 @@ async def upload_product_image(product_id: str, file: UploadFile = File(...), cu
         content = await file.read()
         f.write(content)
     image_url = f"/uploads/products/{filename}"
-    await db.products.update_one({"id": product_id}, {"$set": {"image_url": image_url}})
-    await log_audit(current_user["user_id"], current_user["username"], "upload", "product", product_id, "Image uploaded")
+    await udb.products.update_one({"id": product_id}, {"$set": {"image_url": image_url}})
+    await log_audit(current_user["user_id"], current_user["username"], "upload", "product", product_id, "Image uploaded", audit_db=udb)
     return {"image_url": image_url}
 
 @api_router.delete("/products/{product_id}/image")
 async def delete_product_image(product_id: str, current_user: dict = Depends(get_current_user)):
-    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    product = await udb.products.find_one({"id": product_id}, {"_id": 0})
     if not product: raise HTTPException(404, "Product not found")
     if product.get("image_url"):
         filepath = Path(__file__).parent / product["image_url"].lstrip("/")
         if filepath.exists(): filepath.unlink()
-    await db.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
+    await udb.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
     return {"message": "Image deleted"}
 
 # ==================== 3. Wholesale Module ====================
 @api_router.post("/wholesale-orders")
 async def create_wholesale_order(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     order_id = generate_id()
     order_no = generate_order_no("WS")
     total = sum(item.get("amount", 0) for item in data.get("items", []))
@@ -2344,22 +2426,23 @@ async def create_wholesale_order(data: Dict, current_user: dict = Depends(get_cu
         "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()
     }
     # Deduct inventory from main warehouse
-    warehouse = await db.warehouses.find_one({"is_main": True}, {"_id": 0})
+    warehouse = await udb.warehouses.find_one({"is_main": True}, {"_id": 0})
     wh_id = warehouse["id"] if warehouse else None
     if wh_id:
         for item in data.get("items", []):
-            await db.inventory.update_one(
+            await udb.inventory.update_one(
                 {"product_id": item["product_id"], "warehouse_id": wh_id},
                 {"$inc": {"quantity": -item.get("quantity", 0)}}
             )
-    await db.wholesale_orders.insert_one(order_doc)
+    await udb.wholesale_orders.insert_one(order_doc)
     del order_doc["_id"]
-    await log_audit(current_user["user_id"], current_user["username"], "create", "wholesale", order_id, f"${total}")
+    await log_audit(current_user["user_id"], current_user["username"], "create", "wholesale", order_id, f"${total}", audit_db=udb)
     return order_doc
 
 @api_router.get("/wholesale-orders")
 async def get_wholesale_orders(current_user: dict = Depends(get_current_user)):
-    return await db.wholesale_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    udb = get_user_db(current_user)
+    return await udb.wholesale_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 # ==================== 4. Data Restore ====================
 @api_router.post("/backup/restore")
@@ -2379,14 +2462,15 @@ async def restore_backup(file: UploadFile = File(...), current_user: dict = Depe
                     doc.pop("_id", None)
                 await col.insert_many(backup[col_name])
             restored[col_name] = len(backup[col_name])
-    await log_audit(current_user["user_id"], current_user["username"], "restore", "system", "", f"Restored {len(restored)} collections")
+    await log_audit(current_user["user_id"], current_user["username"], "restore", "system", "", f"Restored {len(restored)} collections", audit_db=udb)
     return {"message": "Backup restored", "collections": restored}
 
 # ==================== 5. Employee Attendance ====================
 @api_router.post("/attendance/clock-in")
 async def clock_in(current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    existing = await db.attendance.find_one({"user_id": current_user["user_id"], "date": today})
+    existing = await udb.attendance.find_one({"user_id": current_user["user_id"], "date": today})
     if existing: raise HTTPException(400, "Already clocked in today")
     record = {
         "id": generate_id(), "user_id": current_user["user_id"],
@@ -2394,48 +2478,52 @@ async def clock_in(current_user: dict = Depends(get_current_user)):
         "clock_in": datetime.now(timezone.utc).isoformat(), "clock_out": None,
         "hours": 0, "status": "present"
     }
-    await db.attendance.insert_one(record)
+    await udb.attendance.insert_one(record)
     del record["_id"]
     return record
 
 @api_router.post("/attendance/clock-out")
 async def clock_out(current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    record = await db.attendance.find_one({"user_id": current_user["user_id"], "date": today})
+    record = await udb.attendance.find_one({"user_id": current_user["user_id"], "date": today})
     if not record: raise HTTPException(400, "Not clocked in")
     if record.get("clock_out"): raise HTTPException(400, "Already clocked out")
     now = datetime.now(timezone.utc)
     clock_in_time = datetime.fromisoformat(record["clock_in"])
     hours = round((now - clock_in_time).total_seconds() / 3600, 2)
-    await db.attendance.update_one({"id": record["id"]}, {"$set": {"clock_out": now.isoformat(), "hours": hours}})
+    await udb.attendance.update_one({"id": record["id"]}, {"$set": {"clock_out": now.isoformat(), "hours": hours}})
     return {"clock_out": now.isoformat(), "hours": hours}
 
 @api_router.get("/attendance")
 async def get_attendance(start_date: Optional[str] = None, end_date: Optional[str] = None, user_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     query = {}
     if user_id: query["user_id"] = user_id
     if start_date: query["date"] = {"$gte": start_date}
     if end_date: query.setdefault("date", {})["$lte"] = end_date
-    records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
+    records = await udb.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
     return records
 
 # ==================== 6. Sales Targets ====================
 @api_router.post("/sales-targets")
 async def create_sales_target(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     target = {
         "id": generate_id(), **data,
         "created_by": current_user["user_id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.sales_targets.insert_one(target)
+    await udb.sales_targets.insert_one(target)
     del target["_id"]
     return target
 
 @api_router.get("/sales-targets")
 async def get_sales_targets(period: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     query = {}
     if period: query["period"] = period
-    targets = await db.sales_targets.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    targets = await udb.sales_targets.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
     # Calculate progress
     for t in targets:
         start = t.get("start_date", "")
@@ -2447,7 +2535,7 @@ async def get_sales_targets(period: Optional[str] = None, current_user: dict = D
             q["created_by"] = t["employee_id"]
         if t.get("store_id"):
             q["store_id"] = t["store_id"]
-        orders = await db.sales_orders.find(q, {"_id": 0, "total_amount": 1}).to_list(10000)
+        orders = await udb.sales_orders.find(q, {"_id": 0, "total_amount": 1}).to_list(10000)
         actual = sum(o.get("total_amount", 0) for o in orders)
         t["actual"] = round(actual, 2)
         t["progress"] = round(actual / t.get("target_amount", 1) * 100, 1) if t.get("target_amount") else 0
@@ -2455,12 +2543,14 @@ async def get_sales_targets(period: Optional[str] = None, current_user: dict = D
 
 @api_router.delete("/sales-targets/{target_id}")
 async def delete_sales_target(target_id: str, current_user: dict = Depends(get_current_user)):
-    await db.sales_targets.delete_one({"id": target_id})
+    udb = get_user_db(current_user)
+    await udb.sales_targets.delete_one({"id": target_id})
     return {"status": "deleted"}
 
 # ==================== 7. Purchase Returns ====================
 @api_router.post("/purchase-returns")
 async def create_purchase_return(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     return_id = generate_id()
     return_no = generate_order_no("PR")
     total = sum(item.get("amount", 0) for item in data.get("items", []))
@@ -2471,32 +2561,35 @@ async def create_purchase_return(data: Dict, current_user: dict = Depends(get_cu
         "reason": data.get("reason", ""), "status": "pending",
         "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.purchase_returns.insert_one(doc)
+    await udb.purchase_returns.insert_one(doc)
     del doc["_id"]
     # Deduct inventory
-    warehouse = await db.warehouses.find_one({"is_main": True}, {"_id": 0})
+    warehouse = await udb.warehouses.find_one({"is_main": True}, {"_id": 0})
     if warehouse:
         for item in data.get("items", []):
-            await db.inventory.update_one(
+            await udb.inventory.update_one(
                 {"product_id": item["product_id"], "warehouse_id": warehouse["id"]},
                 {"$inc": {"quantity": -item.get("quantity", 0)}}
             )
-    await log_audit(current_user["user_id"], current_user["username"], "create", "purchase_return", return_id, f"${total}")
+    await log_audit(current_user["user_id"], current_user["username"], "create", "purchase_return", return_id, f"${total}", audit_db=udb)
     return doc
 
 @api_router.get("/purchase-returns")
 async def get_purchase_returns(current_user: dict = Depends(get_current_user)):
-    return await db.purchase_returns.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    udb = get_user_db(current_user)
+    return await udb.purchase_returns.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 @api_router.put("/purchase-returns/{return_id}/approve")
 async def approve_purchase_return(return_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.purchase_returns.update_one({"id": return_id}, {"$set": {"status": "approved"}})
+    udb = get_user_db(current_user)
+    result = await udb.purchase_returns.update_one({"id": return_id}, {"$set": {"status": "approved"}})
     if result.matched_count == 0: raise HTTPException(404, "Return not found")
     return {"status": "approved"}
 
 # ==================== 8. Product Bundles ====================
 @api_router.post("/bundles")
 async def create_bundle(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     bundle = {
         "id": generate_id(), "name": data.get("name"),
         "description": data.get("description", ""),
@@ -2506,14 +2599,15 @@ async def create_bundle(data: Dict, current_user: dict = Depends(get_current_use
         "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.bundles.insert_one(bundle)
+    await udb.bundles.insert_one(bundle)
     del bundle["_id"]
     return bundle
 
 @api_router.get("/bundles")
 async def get_bundles(current_user: dict = Depends(get_current_user)):
-    bundles = await db.bundles.find({}, {"_id": 0}).to_list(200)
-    products = {p["id"]: p for p in await db.products.find({}, {"_id": 0}).to_list(10000)}
+    udb = get_user_db(current_user)
+    bundles = await udb.bundles.find({}, {"_id": 0}).to_list(200)
+    products = {p["id"]: p for p in await udb.products.find({}, {"_id": 0}).to_list(10000)}
     for b in bundles:
         for item in b.get("items", []):
             p = products.get(item.get("product_id"))
@@ -2522,44 +2616,48 @@ async def get_bundles(current_user: dict = Depends(get_current_user)):
 
 @api_router.put("/bundles/{bundle_id}")
 async def update_bundle(bundle_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
-    await db.bundles.update_one({"id": bundle_id}, {"$set": data})
-    return await db.bundles.find_one({"id": bundle_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    await udb.bundles.update_one({"id": bundle_id}, {"$set": data})
+    return await udb.bundles.find_one({"id": bundle_id}, {"_id": 0})
 
 @api_router.delete("/bundles/{bundle_id}")
 async def delete_bundle(bundle_id: str, current_user: dict = Depends(get_current_user)):
-    await db.bundles.delete_one({"id": bundle_id})
+    udb = get_user_db(current_user)
+    await udb.bundles.delete_one({"id": bundle_id})
     return {"status": "deleted"}
 
 # ==================== 9. Cost Price Tracking ====================
 @api_router.get("/products/{product_id}/cost-history")
 async def get_cost_history(product_id: str, current_user: dict = Depends(get_current_user)):
-    return await db.cost_history.find({"product_id": product_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    udb = get_user_db(current_user)
+    return await udb.cost_history.find({"product_id": product_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 # ==================== 10. Notification Center ====================
 @api_router.get("/notifications")
 async def get_notifications(current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     notifications = []
     # Low stock alerts
-    inventory = await db.inventory.find({}, {"_id": 0}).to_list(10000)
-    products = {p["id"]: p for p in await db.products.find({}, {"_id": 0}).to_list(10000)}
+    inventory = await udb.inventory.find({}, {"_id": 0}).to_list(10000)
+    products = {p["id"]: p for p in await udb.products.find({}, {"_id": 0}).to_list(10000)}
     for inv in inventory:
         product = products.get(inv.get("product_id"))
         if product and inv.get("quantity", 0) <= product.get("min_stock", 5):
             notifications.append({"type": "stock_low", "severity": "warning", "title": f"{product['name']} low stock", "detail": f"Current: {inv['quantity']}, Min: {product.get('min_stock', 5)}", "product_id": inv["product_id"]})
     # Overdue accounts
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    overdue = await db.accounts.find({"status": {"$ne": "paid"}, "due_date": {"$lt": today}}, {"_id": 0}).to_list(100)
+    overdue = await udb.accounts.find({"status": {"$ne": "paid"}, "due_date": {"$lt": today}}, {"_id": 0}).to_list(100)
     for acc in overdue:
         notifications.append({"type": "overdue_account", "severity": "error", "title": f"Overdue: {acc.get('party_name')}", "detail": f"${acc.get('amount', 0)} due {acc.get('due_date')}", "account_id": acc["id"]})
     # Pending online orders
-    pending_online = await db.online_orders.count_documents({"order_status": {"$in": ["pending", "confirmed"]}})
+    pending_online = await udb.online_orders.count_documents({"order_status": {"$in": ["pending", "confirmed"]}})
     if pending_online > 0:
         notifications.append({"type": "pending_orders", "severity": "info", "title": f"{pending_online} pending online orders", "detail": "Orders waiting for processing"})
     return {"count": len(notifications), "items": notifications}
 
 # ==================== Audit Log ====================
-async def log_audit(user_id: str, username: str, action: str, target_type: str, target_id: str = "", detail: str = ""):
-    await db.audit_logs.insert_one({
+async def log_audit(user_id: str, username: str, action: str, target_type: str, target_id: str = "", detail: str = "", audit_db=None):
+    await (audit_db or db).audit_logs.insert_one({
         "id": generate_id(), "user_id": user_id, "username": username,
         "action": action, "target_type": target_type, "target_id": target_id,
         "detail": detail, "created_at": datetime.now(timezone.utc).isoformat()
@@ -2572,13 +2670,14 @@ async def get_audit_logs(
     page: int = 1, limit: int = 50,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if action: query["action"] = action
     if target_type: query["target_type"] = target_type
     if start_date: query["created_at"] = {"$gte": start_date}
     if end_date: query.setdefault("created_at", {})["$lte"] = end_date
-    total = await db.audit_logs.count_documents(query)
-    logs = await db.audit_logs.find(query, {"_id": 0}).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    total = await udb.audit_logs.count_documents(query)
+    logs = await udb.audit_logs.find(query, {"_id": 0}).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
     return {"total": total, "page": page, "limit": limit, "items": logs}
 
 # ==================== Profit Analysis ====================
@@ -2587,10 +2686,11 @@ async def get_profit_analysis(
     start_date: Optional[str] = None, end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    udb = get_user_db(current_user)
     query = {}
     if start_date: query["created_at"] = {"$gte": start_date}
     if end_date: query.setdefault("created_at", {})["$lte"] = end_date
-    orders = await db.sales_orders.find(query, {"_id": 0}).to_list(10000)
+    orders = await udb.sales_orders.find(query, {"_id": 0}).to_list(10000)
     product_profit = {}
     for order in orders:
         for item in order.get("items", []):
@@ -2599,7 +2699,7 @@ async def get_profit_analysis(
                 product_profit[pid] = {"revenue": 0, "cost": 0, "quantity": 0}
             product_profit[pid]["revenue"] += item.get("amount", 0)
             product_profit[pid]["quantity"] += item.get("quantity", 0)
-    products = await db.products.find({}, {"_id": 0}).to_list(10000)
+    products = await udb.products.find({}, {"_id": 0}).to_list(10000)
     prod_map = {p["id"]: p for p in products}
     result = []
     total_revenue = 0
@@ -2629,60 +2729,67 @@ async def get_profit_analysis(
 # ==================== Customer Purchase History & Points/Balance ====================
 @api_router.get("/customers/{customer_id}/purchase-history")
 async def get_customer_purchase_history(customer_id: str, current_user: dict = Depends(get_current_user)):
-    orders = await db.sales_orders.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    udb = get_user_db(current_user)
+    orders = await udb.sales_orders.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
     total_spent = sum(o.get("total_amount", 0) for o in orders)
     return {"orders": orders, "total_spent": round(total_spent, 2), "order_count": len(orders)}
 
 @api_router.post("/customers/{customer_id}/points/add")
 async def add_customer_points(customer_id: str, amount: int = Query(..., gt=0), reason: str = "", current_user: dict = Depends(get_current_user)):
-    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    customer = await udb.customers.find_one({"id": customer_id}, {"_id": 0})
     if not customer: raise HTTPException(404, "Customer not found")
     new_points = customer.get("points", 0) + amount
-    await db.customers.update_one({"id": customer_id}, {"$set": {"points": new_points}})
-    await db.points_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "earn", "amount": amount, "balance": new_points, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
-    await log_audit(current_user["user_id"], current_user["username"], "points_add", "customer", customer_id, f"+{amount} points")
+    await udb.customers.update_one({"id": customer_id}, {"$set": {"points": new_points}})
+    await udb.points_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "earn", "amount": amount, "balance": new_points, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await log_audit(current_user["user_id"], current_user["username"], "points_add", "customer", customer_id, f"+{amount} points", audit_db=udb)
     return {"points": new_points}
 
 @api_router.post("/customers/{customer_id}/points/redeem")
 async def redeem_customer_points(customer_id: str, amount: int = Query(..., gt=0), reason: str = "", current_user: dict = Depends(get_current_user)):
-    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    customer = await udb.customers.find_one({"id": customer_id}, {"_id": 0})
     if not customer: raise HTTPException(404, "Customer not found")
     current_points = customer.get("points", 0)
     if current_points < amount: raise HTTPException(400, "Insufficient points")
     new_points = current_points - amount
-    await db.customers.update_one({"id": customer_id}, {"$set": {"points": new_points}})
-    await db.points_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "redeem", "amount": -amount, "balance": new_points, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
-    await log_audit(current_user["user_id"], current_user["username"], "points_redeem", "customer", customer_id, f"-{amount} points")
+    await udb.customers.update_one({"id": customer_id}, {"$set": {"points": new_points}})
+    await udb.points_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "redeem", "amount": -amount, "balance": new_points, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await log_audit(current_user["user_id"], current_user["username"], "points_redeem", "customer", customer_id, f"-{amount} points", audit_db=udb)
     return {"points": new_points}
 
 @api_router.post("/customers/{customer_id}/balance/topup")
 async def topup_customer_balance(customer_id: str, amount: float = Query(..., gt=0), reason: str = "", current_user: dict = Depends(get_current_user)):
-    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    customer = await udb.customers.find_one({"id": customer_id}, {"_id": 0})
     if not customer: raise HTTPException(404, "Customer not found")
     new_balance = round(customer.get("balance", 0) + amount, 2)
-    await db.customers.update_one({"id": customer_id}, {"$set": {"balance": new_balance}})
-    await db.balance_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "topup", "amount": amount, "balance": new_balance, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
-    await log_audit(current_user["user_id"], current_user["username"], "balance_topup", "customer", customer_id, f"+${amount}")
+    await udb.customers.update_one({"id": customer_id}, {"$set": {"balance": new_balance}})
+    await udb.balance_log.insert_one({"id": generate_id(), "customer_id": customer_id, "type": "topup", "amount": amount, "balance": new_balance, "reason": reason, "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await log_audit(current_user["user_id"], current_user["username"], "balance_topup", "customer", customer_id, f"+${amount}", audit_db=udb)
     return {"balance": new_balance}
 
 @api_router.get("/customers/{customer_id}/points-log")
 async def get_customer_points_log(customer_id: str, current_user: dict = Depends(get_current_user)):
-    logs = await db.points_log.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    udb = get_user_db(current_user)
+    logs = await udb.points_log.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return logs
 
 @api_router.get("/customers/{customer_id}/balance-log")
 async def get_customer_balance_log(customer_id: str, current_user: dict = Depends(get_current_user)):
-    logs = await db.balance_log.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    udb = get_user_db(current_user)
+    logs = await udb.balance_log.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return logs
 
 # ==================== Report Export (Excel) ====================
 @api_router.get("/reports/export/sales")
 async def export_sales_report(start_date: Optional[str] = None, end_date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     import openpyxl
     query = {}
     if start_date: query["created_at"] = {"$gte": start_date}
     if end_date: query.setdefault("created_at", {})["$lte"] = end_date
-    orders = await db.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    orders = await udb.sales_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sales Report"
@@ -2690,7 +2797,7 @@ async def export_sales_report(start_date: Optional[str] = None, end_date: Option
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.font = openpyxl.styles.Font(bold=True)
-    customers = {c["id"]: c["name"] for c in await db.customers.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(10000)}
+    customers = {c["id"]: c["name"] for c in await udb.customers.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(10000)}
     for row, order in enumerate(orders, 2):
         ws.cell(row=row, column=1, value=order.get("order_no", ""))
         ws.cell(row=row, column=2, value=order.get("created_at", "")[:19])
@@ -2702,15 +2809,16 @@ async def export_sales_report(start_date: Optional[str] = None, end_date: Option
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    await log_audit(current_user["user_id"], current_user["username"], "export", "report", "", "Sales report exported")
+    await log_audit(current_user["user_id"], current_user["username"], "export", "report", "", "Sales report exported", audit_db=udb)
     return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sales_report.xlsx"})
 
 @api_router.get("/reports/export/inventory")
 async def export_inventory_report(current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     import openpyxl
-    inventory = await db.inventory.find({}, {"_id": 0}).to_list(10000)
-    products = {p["id"]: p for p in await db.products.find({}, {"_id": 0}).to_list(10000)}
-    warehouses = {w["id"]: w["name"] for w in await db.warehouses.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)}
+    inventory = await udb.inventory.find({}, {"_id": 0}).to_list(10000)
+    products = {p["id"]: p for p in await udb.products.find({}, {"_id": 0}).to_list(10000)}
+    warehouses = {w["id"]: w["name"] for w in await udb.warehouses.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)}
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Inventory Report"
@@ -2730,91 +2838,100 @@ async def export_inventory_report(current_user: dict = Depends(get_current_user)
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    await log_audit(current_user["user_id"], current_user["username"], "export", "report", "", "Inventory report exported")
+    await log_audit(current_user["user_id"], current_user["username"], "export", "report", "", "Inventory report exported", audit_db=udb)
     return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=inventory_report.xlsx"})
 
 # ==================== Promotions ====================
 @api_router.post("/promotions")
 async def create_promotion(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     promo = {
         "id": generate_id(), **data,
         "status": data.get("status", "active"),
         "created_by": current_user["user_id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.promotions.insert_one(promo)
+    await udb.promotions.insert_one(promo)
     del promo["_id"]
-    await log_audit(current_user["user_id"], current_user["username"], "create", "promotion", promo["id"], promo.get("name", ""))
+    await log_audit(current_user["user_id"], current_user["username"], "create", "promotion", promo["id"], promo.get("name", ""), audit_db=udb)
     return promo
 
 @api_router.get("/promotions")
 async def get_promotions(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     query = {}
     if status: query["status"] = status
-    return await db.promotions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return await udb.promotions.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
 
 @api_router.put("/promotions/{promo_id}")
 async def update_promotion(promo_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
-    result = await db.promotions.update_one({"id": promo_id}, {"$set": data})
+    udb = get_user_db(current_user)
+    result = await udb.promotions.update_one({"id": promo_id}, {"$set": data})
     if result.matched_count == 0: raise HTTPException(404, "Promotion not found")
-    await log_audit(current_user["user_id"], current_user["username"], "update", "promotion", promo_id, "")
-    return await db.promotions.find_one({"id": promo_id}, {"_id": 0})
+    await log_audit(current_user["user_id"], current_user["username"], "update", "promotion", promo_id, "", audit_db=udb)
+    return await udb.promotions.find_one({"id": promo_id}, {"_id": 0})
 
 @api_router.delete("/promotions/{promo_id}")
 async def delete_promotion(promo_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.promotions.delete_one({"id": promo_id})
+    udb = get_user_db(current_user)
+    result = await udb.promotions.delete_one({"id": promo_id})
     if result.deleted_count == 0: raise HTTPException(404, "Promotion not found")
-    await log_audit(current_user["user_id"], current_user["username"], "delete", "promotion", promo_id, "")
+    await log_audit(current_user["user_id"], current_user["username"], "delete", "promotion", promo_id, "", audit_db=udb)
     return {"status": "deleted"}
 
 # ==================== Accounts Receivable / Payable ====================
 @api_router.post("/accounts/receivable")
 async def create_receivable(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     record = {
         "id": generate_id(), **data, "type": "receivable",
         "status": data.get("status", "pending"),
         "created_by": current_user["user_id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.accounts.insert_one(record)
+    await udb.accounts.insert_one(record)
     del record["_id"]
-    await log_audit(current_user["user_id"], current_user["username"], "create", "receivable", record["id"], f"${data.get('amount', 0)}")
+    await log_audit(current_user["user_id"], current_user["username"], "create", "receivable", record["id"], f"${data.get('amount', 0)}", audit_db=udb)
     return record
 
 @api_router.get("/accounts/receivable")
 async def get_receivables(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     query = {"type": "receivable"}
     if status: query["status"] = status
-    return await db.accounts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return await udb.accounts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 @api_router.put("/accounts/{account_id}/pay")
 async def pay_account(account_id: str, amount: float = Query(..., gt=0), current_user: dict = Depends(get_current_user)):
-    account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    udb = get_user_db(current_user)
+    account = await udb.accounts.find_one({"id": account_id}, {"_id": 0})
     if not account: raise HTTPException(404, "Account not found")
     paid = account.get("paid_amount", 0) + amount
     status = "paid" if paid >= account.get("amount", 0) else "partial"
-    await db.accounts.update_one({"id": account_id}, {"$set": {"paid_amount": paid, "status": status}})
-    await log_audit(current_user["user_id"], current_user["username"], "payment", "account", account_id, f"${amount}")
+    await udb.accounts.update_one({"id": account_id}, {"$set": {"paid_amount": paid, "status": status}})
+    await log_audit(current_user["user_id"], current_user["username"], "payment", "account", account_id, f"${amount}", audit_db=udb)
     return {"paid_amount": paid, "status": status}
 
 @api_router.post("/accounts/payable")
 async def create_payable(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     record = {
         "id": generate_id(), **data, "type": "payable",
         "status": data.get("status", "pending"),
         "created_by": current_user["user_id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.accounts.insert_one(record)
+    await udb.accounts.insert_one(record)
     del record["_id"]
-    await log_audit(current_user["user_id"], current_user["username"], "create", "payable", record["id"], f"${data.get('amount', 0)}")
+    await log_audit(current_user["user_id"], current_user["username"], "create", "payable", record["id"], f"${data.get('amount', 0)}", audit_db=udb)
     return record
 
 @api_router.get("/accounts/payable")
 async def get_payables(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     query = {"type": "payable"}
     if status: query["status"] = status
-    return await db.accounts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return await udb.accounts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 # ==================== Data Backup ====================
 @api_router.get("/backup/export")
@@ -2830,14 +2947,15 @@ async def export_backup(current_user: dict = Depends(get_current_user)):
     backup["exported_at"] = datetime.now(timezone.utc).isoformat()
     backup["version"] = "1.0"
     output = io.BytesIO(json.dumps(backup, ensure_ascii=False, indent=2, default=str).encode("utf-8"))
-    await log_audit(current_user["user_id"], current_user["username"], "backup", "system", "", "Full database backup")
+    await log_audit(current_user["user_id"], current_user["username"], "backup", "system", "", "Full database backup", audit_db=udb)
     return StreamingResponse(output, media_type="application/json", headers={"Content-Disposition": f"attachment; filename=pos_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"})
 
 # ==================== Dashboard Trends ====================
 @api_router.get("/dashboard/trends")
 async def get_dashboard_trends(days: int = 7, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    orders = await db.sales_orders.find({"created_at": {"$gte": since}}, {"_id": 0}).to_list(10000)
+    orders = await udb.sales_orders.find({"created_at": {"$gte": since}}, {"_id": 0}).to_list(10000)
     daily = {}
     for order in orders:
         date_key = order.get("created_at", "")[:10]
@@ -2857,7 +2975,8 @@ async def get_dashboard_trends(days: int = 7, current_user: dict = Depends(get_c
 # ==================== Role Permission Check ====================
 @api_router.get("/auth/permissions")
 async def get_permissions(current_user: dict = Depends(get_current_user)):
-    user = await db.users.find_one({"id": current_user["user_id"]}, {"_id": 0})
+    udb = get_user_db(current_user)
+    user = await udb.users.find_one({"id": current_user["user_id"]}, {"_id": 0})
     if not user: raise HTTPException(404, "User not found")
     role = user.get("role", "staff")
     perms = user.get("permissions", {})

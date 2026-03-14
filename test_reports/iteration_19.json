@@ -1,0 +1,114 @@
+{
+  "summary": "Multi-Tenant Architecture Testing Complete - 18/18 backend tests passed, Frontend login and access control verified. Fixed bug in tenant store/warehouse creation (missing created_at and store_id fields). Data isolation between tenants VERIFIED.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Create Tenant Dialog", "issues": ["Minor: Missing aria-describedby for DialogContent (console warning)"]}
+    ]
+  },
+
+  "passed_tests": [
+    "✓ Backend: Super admin login (POST /api/auth/login) with admin/admin123",
+    "✓ Backend: Super admin invalid password returns 401",
+    "✓ Backend: GET /api/auth/me for super admin - no tenant_id in response",
+    "✓ Backend: Create tenant (POST /api/tenants) - returns id, admin_username, admin_password",
+    "✓ Backend: List tenants (GET /api/tenants) - super admin only",
+    "✓ Backend: Tenant user blocked from /api/tenants (403 Forbidden)",
+    "✓ Backend: Tenant login (POST /api/auth/tenant-login) works with tenant_id/username/password",
+    "✓ Backend: Invalid tenant_id returns 404",
+    "✓ Backend: Invalid tenant credentials returns 401",
+    "✓ Backend: GET /api/auth/me for tenant user returns tenant_id",
+    "✓ Backend: CRITICAL DATA ISOLATION - Products created in Tenant 1 NOT visible in Tenant 2",
+    "✓ Backend: Store isolation between tenants verified",
+    "✓ Backend: Category isolation between tenants verified",
+    "✓ Backend: Customer isolation between tenants verified",
+    "✓ Backend: Toggle tenant status (active/inactive) works",
+    "✓ Backend: Inactive tenant cannot login (403 Forbidden)",
+    "✓ Backend: Tenant-scoped Product CRUD works (Create/Read/Update/Delete)",
+    "✓ Backend: Tenant-scoped Warehouse listing works",
+    "✓ Frontend: Login page shows both tabs (管理员登录 and 商家登录)",
+    "✓ Frontend: Admin login with pre-filled credentials works",
+    "✓ Frontend: Super Admin badge displayed for super admin users",
+    "✓ Frontend: SaaS商家管理 link visible for super admin in sidebar",
+    "✓ Frontend: TenantsPage loads with tenant list, stats cards, create form",
+    "✓ Frontend: Tenant login form has tenant_id, username, password fields",
+    "✓ Frontend: Tenant login successful - shows tenant name in toast and sidebar",
+    "✓ Frontend: SECURITY - Tenant users do NOT see SaaS商家管理 link",
+    "✓ Frontend: Tenant users do NOT see Super Admin badge"
+  ],
+
+  "features_verified": {
+    "super_admin_login": "PASS - POST /api/auth/login with admin/admin123",
+    "tenant_creation": "PASS - POST /api/tenants creates isolated DB with default store, warehouse, admin user",
+    "tenant_login": "PASS - POST /api/auth/tenant-login returns tenant-scoped token",
+    "data_isolation": "PASS - Products, stores, categories, customers all tenant-isolated",
+    "tenant_status_control": "PASS - Toggle active/inactive, inactive tenants blocked from login",
+    "frontend_login_tabs": "PASS - Admin tab and Tenant tab both functional",
+    "frontend_access_control": "PASS - SaaS menu only visible for super admin",
+    "api_auth_me": "PASS - Returns tenant_id for tenant users, no tenant_id for super admin"
+  },
+
+  "bugs_fixed": [
+    {
+      "location": "/app/backend/server.py lines 2142-2153",
+      "issue": "Default store and warehouse created for new tenants were missing required fields",
+      "fix": "Added created_at to store and store_id + created_at to warehouse in create_tenant function"
+    }
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_multitenant.py",
+    "/app/test_reports/pytest/pytest_multitenant.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Tenant creation was missing created_at for store and store_id/created_at for warehouse - FIXED"
+  ],
+
+  "updated_files": [
+    "/app/backend/server.py",
+    "/app/backend/tests/test_multitenant.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 18/18 tests passed",
+    "frontend": "100% - All login flows and access control verified"
+  },
+
+  "test_credentials": {
+    "super_admin": {
+      "username": "admin",
+      "password": "admin123"
+    },
+    "test_tenant": {
+      "tenant_id": "bf11b4b9",
+      "tenant_name": "UI_Test_Tenant",
+      "username": "uitestadmin",
+      "password": "uitest123"
+    }
+  },
+
+  "seed_data_creation": "Created test tenant 'UI_Test_Tenant' for frontend testing",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Multi-tenant architecture fully tested. Key points: (1) Super admin at /api/auth/login with no tenant_id in token, (2) Tenants at /api/auth/tenant-login with tenant_id in token, (3) All routes use get_user_db(current_user) to return correct DB, (4) Frontend conditionally shows SaaS menu via isSuperAdmin = user?.role === 'admin' && !user?.tenant_id. Test file at /app/backend/tests/test_multitenant.py can be reused.",
+
+  "multi_tenant_architecture": {
+    "database_model": "Database-per-tenant: master DB for admin/tenants, tenant_{id} DB for each tenant",
+    "token_structure": "{user_id, username, role, tenant_id, exp}",
+    "db_routing": "get_user_db(current_user) returns tenant DB if tenant_id exists, else master DB",
+    "access_control": "Tenant management endpoints check: role=admin AND no tenant_id",
+    "frontend_check": "isSuperAdmin = user?.role === 'admin' && !user?.tenant_id"
+  }
+}

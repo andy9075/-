@@ -11,12 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import axios, { API } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
 import { InvoicePrint } from "@/components/InvoicePrint";
 
 export default function PosPage() {
   const { t, lang, changeLang } = useLang();
+  const auth = useAuth();
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -77,7 +79,20 @@ export default function PosPage() {
     const savedStore = localStorage.getItem("pos_store");
     const savedShift = localStorage.getItem("pos_shift");
     const savedPriceMode = localStorage.getItem("pos_price_mode");
-    if (savedUser && savedStore) { setUser(JSON.parse(savedUser)); setSelectedStore(JSON.parse(savedStore)); setShowLogin(false); if (savedShift) setShift(JSON.parse(savedShift)); if (savedPriceMode) setPriceMode(savedPriceMode); fetchData(JSON.parse(savedUser).token); }
+    if (savedUser && savedStore) {
+      setUser(JSON.parse(savedUser)); setSelectedStore(JSON.parse(savedStore)); setShowLogin(false);
+      if (savedShift) setShift(JSON.parse(savedShift));
+      if (savedPriceMode) setPriceMode(savedPriceMode);
+      fetchData(JSON.parse(savedUser).token);
+    } else if (auth?.token && auth?.user) {
+      // Use admin panel token for POS (supports tenant context)
+      const userData = { ...auth.user, token: auth.token };
+      setUser(userData);
+      localStorage.setItem("pos_user", JSON.stringify(userData));
+      localStorage.setItem("pos_token", auth.token);
+      fetchData(auth.token);
+      setShowLogin(false);
+    }
   }, []);
 
   // Keyboard shortcuts
@@ -120,7 +135,10 @@ export default function PosPage() {
     } catch (e) { console.error(e); }
   };
 
-  useEffect(() => { axios.get(`${API}/auth/cashiers`).then(res => setCashiers(res.data)).catch(() => {}); }, []);
+  const fetchCashiers = async () => {
+    try { const res = await axios.get(`${API}/auth/cashiers`); setCashiers(res.data); } catch { setCashiers([]); }
+  };
+  useEffect(() => { if (!showLogin && user?.token) { axios.defaults.headers.common["Authorization"] = `Bearer ${user.token}`; fetchCashiers(); } }, [showLogin]);
 
   // === Pricing helpers ===
   const getProductBsMultiplier = (product) => {

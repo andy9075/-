@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [tUsername, setTUsername] = useState("");
   const [tPassword, setTPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { login, setUser, setToken } = useAuth();
+  const { login, tenantLogin } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,15 +39,9 @@ export default function LoginPage() {
     if (!tenantId || !tUsername || !tPassword) { toast.error("请填写所有字段"); return; }
     setIsLoading(true);
     try {
-      const res = await axios.post(`${API}/auth/tenant-login`, { tenant_id: tenantId, username: tUsername, password: tPassword });
-      const { token, user } = res.data;
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      if (setToken) setToken(token);
-      if (setUser) setUser(user);
+      const { tenant } = await tenantLogin(tenantId, tUsername, tPassword);
       navigate("/admin");
-      toast.success(`${t('login')} OK - ${res.data.tenant?.name || ''}`);
+      toast.success(`${t('login')} OK - ${tenant?.name || ''}`);
     } catch (error) {
       toast.error(error.response?.data?.detail || t('login') + " failed");
     } finally { setIsLoading(false); }

@@ -22,6 +22,8 @@ const AdminLayout = ({ children }) => {
 
   const toggleGroup = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
+  const isSuperAdmin = user?.role === 'admin' && !user?.tenant_id;
+
   const navGroups = [
     { key: "main", label: t('dashboard'), items: [
       { icon: Home, label: t('dashboard'), path: "/admin" },
@@ -71,7 +73,7 @@ const AdminLayout = ({ children }) => {
       { icon: CreditCard, label: t('paymentSettings'), path: "/admin/payment-settings" },
       { icon: Settings, label: t('systemSettings'), path: "/admin/settings" },
       { icon: Shield, label: t('auditLog'), path: "/admin/audit-log" },
-      { icon: Building2, label: "SaaS商家", path: "/admin/tenants" },
+      ...(isSuperAdmin ? [{ icon: Building2, label: "SaaS商家管理", path: "/admin/tenants" }] : []),
     ]},
   ];
 
@@ -80,6 +82,8 @@ const AdminLayout = ({ children }) => {
       <div className="p-4 border-b border-slate-700">
         <h2 className="text-lg font-bold text-white tracking-wide">POS System</h2>
         <p className="text-xs text-slate-400 mt-1">{user?.name || user?.username}</p>
+        {user?.tenant_id && <p className="text-xs text-blue-400 mt-0.5">{user?.tenant_name || user?.tenant_id}</p>}
+        {isSuperAdmin && <Badge className="mt-1 bg-amber-500/20 text-amber-400 text-xs">Super Admin</Badge>}
       </div>
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
         {navGroups.map(group => {
