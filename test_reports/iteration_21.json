@@ -1,0 +1,105 @@
+{
+  "summary": "Help Pages Testing - Found CRITICAL SECURITY ISSUE: Tenant users can access /admin/super-admin-help route and view all Super Admin SaaS management content. The route is NOT protected for super-admin-only access. Also found minor UI issue: 使用手册 link missing from tenant sidebar.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminLayout.js - Sidebar",
+        "issue": "使用手册 link not visible in tenant sidebar under 系统参数 group",
+        "selector": "nav a[href='/admin/help']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "security_issues": [
+      {
+        "component": "/admin/super-admin-help route",
+        "issue": "CRITICAL: Tenant users can directly access /admin/super-admin-help and view ALL Super Admin content (SaaS management, tenant management, deployment instructions, billing info)",
+        "affected_route": "/admin/super-admin-help",
+        "expected_behavior": "Route should redirect tenant users to /admin/help OR show 403/access denied",
+        "actual_behavior": "Route renders SuperAdminHelpPage.js with full content for tenant users",
+        "priority": "CRITICAL"
+      }
+    ]
+  },
+  
+  "passed_tests": [
+    "✓ Super Admin login works (admin/admin123)",
+    "✓ Tenant login works (4e151812/shop1admin/shop1pass)",
+    "✓ Super Admin sees Super Admin badge",
+    "✓ Super Admin sees BOTH help links (管理员手册 + 使用手册) in sidebar",
+    "✓ Super Admin Help Page (/admin/super-admin-help) renders correctly with SaaS content",
+    "✓ Tenant Help Page (/admin/help) renders correctly with store operations content",
+    "✓ Accordion functionality works on both help pages",
+    "✓ Tenant Help Page does NOT contain Super Admin content (correct)",
+    "✓ Tenant user does NOT see Super Admin badge (correct)",
+    "✓ Tenant user does NOT see 管理员手册 link in sidebar (correct)",
+    "✓ Tenant user does NOT see SaaS商家管理 link (correct)"
+  ],
+  
+  "failed_tests": [
+    "✗ CRITICAL: Tenant user CAN access /admin/super-admin-help directly and view all Super Admin SaaS content",
+    "✗ 使用手册 link NOT visible in tenant sidebar (though page is accessible via direct URL)"
+  ],
+  
+  "test_report_links": [
+    "/app/frontend/src/pages/admin/SuperAdminHelpPage.js",
+    "/app/frontend/src/pages/admin/TenantHelpPage.js",
+    "/app/frontend/src/App.js",
+    "/app/frontend/src/components/AdminLayout.js"
+  ],
+  
+  "action_items": [
+    "CRITICAL: Protect /admin/super-admin-help route to only allow super admin access (isSuperAdmin check). Options: (1) Add role check in ProtectedRoute or create SuperAdminRoute, (2) Add redirect in SuperAdminHelpPage component if !isSuperAdmin, (3) Add backend API check",
+    "FIX: Investigate why 使用手册 link is not appearing in tenant sidebar under 系统参数 group - the navGroups config in AdminLayout.js line 79 looks correct but link is not rendering"
+  ],
+  
+  "critical_code_review_comments": [
+    "SECURITY: SuperAdminHelpPage at /admin/super-admin-help has NO access control - ANY authenticated user can view SaaS management instructions",
+    "The route in App.js line 110 uses generic AdminRoute wrapper which only checks for authentication, not role",
+    "The sidebar correctly hides the 管理员手册 link from tenant users but the route itself is still accessible via direct URL",
+    "Need to implement route-level protection similar to how /admin/tenants should be protected"
+  ],
+  
+  "updated_files": [],
+  
+  "success_rate": {
+    "backend": "N/A - frontend only testing",
+    "frontend": "73% - 11/15 tests passed (main security issue is critical)"
+  },
+  
+  "test_credentials": {
+    "super_admin": {
+      "username": "admin",
+      "password": "admin123"
+    },
+    "tenant_user": {
+      "tenant_id": "4e151812",
+      "username": "shop1admin",
+      "password": "shop1pass"
+    }
+  },
+  
+  "seed_data_creation": "None - used existing test credentials",
+  
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "Help pages functionality testing completed. Critical security issue found: /admin/super-admin-help route accessible to tenant users. The sidebar correctly conditionally renders the 管理员手册 link (lines 77-78 AdminLayout.js) but the route itself in App.js has no role protection. After fix is applied, retest: (1) Tenant user navigating to /admin/super-admin-help should be redirected or see 403, (2) 使用手册 link should appear in tenant sidebar.",
+  
+  "rca_of_the_issue": {
+    "root_cause": "The /admin/super-admin-help route in App.js (line 110) uses AdminRoute wrapper which only checks authentication via ProtectedRoute, not role. The sidebar link hiding in AdminLayout.js is only UI-level protection (security through obscurity), not route-level protection.",
+    "reproduction_steps": [
+      "1. Login as tenant user (tenant_id=4e151812, username=shop1admin, password=shop1pass)",
+      "2. Navigate directly to /admin/super-admin-help",
+      "3. Observe that full Super Admin Help Page content is visible"
+    ],
+    "recommended_fix": "Create a SuperAdminRoute component that checks isSuperAdmin = user?.role === 'admin' && !user?.tenant_id, and redirects tenant users to /admin or /admin/help. Use this wrapper for /admin/super-admin-help and /admin/tenants routes."
+  }
+}

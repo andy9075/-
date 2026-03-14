@@ -9,7 +9,8 @@ import {
   Settings, LogOut, Menu, X, Home, Building2, Truck, CreditCard,
   Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight,
   Tag, Calendar, RotateCcw, TrendingUp, Shield, Megaphone, Banknote,
-  ChevronDown, ChevronRight, Clock, Target, Box, Bell, Monitor, ShoppingBag
+  ChevronDown, ChevronRight, Clock, Target, Box, Bell, Monitor, ShoppingBag,
+  HelpCircle
 } from "lucide-react";
 
 const AdminLayout = ({ children }) => {
@@ -74,6 +75,8 @@ const AdminLayout = ({ children }) => {
       { icon: Settings, label: t('systemSettings'), path: "/admin/settings" },
       { icon: Shield, label: t('auditLog'), path: "/admin/audit-log" },
       ...(isSuperAdmin ? [{ icon: Building2, label: "SaaS商家管理", path: "/admin/tenants" }] : []),
+      ...(isSuperAdmin ? [{ icon: HelpCircle, label: "管理员手册", path: "/admin/super-admin-help" }] : []),
+      { icon: HelpCircle, label: "使用手册", path: "/admin/help" },
     ]},
   ];
 

@@ -47,6 +47,8 @@ import BundlesPage from "@/pages/admin/BundlesPage";
 import NotificationsPage from "@/pages/admin/NotificationsPage";
 import CommissionPage from "@/pages/admin/CommissionPage";
 import TenantsPage from "@/pages/admin/TenantsPage";
+import SuperAdminHelpPage from "@/pages/admin/SuperAdminHelpPage";
+import TenantHelpPage from "@/pages/admin/TenantHelpPage";
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 
 function AdminRoute({ children }) {
@@ -105,6 +107,8 @@ function AppContent() {
           <Route path="/admin/notifications" element={<AdminRoute><NotificationsPage /></AdminRoute>} />
           <Route path="/admin/commission" element={<AdminRoute><CommissionPage /></AdminRoute>} />
           <Route path="/admin/tenants" element={<AdminRoute><TenantsPage /></AdminRoute>} />
+          <Route path="/admin/super-admin-help" element={<AdminRoute><SuperAdminHelpPage /></AdminRoute>} />
+          <Route path="/admin/help" element={<AdminRoute><TenantHelpPage /></AdminRoute>} />
 
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
