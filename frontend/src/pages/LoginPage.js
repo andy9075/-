@@ -48,8 +48,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-slate-800/50 border-slate-700 backdrop-blur">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 z-0">
+        <img src="/sellox-hero.png" alt="" className="w-full h-full object-cover opacity-20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/60" />
+      </div>
+      <Card className="w-full max-w-md bg-slate-800/70 border-slate-700 backdrop-blur-xl relative z-10">
         <CardHeader className="text-center">
           <div className="mx-auto w-16 h-16 rounded-2xl overflow-hidden mb-4">
             <img src="/sellox-logo.png" alt="Sellox" className="w-full h-full object-cover" />
