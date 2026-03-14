@@ -9,7 +9,7 @@ import {
   Settings, LogOut, Menu, X, Home, Building2, Truck, CreditCard,
   Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight,
   Tag, Calendar, RotateCcw, TrendingUp, Shield, Megaphone, Banknote,
-  ChevronDown, ChevronRight, Clock, Target, Box, Bell
+  ChevronDown, ChevronRight, Clock, Target, Box, Bell, Monitor, ShoppingBag
 } from "lucide-react";
 
 const AdminLayout = ({ children }) => {
@@ -89,6 +89,27 @@ const AdminLayout = ({ children }) => {
         {isSuperAdmin && <Badge className="mt-1 bg-amber-500/20 text-amber-400 text-xs">Super Admin</Badge>}
       </div>
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+        {/* Quick Access: POS & Shop */}
+        <div className="flex gap-2 px-1 pb-2 mb-2 border-b border-slate-700">
+          <Link to="/pos" className="flex-1" onClick={() => setSidebarOpen(false)}>
+            <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-sm h-9 gap-1.5" data-testid="quick-pos-btn">
+              <Monitor className="w-4 h-4" /> POS
+            </Button>
+          </Link>
+          {user?.tenant_id ? (
+            <a href={`/shop/${user.tenant_id}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+              <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-sm h-9 gap-1.5" data-testid="quick-shop-btn">
+                <ShoppingBag className="w-4 h-4" /> Shop
+              </Button>
+            </a>
+          ) : (
+            <Link to="/admin/tenants" className="flex-1" onClick={() => setSidebarOpen(false)}>
+              <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-sm h-9 gap-1.5" data-testid="quick-shop-btn">
+                <ShoppingBag className="w-4 h-4" /> Shops
+              </Button>
+            </Link>
+          )}
+        </div>
         {navGroups.map(group => {
           const isExpanded = !collapsed[group.key];
           const isActive = group.items.some(item => location.pathname === item.path);
