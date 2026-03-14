@@ -2233,14 +2233,10 @@ async def get_tenant_stats(tenant_id: str, current_user: dict = Depends(get_curr
     if current_user.get("role") != "admin" or current_user.get("tenant_id"):
         raise HTTPException(403, "Super admin only")
     tdb = get_tenant_db(tenant_id)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    today_orders = await tdb.sales_orders.find({"created_at": {"$gte": f"{today}T00:00:00"}}, {"_id": 0, "total_amount": 1}).to_list(10000)
     return {
         "users": await tdb.users.count_documents({}),
         "products": await tdb.products.count_documents({}),
-        "stores": await tdb.stores.count_documents({}),
-        "total_orders": await tdb.sales_orders.count_documents({}),
-        "today_sales": round(sum(o.get("total_amount", 0) for o in today_orders), 2)
+        "stores": await tdb.stores.count_documents({})
     }
 
 # ==================== Commission Rules & Calculation ====================

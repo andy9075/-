@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Building2, Plus, Users, ShoppingCart, Edit2, Power } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Building2, Plus, Power, Copy, ExternalLink, Eye } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ export default function TenantsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState(null);
-  const [tenantStats, setTenantStats] = useState(null);
   const [form, setForm] = useState({ name: "", contact_name: "", contact_phone: "", plan: "basic", max_users: 5, max_stores: 3, admin_username: "", admin_password: "admin123" });
 
   const fetchTenants = async () => {
@@ -30,21 +29,20 @@ export default function TenantsPage() {
   const handleCreate = async () => {
     try {
       const res = await axios.post(`${API}/tenants`, form);
-      toast.success(`商家创建成功！\n账号: ${res.data.admin_username}\n密码: ${res.data.admin_password}\n商家ID: ${res.data.id}`);
+      toast.success(`Tenant created!\nUsername: ${res.data.admin_username}\nPassword: ${res.data.admin_password}\nTenant ID: ${res.data.id}`);
       setShowForm(false); fetchTenants();
     } catch (e) { toast.error(e.response?.data?.detail || t('operationFailed')); }
   };
 
   const handleToggle = async (id) => {
-    try { const res = await axios.put(`${API}/tenants/${id}/toggle`); toast.success(`Status: ${res.data.status}`); fetchTenants(); }
+    try { await axios.put(`${API}/tenants/${id}/toggle`); toast.success("Status updated"); fetchTenants(); }
     catch (e) { toast.error(t('operationFailed')); }
   };
 
-  const viewDetail = async (tenant) => {
-    setSelectedTenant(tenant);
-    try { const res = await axios.get(`${API}/tenants/${tenant.id}/stats`); setTenantStats(res.data); }
-    catch (e) { setTenantStats(null); }
-    setShowDetail(true);
+  const copyShopLink = (tenantId) => {
+    const url = `${window.location.origin}/shop/${tenantId}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Shop link copied!");
   };
 
   const PLAN_COLORS = { basic: "bg-slate-500/20 text-slate-400", pro: "bg-blue-500/20 text-blue-400", enterprise: "bg-purple-500/20 text-purple-400" };
@@ -52,21 +50,21 @@ export default function TenantsPage() {
   return (
     <div className="space-y-6" data-testid="tenants-page">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Building2 className="w-6 h-6 text-blue-400" /> 商家管理 (SaaS)</h1>
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Building2 className="w-6 h-6 text-blue-400" /> Tenant Management</h1>
         <Button onClick={() => { setForm({ name: "", contact_name: "", contact_phone: "", plan: "basic", max_users: 5, max_stores: 3, admin_username: "", admin_password: "admin123" }); setShowForm(true); }} className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-tenant-btn">
-          <Plus className="w-4 h-4 mr-2" /> 添加商家
+          <Plus className="w-4 h-4 mr-2" /> Add Tenant
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border-blue-500/30">
-          <CardContent className="p-6"><p className="text-blue-300 text-sm">总商家数</p><p className="text-3xl font-bold text-white mt-1">{tenants.length}</p></CardContent>
+        <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
+          <CardContent className="p-6"><p className="text-blue-300 text-sm">Total Tenants</p><p className="text-3xl font-bold text-white mt-1">{tenants.length}</p></CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border-emerald-500/30">
-          <CardContent className="p-6"><p className="text-emerald-300 text-sm">活跃商家</p><p className="text-3xl font-bold text-white mt-1">{tenants.filter(t => t.status === 'active').length}</p></CardContent>
+        <Card className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border-emerald-500/30">
+          <CardContent className="p-6"><p className="text-emerald-300 text-sm">Active</p><p className="text-3xl font-bold text-white mt-1">{tenants.filter(t => t.status === 'active').length}</p></CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border-purple-500/30">
-          <CardContent className="p-6"><p className="text-purple-300 text-sm">总订单数</p><p className="text-3xl font-bold text-white mt-1">{tenants.reduce((s, t) => s + (t.orders_count || 0), 0)}</p></CardContent>
+        <Card className="bg-gradient-to-br from-red-500/20 to-red-600/10 border-red-500/30">
+          <CardContent className="p-6"><p className="text-red-300 text-sm">Inactive</p><p className="text-3xl font-bold text-white mt-1">{tenants.filter(t => t.status !== 'active').length}</p></CardContent>
         </Card>
       </div>
 
@@ -75,35 +73,38 @@ export default function TenantsPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-slate-700">
-                <TableHead className="text-slate-300">商家ID</TableHead>
-                <TableHead className="text-slate-300">商家名称</TableHead>
-                <TableHead className="text-slate-300">联系人</TableHead>
-                <TableHead className="text-slate-300">套餐</TableHead>
-                <TableHead className="text-slate-300">用户数</TableHead>
-                <TableHead className="text-slate-300">订单数</TableHead>
-                <TableHead className="text-slate-300">状态</TableHead>
-                <TableHead className="text-slate-300">操作</TableHead>
+                <TableHead className="text-slate-300">Tenant</TableHead>
+                <TableHead className="text-slate-300">Contact</TableHead>
+                <TableHead className="text-slate-300">Plan</TableHead>
+                <TableHead className="text-slate-300">Created</TableHead>
+                <TableHead className="text-slate-300">Status</TableHead>
+                <TableHead className="text-slate-300">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tenants.map(t => (
-                <TableRow key={t.id} className="border-slate-700">
-                  <TableCell className="text-blue-400 font-mono text-sm">{t.id}</TableCell>
-                  <TableCell className="text-white font-medium">{t.name}</TableCell>
-                  <TableCell className="text-slate-300">{t.contact_name || '-'}</TableCell>
-                  <TableCell><Badge className={PLAN_COLORS[t.plan] || ""}>{t.plan}</Badge></TableCell>
-                  <TableCell className="text-slate-300">{t.users_count || 0}/{t.max_users}</TableCell>
-                  <TableCell className="text-slate-300">{t.orders_count || 0}</TableCell>
-                  <TableCell><Badge className={t.status === 'active' ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}>{t.status}</Badge></TableCell>
+              {tenants.map(tenant => (
+                <TableRow key={tenant.id} className="border-slate-700">
+                  <TableCell>
+                    <div>
+                      <p className="text-white font-medium">{tenant.name}</p>
+                      <p className="text-slate-500 text-xs font-mono">{tenant.id}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-slate-300">{tenant.contact_name || '-'}</TableCell>
+                  <TableCell><Badge className={PLAN_COLORS[tenant.plan] || ""}>{tenant.plan}</Badge></TableCell>
+                  <TableCell className="text-slate-400 text-sm">{tenant.created_at?.substring(0, 10) || '-'}</TableCell>
+                  <TableCell><Badge className={tenant.status === 'active' ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}>{tenant.status}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => viewDetail(t)} className="text-blue-400"><Edit2 className="w-4 h-4" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleToggle(t.id)} className={t.status === 'active' ? "text-red-400" : "text-emerald-400"}><Power className="w-4 h-4" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setSelectedTenant(tenant); setShowDetail(true); }} className="text-blue-400" title="Details"><Eye className="w-4 h-4" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => copyShopLink(tenant.id)} className="text-emerald-400" title="Copy Shop Link"><Copy className="w-4 h-4" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => window.open(`/shop/${tenant.id}`, '_blank')} className="text-purple-400" title="Open Shop"><ExternalLink className="w-4 h-4" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleToggle(tenant.id)} className={tenant.status === 'active' ? "text-red-400" : "text-emerald-400"} title="Toggle Status"><Power className="w-4 h-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
               ))}
-              {tenants.length === 0 && <TableRow><TableCell colSpan={8} className="text-slate-400 text-center py-8">{t('noData')}</TableCell></TableRow>}
+              {tenants.length === 0 && <TableRow><TableCell colSpan={6} className="text-slate-400 text-center py-8">{t('noData')}</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -112,23 +113,23 @@ export default function TenantsPage() {
       {/* Create Tenant Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
-          <DialogHeader><DialogTitle>添加商家</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Add Tenant</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input placeholder="商家名称（如：小明便利店）" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="tenant-name-input" />
+            <Input placeholder="Business Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="tenant-name-input" />
             <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="联系人" value={form.contact_name} onChange={e => setForm({...form, contact_name: e.target.value})} className="bg-slate-700 border-slate-600" />
-              <Input placeholder="电话" value={form.contact_phone} onChange={e => setForm({...form, contact_phone: e.target.value})} className="bg-slate-700 border-slate-600" />
+              <Input placeholder="Contact Person" value={form.contact_name} onChange={e => setForm({...form, contact_name: e.target.value})} className="bg-slate-700 border-slate-600" />
+              <Input placeholder="Phone" value={form.contact_phone} onChange={e => setForm({...form, contact_phone: e.target.value})} className="bg-slate-700 border-slate-600" />
             </div>
             <select value={form.plan} onChange={e => setForm({...form, plan: e.target.value})} className="w-full bg-slate-700 border border-slate-600 text-white rounded-md px-3 py-2">
-              <option value="basic">基础版 (5用户, 3门店)</option>
-              <option value="pro">专业版 (15用户, 10门店)</option>
-              <option value="enterprise">企业版 (不限)</option>
+              <option value="basic">Basic (5 users, 3 stores)</option>
+              <option value="pro">Pro (15 users, 10 stores)</option>
+              <option value="enterprise">Enterprise (Unlimited)</option>
             </select>
             <hr className="border-slate-700" />
-            <p className="text-sm text-slate-400">管理员账号（给商家用的）</p>
+            <p className="text-sm text-slate-400">Admin account for tenant</p>
             <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="登录账号" value={form.admin_username} onChange={e => setForm({...form, admin_username: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="tenant-admin-username" />
-              <Input placeholder="登录密码" value={form.admin_password} onChange={e => setForm({...form, admin_password: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="tenant-admin-password" />
+              <Input placeholder="Username" value={form.admin_username} onChange={e => setForm({...form, admin_username: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="tenant-admin-username" />
+              <Input placeholder="Password" value={form.admin_password} onChange={e => setForm({...form, admin_password: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="tenant-admin-password" />
             </div>
             <div className="flex gap-2 pt-2">
               <Button onClick={handleCreate} className="flex-1 bg-emerald-500 hover:bg-emerald-600" data-testid="tenant-submit-btn">{t('save')}</Button>
@@ -141,20 +142,21 @@ export default function TenantsPage() {
       {/* Tenant Detail Dialog */}
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
-          <DialogHeader><DialogTitle>{selectedTenant?.name} - 详情</DialogTitle></DialogHeader>
-          {selectedTenant && tenantStats && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-700/50 rounded p-3 text-center"><p className="text-slate-400 text-xs">用户</p><p className="text-xl font-bold text-blue-400">{tenantStats.users}</p></div>
-                <div className="bg-slate-700/50 rounded p-3 text-center"><p className="text-slate-400 text-xs">商品</p><p className="text-xl font-bold text-purple-400">{tenantStats.products}</p></div>
-                <div className="bg-slate-700/50 rounded p-3 text-center"><p className="text-slate-400 text-xs">门店</p><p className="text-xl font-bold text-orange-400">{tenantStats.stores}</p></div>
-                <div className="bg-slate-700/50 rounded p-3 text-center"><p className="text-slate-400 text-xs">总订单</p><p className="text-xl font-bold text-emerald-400">{tenantStats.total_orders}</p></div>
+          <DialogHeader><DialogTitle>{selectedTenant?.name}</DialogTitle></DialogHeader>
+          {selectedTenant && (
+            <div className="space-y-3 text-sm text-slate-300">
+              <div className="space-y-2">
+                <p>Tenant ID: <span className="text-blue-400 font-mono">{selectedTenant.id}</span></p>
+                <p>Contact: {selectedTenant.contact_name || '-'} {selectedTenant.contact_phone || ''}</p>
+                <p>Plan: <Badge className={PLAN_COLORS[selectedTenant.plan] || ""}>{selectedTenant.plan}</Badge></p>
+                <p>Created: {selectedTenant.created_at?.substring(0, 10) || '-'}</p>
               </div>
-              <div className="bg-emerald-500/10 rounded p-3 text-center"><p className="text-slate-400 text-xs">今日销售</p><p className="text-2xl font-bold text-emerald-400">${tenantStats.today_sales}</p></div>
-              <div className="text-sm text-slate-400 space-y-1">
-                <p>商家ID: <span className="text-blue-400 font-mono">{selectedTenant.id}</span></p>
-                <p>联系人: {selectedTenant.contact_name || '-'} {selectedTenant.contact_phone || ''}</p>
-                <p>创建时间: {selectedTenant.created_at?.substring(0, 10)}</p>
+              <div className="border-t border-slate-700 pt-3">
+                <p className="text-xs text-slate-400 mb-1">Shop URL:</p>
+                <div className="flex items-center gap-2">
+                  <code className="text-emerald-400 text-xs bg-slate-900 px-2 py-1.5 rounded flex-1 truncate">{window.location.origin}/shop/{selectedTenant.id}</code>
+                  <Button size="sm" variant="ghost" onClick={() => copyShopLink(selectedTenant.id)} className="text-emerald-400"><Copy className="w-4 h-4" /></Button>
+                </div>
               </div>
             </div>
           )}
