@@ -26,14 +26,14 @@ export default function VideoGenerator({ onComplete }) {
     setShowDialog(true);
     setProgress(0);
 
-    // Start progress animation (generation takes ~2-3 mins)
+    // Start progress animation (generation takes ~3-5 mins with TTS)
     timerRef.current = setInterval(() => {
       setProgress(p => Math.min(p + 1, 95));
-    }, 2000);
+    }, 3500);
 
     try {
       await axios.post(`${API}/videos/generate-tutorials`);
-      toast.success("视频生成任务已启动！录制真实操作中，请稍等2-3分钟...");
+      toast.success("正在生成带语音解说的教程视频！包括录屏和中文旁白，请稍等3-5分钟...");
 
       // Poll for completion
       let attempts = 0;
@@ -49,13 +49,13 @@ export default function VideoGenerator({ onComplete }) {
             const created = new Date(v.created_at);
             return (Date.now() - created.getTime()) < 5 * 60 * 1000;
           });
-          if (recent.length >= 5 || attempts > 90) {
+          if (recent.length >= 5 || attempts > 120) {
             clearInterval(pollInterval);
             clearInterval(timerRef.current);
             setProgress(100);
             setGenerating(false);
             if (recent.length > 0) {
-              toast.success(`已生成 ${recent.length} 个真实操作录屏教程！`);
+              toast.success(`已生成 ${recent.length} 个带语音解说的教程视频！`);
             }
             if (onComplete) onComplete();
           }
@@ -72,19 +72,19 @@ export default function VideoGenerator({ onComplete }) {
     <>
       <Button onClick={handleGenerate} disabled={generating} className="bg-red-500 hover:bg-red-600" data-testid="generate-all-videos-btn">
         {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Video className="w-4 h-4 mr-2" />}
-        {generating ? "录制中..." : "自动录制教程"}
+        {generating ? "生成中..." : "生成语音解说教程"}
       </Button>
 
       <Dialog open={showDialog} onOpenChange={v => { if (!generating) setShowDialog(v); }}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Video className="w-5 h-5 text-red-400" /> 自动录制真实操作教程
+              <Video className="w-5 h-5 text-red-400" /> 生成语音解说教程
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-slate-300">
-              系统正在自动打开浏览器，模拟真实操作录制视频教程。包括：登录、浏览页面、点击按钮、输入数据等真实操作。
+              系统正在自动录制真实操作并生成中文语音解说。流程：生成旁白音频 → 录制屏幕操作 → 合并为带解说的教程视频。
             </p>
 
             {/* Progress bar */}

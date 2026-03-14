@@ -84,24 +84,29 @@ async def delete_video(video_id: str, current_user: dict = Depends(get_current_u
 
 @router.post("/videos/generate-tutorials")
 async def generate_tutorial_videos(current_user: dict = Depends(get_current_user)):
-    """Trigger background generation of tutorial videos from real browser recordings"""
+    """Trigger background generation of narrated tutorial videos (screen recording + voice-over)"""
     if current_user.get("role") not in ("admin",):
         raise HTTPException(403, "Admin only")
     import subprocess, threading
     app_url = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:3000")
-    # Remove /api suffix if present for frontend URL
     app_url = app_url.rstrip("/")
 
     def run_generation():
         try:
-            subprocess.run(
-                ["python3", str(Path(ROOT_DIR) / "generate_tutorials.py"), app_url],
+            # Use the narrated tutorial generator (TTS + Playwright + ffmpeg)
+            result = subprocess.run(
+                ["python3", str(Path(ROOT_DIR) / "generate_narrated_tutorials.py"), app_url],
                 cwd=str(ROOT_DIR),
-                timeout=300,
+                timeout=600,
                 capture_output=True,
-                text=True
+                text=True,
+                env={**os.environ, "APP_URL": app_url}
             )
-            # After generation, register videos in DB
+            print(f"Narrated generation stdout: {result.stdout[-500:]}")
+            if result.stderr:
+                print(f"Narrated generation stderr: {result.stderr[-500:]}")
+
+            # Register videos in DB
             import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -124,7 +129,6 @@ async def generate_tutorial_videos(current_user: dict = Depends(get_current_user
                     fpath = video_dir / f"{filename}.webm"
                     if fpath.exists():
                         vid = generate_id()[:12]
-                        # Remove old version with same title
                         await video_db.videos.delete_many({"title": title})
                         await video_db.videos.insert_one({
                             "id": vid, "title": title, "url": f"/api/uploads/videos/{filename}.webm",
@@ -136,11 +140,13 @@ async def generate_tutorial_videos(current_user: dict = Depends(get_current_user
             mongo_client.close()
             loop.close()
         except Exception as e:
-            print(f"Tutorial generation error: {e}")
+            print(f"Narrated tutorial generation error: {e}")
+            import traceback
+            traceback.print_exc()
 
     thread = threading.Thread(target=run_generation, daemon=True)
     thread.start()
-    return {"message": "Tutorial generation started in background. Videos will appear in a few minutes."}
+    return {"message": "正在生成带语音解说的视频教程，包括录制屏幕操作和生成中文旁白。预计需要3-5分钟，完成后自动显示。"}
 
 # ==================== Audit Log ====================
 
