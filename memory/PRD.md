@@ -13,56 +13,65 @@ Build a comprehensive, desktop-style POS application ("秘奥软件") as a web-b
 ```
 /app
 ├── backend/
-│   └── server.py
+│   ├── server.py
+│   └── uploads/products/   (product images)
 ├── frontend/src/
 │   ├── App.js
 │   ├── lib/api.js
 │   ├── context/ (AuthContext, LangContext)
-│   ├── components/ (AdminLayout, ProtectedRoute, Print components, ui/)
+│   ├── components/ (AdminLayout with grouped nav, Print, ui/)
 │   └── pages/
 │       ├── LoginPage.js, PosPage.js, ShopPage.js, ShopOrdersPage.js
-│       └── admin/ (30+ pages)
+│       └── admin/ (35+ pages)
 ```
 
 ## Completed Features
-- [x] Admin Panel (all CRUD modules)
-- [x] POS Cash Register (shifts, cart, payment, held orders, refunds, keyboard shortcuts)
-- [x] Multi-currency display (USD / Bs.) with per-department exchange rates
+
+### Core POS
+- [x] POS Cash Register with shifts, cart, payment, held orders, refunds, keyboard shortcuts
+- [x] Multi-currency (USD/Bs.) with per-department exchange rates
 - [x] Online Store with cart and checkout
 - [x] Product Import (CSV/Excel/JSON)
 - [x] i18n (Chinese/English/Spanish)
-- [x] Offline mode with auto-sync
-- [x] Frontend Refactoring: Monolithic -> 30+ modular files
 - [x] Printing: 80mm receipt, A4 invoice, price labels
-- [x] 12-Point Enhancement Plan: All completed
-- [x] **Phase 2 Features (2026-03-13):** All 11 new features
-  - Report Export (Excel), Profit Analysis, Customer Purchase History
-  - Loyalty Points/Balance management, Audit Log
-  - Promotions Engine, Accounts Receivable/Payable
-  - Data Backup Export, Dashboard Sales Trends
-  - Role Permissions, Report Export Buttons
-- [x] **POS Auto-Points System (2026-03-13):**
-  - Auto-earn points on purchase ($1 = 1pt, configurable)
-  - Points redemption at checkout (100pts = $1, configurable)
-  - Points badge in POS header when customer selected
-  - Points section in payment modal with "use all" button
-  - Points earned/used shown in receipt
-  - Points rate configuration in System Settings
-  - All transactions logged in points_log collection
+
+### Phase 1 - Foundation
+- [x] Admin Panel with all CRUD modules
+- [x] Frontend refactored from monolithic to 35+ modular files
+
+### Phase 2 - Enhancements (2026-03-13)
+- [x] Report Export (Excel), Profit Analysis, Customer Purchase History
+- [x] Loyalty Points/Balance, Audit Log, Promotions Engine
+- [x] Accounts Receivable/Payable, Data Backup, Dashboard Trends
+- [x] Role Permissions, POS Auto-Points ($1=1pt earn, 100pt=$1 redeem)
+
+### Phase 3 - Advanced Features (2026-03-13)
+- [x] VIP Auto-Upgrade (normal->silver->gold->VIP based on spending)
+- [x] Product Image Upload with display in shop
+- [x] Wholesale Module (dedicated wholesale ordering)
+- [x] Data Restore from JSON backup
+- [x] Employee Attendance (clock in/out, hours tracking)
+- [x] Sales Target Management (monthly/quarterly with progress)
+- [x] Purchase Returns (create, approve workflow)
+- [x] Product Bundles/Combos (create bundles with discount pricing)
+- [x] Cost Price Change Tracking
+- [x] Notification Center (low stock, overdue accounts, pending orders)
+- [x] Sidebar Grouped Navigation (9 collapsible groups)
 
 ## P1 - Next Tasks
-- Wholesale Module (dedicated wholesale ordering flow)
-- Backend server.py refactoring into API routers
+- Backend server.py refactoring into API routers (code organization)
+- Offline Mode sync enhancement
 
 ## P2 - Future Tasks
 - UI/UX polish across the app
-- Product images upload
-- Enhanced reporting (complex filters, PDF export)
+- Enhanced reporting (PDF export, complex filters)
+- Barcode scanner optimization
 
 ## Test Credentials
 - Username: admin / Password: admin123
 
 ## Test Reports
-- /app/test_reports/iteration_14.json (pie chart fix - 100%)
-- /app/test_reports/iteration_15.json (11 new features - 100%)
-- /app/test_reports/iteration_16.json (POS auto-points - 100%)
+- iteration_14: pie chart fix (100%)
+- iteration_15: 11 features (100%)
+- iteration_16: POS auto-points (100%)
+- iteration_17: Phase 3 - 12 features (100%)
