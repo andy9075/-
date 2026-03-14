@@ -91,7 +91,7 @@ const AdminLayout = ({ children }) => {
         </div>
         <p className="text-xs text-slate-400 mt-1">{user?.name || user?.username}</p>
         {user?.tenant_id && <p className="text-xs text-blue-400 mt-0.5">{user?.tenant_name || user?.tenant_id}</p>}
-        {isSuperAdmin && <Badge className="mt-1 bg-amber-500/20 text-amber-400 text-xs">Super Admin</Badge>}
+        {isSuperAdmin && <Badge className="mt-1 bg-amber-500/20 text-amber-400 text-xs">{t('superAdmin')}</Badge>}
       </div>
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
         {/* Quick Access: POS & Shop */}
@@ -104,13 +104,13 @@ const AdminLayout = ({ children }) => {
           {user?.tenant_id ? (
             <a href={`/shop/${user.tenant_id}`} target="_blank" rel="noopener noreferrer" className="flex-1">
               <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-sm h-9 gap-1.5" data-testid="quick-shop-btn">
-                <ShoppingBag className="w-4 h-4" /> Shop
+                <ShoppingBag className="w-4 h-4" /> {t('shop')}
               </Button>
             </a>
           ) : (
             <Link to="/admin/tenants" className="flex-1" onClick={() => setSidebarOpen(false)}>
               <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-sm h-9 gap-1.5" data-testid="quick-shop-btn">
-                <ShoppingBag className="w-4 h-4" /> Shops
+                <ShoppingBag className="w-4 h-4" /> {t('shops')}
               </Button>
             </Link>
           )}

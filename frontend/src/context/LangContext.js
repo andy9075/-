@@ -221,6 +221,9 @@ const translations = {
     passwordKeepHint: "留空保持不变",
     enabledCount: "已启用",
     maxDiscountPercent: "最大折扣",
+    superAdmin: "超级管理员",
+    shops: "商家管理",
+    shop: "网店",
   },
   en: {
     save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit", add: "Add",
@@ -412,6 +415,9 @@ const translations = {
     passwordKeepHint: "leave empty to keep",
     enabledCount: "enabled",
     maxDiscountPercent: "Max Discount",
+    superAdmin: "Super Admin",
+    shops: "Shops",
+    shop: "Shop",
   },  es: {
     save: "Guardar", cancel: "Cancelar", delete: "Eliminar", edit: "Editar", add: "Agregar",
     search: "Buscar", loading: "Cargando...", confirm: "Confirmar", close: "Cerrar",
@@ -602,6 +608,9 @@ const translations = {
     passwordKeepHint: "dejar vacio para mantener",
     enabledCount: "habilitados",
     maxDiscountPercent: "Descuento Maximo",
+    superAdmin: "Super Admin",
+    shops: "Tiendas",
+    shop: "Tienda",
   }
 };
 
