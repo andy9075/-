@@ -82,6 +82,66 @@ async def delete_video(video_id: str, current_user: dict = Depends(get_current_u
     await udb.videos.delete_one({"id": video_id})
     return {"message": "Deleted"}
 
+@router.post("/videos/generate-tutorials")
+async def generate_tutorial_videos(current_user: dict = Depends(get_current_user)):
+    """Trigger background generation of tutorial videos from real browser recordings"""
+    if current_user.get("role") not in ("admin",):
+        raise HTTPException(403, "Admin only")
+    import subprocess, threading
+    app_url = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:3000")
+    # Remove /api suffix if present for frontend URL
+    app_url = app_url.rstrip("/")
+
+    def run_generation():
+        try:
+            subprocess.run(
+                ["python3", str(Path(ROOT_DIR) / "generate_tutorials.py"), app_url],
+                cwd=str(ROOT_DIR),
+                timeout=300,
+                capture_output=True,
+                text=True
+            )
+            # After generation, register videos in DB
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            from motor.motor_asyncio import AsyncIOMotorClient
+            mongo_client = AsyncIOMotorClient(os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
+            udb_name = f"pos_{current_user['tenant_id']}" if current_user.get("tenant_id") else os.environ["DB_NAME"]
+            video_db = mongo_client[udb_name]
+            video_dir = UPLOAD_DIR / "videos"
+            tutorials = [
+                ("pos_tutorial", "POS 收银操作教程", "pos"),
+                ("products_tutorial", "商品管理教程", "products"),
+                ("inventory_tutorial", "库存管理教程", "inventory"),
+                ("sales_tutorial", "销售与退款教程", "sales"),
+                ("customers_tutorial", "客户管理教程", "customers"),
+                ("reports_tutorial", "报表与分析教程", "reports"),
+                ("settings_tutorial", "系统设置教程", "settings"),
+            ]
+            async def register():
+                for filename, title, category in tutorials:
+                    fpath = video_dir / f"{filename}.webm"
+                    if fpath.exists():
+                        vid = generate_id()[:12]
+                        # Remove old version with same title
+                        await video_db.videos.delete_many({"title": title})
+                        await video_db.videos.insert_one({
+                            "id": vid, "title": title, "url": f"/api/uploads/videos/{filename}.webm",
+                            "filename": f"{filename}.webm", "size": fpath.stat().st_size,
+                            "category": category, "created_by": current_user["user_id"],
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        })
+            loop.run_until_complete(register())
+            mongo_client.close()
+            loop.close()
+        except Exception as e:
+            print(f"Tutorial generation error: {e}")
+
+    thread = threading.Thread(target=run_generation, daemon=True)
+    thread.start()
+    return {"message": "Tutorial generation started in background. Videos will appear in a few minutes."}
+
 # ==================== Audit Log ====================
 
 @router.get("/audit-logs")
