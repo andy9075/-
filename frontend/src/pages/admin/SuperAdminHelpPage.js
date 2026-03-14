@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { ChevronDown, ChevronRight, Building2, Shield, Settings, Users, Monitor, DollarSign, BarChart3, Globe } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/context/AuthContext";
 
 const Section = ({ icon: Icon, title, color, children }) => {
   const [open, setOpen] = useState(false);
@@ -24,6 +26,10 @@ const Step = ({ n, children }) => (
 );
 
 export default function SuperAdminHelpPage() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'admin' && !user?.tenant_id;
+  if (!isSuperAdmin) return <Navigate to="/admin/help" replace />;
+
   return (
     <div className="space-y-4" data-testid="super-admin-help-page">
       <div className="flex items-center gap-3 mb-6">
