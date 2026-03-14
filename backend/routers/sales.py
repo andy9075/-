@@ -437,3 +437,69 @@ async def get_wholesale_orders(current_user: dict = Depends(get_current_user)):
     udb = get_user_db(current_user)
     return await udb.wholesale_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
+@router.get("/wholesale-orders/stats")
+async def get_wholesale_stats(current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
+    orders = await udb.wholesale_orders.find({}, {"_id": 0}).to_list(5000)
+    total_orders = len(orders)
+    pending = sum(1 for o in orders if o.get("status") == "pending")
+    total_revenue = sum(o.get("total_amount", 0) for o in orders)
+    total_paid = sum(o.get("paid_amount", 0) for o in orders)
+    total_items = sum(sum(i.get("quantity", 0) for i in o.get("items", [])) for o in orders)
+    return {"total_orders": total_orders, "pending": pending, "total_revenue": round(total_revenue, 2), "total_paid": round(total_paid, 2), "total_items": total_items}
+
+@router.get("/wholesale-orders/{order_id}")
+async def get_wholesale_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
+    order = await udb.wholesale_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    return order
+
+@router.put("/wholesale-orders/{order_id}")
+async def update_wholesale_order(order_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
+    order = await udb.wholesale_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    update = {}
+    if "status" in data:
+        update["status"] = data["status"]
+    if "paid_amount" in data:
+        update["paid_amount"] = data["paid_amount"]
+        total = order.get("total_amount", 0)
+        if data["paid_amount"] >= total:
+            update["status"] = "completed"
+    if "notes" in data:
+        update["notes"] = data["notes"]
+    if "delivery_address" in data:
+        update["delivery_address"] = data["delivery_address"]
+    if "delivery_date" in data:
+        update["delivery_date"] = data["delivery_date"]
+    if update:
+        update["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await udb.wholesale_orders.update_one({"id": order_id}, {"$set": update})
+        await log_audit(current_user["user_id"], current_user["username"], "update", "wholesale", order_id, str(update), audit_db=udb)
+    updated = await udb.wholesale_orders.find_one({"id": order_id}, {"_id": 0})
+    return updated
+
+@router.delete("/wholesale-orders/{order_id}")
+async def delete_wholesale_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
+    order = await udb.wholesale_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    # Restore inventory
+    if order.get("status") != "cancelled":
+        warehouse = await udb.warehouses.find_one({"is_main": True}, {"_id": 0})
+        wh_id = warehouse["id"] if warehouse else None
+        if wh_id:
+            for item in order.get("items", []):
+                await udb.inventory.update_one(
+                    {"product_id": item["product_id"], "warehouse_id": wh_id},
+                    {"$inc": {"quantity": item.get("quantity", 0)}}
+                )
+    await udb.wholesale_orders.update_one({"id": order_id}, {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await log_audit(current_user["user_id"], current_user["username"], "cancel", "wholesale", order_id, "", audit_db=udb)
+    return {"status": "cancelled"}
+

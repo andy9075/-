@@ -1,0 +1,77 @@
+{
+  "summary": "Wholesale module and change password feature testing completed. All 17 backend API tests passed (100%). Frontend UI verified - wholesale page, order creation dialog, order detail dialog, payment recording dialog, and change password dialog all functioning correctly. All text displayed in Chinese as expected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "All dialogs",
+        "issues": ["Console warning: Missing DialogTitle Description or aria-describedby - minor a11y issue, not blocking"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wholesale_changepwd_iter27.py",
+    "/app/test_reports/pytest/pytest_wholesale_iter27.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All wholesale CRUD endpoints working correctly (GET, POST, PUT, DELETE)",
+    "Stats endpoint returns correct aggregated data (total_orders, pending, total_revenue, total_paid, total_items)",
+    "Order status transitions work: pending -> completed -> delivered or cancelled",
+    "Change password endpoint properly validates old password and password length",
+    "Frontend wholesale page shows stats cards, filter tabs, order table with all Chinese labels",
+    "Create order dialog allows customer selection, product search, and cart management",
+    "Order detail dialog shows items table and payment summary with action buttons",
+    "Payment dialog allows recording partial or full payments",
+    "Change password dialog in AdminLayout sidebar with proper form validation"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wholesale_changepwd_iter27.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (login, wholesale page, create dialog, detail dialog, payment dialog, change password dialog all verified)"
+  },
+  "test_credentials": {
+    "super_admin": {"username": "admin", "password": "admin123"}
+  },
+  "seed_data_creation": "Created test wholesale orders during API testing (with TEST_ prefix in notes)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Wholesale module fully functional. All CRUD operations tested. Stats endpoint aggregates order data correctly. Change password tested with password change + revert. Frontend shows proper Chinese UI for wholesale operations.",
+  "verified_features": {
+    "backend_apis": [
+      "GET /api/wholesale-orders - Returns list of wholesale orders with status, amounts, items",
+      "GET /api/wholesale-orders/stats - Returns total_orders, pending, total_revenue, total_paid, total_items",
+      "POST /api/wholesale-orders - Creates new wholesale order with customer_id, items, notes, delivery_address",
+      "GET /api/wholesale-orders/{id} - Returns single order detail",
+      "PUT /api/wholesale-orders/{id} - Updates order status, paid_amount, notes, delivery_address",
+      "DELETE /api/wholesale-orders/{id} - Cancels order and restores inventory",
+      "PUT /api/auth/change-password - Changes user password with old_password validation",
+      "POST /api/auth/login - Super admin login without tenant ID"
+    ],
+    "frontend_pages": [
+      "Wholesale page (/admin/wholesale) - Title '批发订单', stats cards, filter tabs, order table",
+      "Create order dialog - '创建批发订单', customer select, product search, cart table",
+      "Order detail dialog - '订单详情', items table, payment summary, action buttons",
+      "Payment dialog - '登记付款', shows amounts and payment input",
+      "Change password dialog - '修改密码', old/new/confirm password fields"
+    ],
+    "chinese_labels_verified": [
+      "批发订单 (Wholesale Order)",
+      "待处理订单 (Pending Orders)",
+      "总收入 (Total Revenue)",
+      "总件数 (Total Items)",
+      "全部/待处理/已完成/已送达/已取消 (Filter tabs)",
+      "创建批发订单 (Create Wholesale Order)",
+      "订单详情 (Order Detail)",
+      "登记付款 (Record Payment)",
+      "修改密码 (Change Password)"
+    ]
+  }
+}
