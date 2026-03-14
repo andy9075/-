@@ -1403,23 +1403,44 @@ async def delete_employee(user_id: str, current_user: dict = Depends(get_current
 
 # ==================== Refund/Return ====================
 
-@api_router.post("/refunds")
-async def create_refund(order_no: str = "", items: List[Dict] = [], reason: str = "", current_user: dict = Depends(get_current_user)):
+@api_router.get("/sales-orders/{order_no}/detail")
+async def get_order_detail(order_no: str, current_user: dict = Depends(get_current_user)):
+    """Get order detail with product info for refund lookup"""
     udb = get_user_db(current_user)
     order = await udb.sales_orders.find_one({"order_no": order_no}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    
+    for item in order.get("items", []):
+        product = await udb.products.find_one({"id": item.get("product_id")}, {"_id": 0})
+        if product:
+            item["product_name"] = product.get("name", "")
+            item["product_code"] = product.get("code", "")
+            item["image_url"] = product.get("image_url", "")
+    return order
+
+@api_router.post("/refunds")
+async def create_refund(data: Dict, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
+    # Role check: only admin/manager can refund
+    role = current_user.get("role", "staff")
+    if role not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can process refunds")
+    order_no = data.get("order_no", "")
+    items = data.get("items", [])
+    reason = data.get("reason", "")
+    order = await udb.sales_orders.find_one({"order_no": order_no}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
     refund_id = generate_id()
-    refund_amount = sum(item.get("amount", 0) for item in items)
-    
+    refund_items = items if items else order.get("items", [])
+    refund_amount = sum(item.get("amount", 0) for item in refund_items)
     refund_doc = {
         "id": refund_id,
         "refund_no": generate_order_no("RF"),
         "original_order_no": order_no,
         "original_order_id": order["id"],
         "store_id": order.get("store_id"),
-        "items": items,
+        "items": refund_items,
         "refund_amount": refund_amount,
         "reason": reason,
         "status": "completed",
@@ -1427,16 +1448,16 @@ async def create_refund(order_no: str = "", items: List[Dict] = [], reason: str 
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await udb.refunds.insert_one(refund_doc)
-    
-    # Restore inventory
-    for item in items:
+    for item in refund_items:
         warehouse = await udb.warehouses.find_one({"store_id": order.get("store_id")})
+        if not warehouse:
+            warehouse = await udb.warehouses.find_one({"is_main": True})
         if warehouse:
             await udb.inventory.update_one(
-                {"product_id": item["product_id"], "warehouse_id": warehouse["id"]},
+                {"product_id": item.get("product_id"), "warehouse_id": warehouse["id"]},
                 {"$inc": {"quantity": item.get("quantity", 0)}}
             )
-    
+    await log_audit(current_user.get("user_id",""), current_user.get("username",""), "refund", "refund", refund_id, f"Order {order_no}, Amount ${refund_amount}", audit_db=udb)
     return {k: v for k, v in refund_doc.items() if k != "_id"}
 
 @api_router.get("/refunds")
@@ -2604,6 +2625,20 @@ async def get_dashboard_trends(days: int = 7, current_user: dict = Depends(get_c
     return result
 
 # ==================== Role Permission Check ====================
+
+# SaaS Plan Features
+PLAN_FEATURES = {
+    "basic": {"pos": True, "products": True, "inventory": True, "customers": True, "reports_basic": True,
+              "online_shop": False, "reports_advanced": False, "promotions": False, "wholesale": False,
+              "commission": False, "multi_store": False, "api_access": False, "max_users": 5, "max_stores": 1},
+    "pro": {"pos": True, "products": True, "inventory": True, "customers": True, "reports_basic": True,
+            "online_shop": True, "reports_advanced": True, "promotions": True, "wholesale": True,
+            "commission": False, "multi_store": True, "api_access": False, "max_users": 15, "max_stores": 5},
+    "enterprise": {"pos": True, "products": True, "inventory": True, "customers": True, "reports_basic": True,
+                   "online_shop": True, "reports_advanced": True, "promotions": True, "wholesale": True,
+                   "commission": True, "multi_store": True, "api_access": True, "max_users": 999, "max_stores": 999},
+}
+
 @api_router.get("/auth/permissions")
 async def get_permissions(current_user: dict = Depends(get_current_user)):
     udb = get_user_db(current_user)
@@ -2619,7 +2654,15 @@ async def get_permissions(current_user: dict = Depends(get_current_user)):
     }
     defaults = role_defaults.get(role, role_defaults["staff"])
     defaults.update(perms)
-    return {"role": role, "permissions": defaults}
+    # Get plan features if tenant user
+    plan_features = {}
+    if current_user.get("tenant_id"):
+        tenant = await master_db.tenants.find_one({"id": current_user["tenant_id"]}, {"_id": 0})
+        plan = tenant.get("plan", "basic") if tenant else "basic"
+        plan_features = PLAN_FEATURES.get(plan, PLAN_FEATURES["basic"])
+    else:
+        plan_features = PLAN_FEATURES["enterprise"]
+    return {"role": role, "permissions": defaults, "plan_features": plan_features}
 
 app.include_router(api_router)
 

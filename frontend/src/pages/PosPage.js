@@ -47,6 +47,10 @@ export default function PosPage() {
   const [showHeldOrders, setShowHeldOrders] = useState(false);
   const [showRefund, setShowRefund] = useState(false);
   const [refundOrderNo, setRefundOrderNo] = useState("");
+  const [refundOrderDetail, setRefundOrderDetail] = useState(null);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundReason, setRefundReason] = useState("");
+  const [refundItems, setRefundItems] = useState([]);
   const [pricingMode, setPricingMode] = useState("local_based");
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
@@ -120,7 +124,7 @@ export default function PosPage() {
       if (e.key === 'F4') { e.preventDefault(); holdCurrentOrder(); }
       if (e.key === 'F9') { e.preventDefault(); if (cart.length > 0 && shift) setShowPayment(true); }
       if (e.key === 'F10') { e.preventDefault(); setShowHeldOrders(true); }
-      if (e.key === 'F11') { e.preventDefault(); setShowRefund(true); }
+      if (e.key === 'F11') { e.preventDefault(); openRefundDialog(); }
       if (e.key === 'Escape') { setShowProductSearch(false); setShowPayment(false); setShowShiftModal(false); setShowHeldOrders(false); setShowRefund(false); setShowInventory(false); }
       if (showPayment) {
         if (e.key === 'F5') { e.preventDefault(); setPaymentMethod('cash'); }
@@ -135,7 +139,31 @@ export default function PosPage() {
 
   const holdCurrentOrder = () => { if (cart.length === 0) return; const held = { id: Date.now(), items: cart, total: finalTotal, time: new Date().toISOString() }; const newHeld = [...heldOrders, held]; setHeldOrders(newHeld); localStorage.setItem('pos_held_orders', JSON.stringify(newHeld)); clearCart(); toast.success(t('holdOrder') + " OK"); };
   const recallOrder = (heldId) => { const held = heldOrders.find(h => h.id === heldId); if (held) { setCart(held.items); setHeldOrders(prev => { const n = prev.filter(h => h.id !== heldId); localStorage.setItem('pos_held_orders', JSON.stringify(n)); return n; }); setShowHeldOrders(false); toast.success(t('recallOrder') + " OK"); } };
-  const handleRefund = async () => { try { const token = localStorage.getItem("pos_token"); await axios.post(`${API}/refunds`, { order_no: refundOrderNo, items: [], reason: "POS refund" }, { headers: { Authorization: `Bearer ${token}` } }); toast.success(t('refund') + " OK"); setShowRefund(false); setRefundOrderNo(""); } catch (e) { toast.error(e.response?.data?.detail || "Error"); } };
+  const canRefund = user?.role === 'admin' || user?.role === 'manager';
+  const openRefundDialog = () => {
+    if (!canRefund) { toast.error("Only managers/admins can process refunds"); return; }
+    setShowRefund(true); setRefundOrderNo(""); setRefundOrderDetail(null); setRefundItems([]); setRefundReason("");
+  };
+  const lookupRefundOrder = async () => {
+    if (!refundOrderNo.trim()) return;
+    setRefundLoading(true);
+    try {
+      const res = await axios.get(`${API}/sales-orders/${refundOrderNo}/detail`);
+      setRefundOrderDetail(res.data);
+      setRefundItems(res.data.items?.map(i => ({ ...i, refund: true })) || []);
+    } catch (e) { toast.error(e.response?.data?.detail || "Order not found"); setRefundOrderDetail(null); }
+    setRefundLoading(false);
+  };
+  const handleRefund = async () => {
+    if (!refundOrderDetail) return;
+    const itemsToRefund = refundItems.filter(i => i.refund);
+    if (itemsToRefund.length === 0) { toast.error("Please select items to refund"); return; }
+    try {
+      await axios.post(`${API}/refunds`, { order_no: refundOrderNo, items: itemsToRefund, reason: refundReason || "POS refund" });
+      toast.success(t('refund') + " OK");
+      setShowRefund(false); setRefundOrderNo(""); setRefundOrderDetail(null);
+    } catch (e) { toast.error(e.response?.data?.detail || "Refund failed"); }
+  };
 
   const fetchData = async (token) => {
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -360,7 +388,7 @@ export default function PosPage() {
         <div className="flex items-center gap-3">
           <div className="flex gap-0.5">{[{k:'zh',l:'中'},{k:'en',l:'EN'},{k:'es',l:'ES'}].map(({k,l}) => (<button key={k} onClick={() => changeLang(k)} className={`px-1.5 py-0.5 text-xs rounded ${lang === k ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`} data-testid={`pos-lang-${k}`}>{l}</button>))}</div>
           <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`} data-testid="online-status">{isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}{isOnline ? t('online') : t('offline')}{pendingOrders.length > 0 && <Badge className="ml-1 bg-orange-500 text-white text-xs px-1 py-0">{pendingOrders.length}</Badge>}</div>
-          <div className="flex gap-1.5"><Button size="sm" variant="outline" onClick={openInventory} className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10 h-7 text-xs" data-testid="inventory-btn">F2 Stock</Button><Button size="sm" variant="outline" onClick={holdCurrentOrder} className="border-slate-600 text-slate-300 h-7 text-xs" disabled={cart.length === 0} data-testid="hold-btn">F4 {t('holdOrder')}</Button><Button size="sm" variant="outline" onClick={() => setShowHeldOrders(true)} className="border-slate-600 text-slate-300 h-7 text-xs relative" data-testid="recall-btn">F10 {t('recallOrder')}{heldOrders.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-orange-500 rounded-full text-xs flex items-center justify-center">{heldOrders.length}</span>}</Button><Button size="sm" variant="outline" onClick={() => setShowRefund(true)} className="border-slate-600 text-slate-300 h-7 text-xs" data-testid="refund-btn">F11 {t('refund')}</Button></div>
+          <div className="flex gap-1.5"><Button size="sm" variant="outline" onClick={openInventory} className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10 h-7 text-xs" data-testid="inventory-btn">F2 Stock</Button><Button size="sm" variant="outline" onClick={holdCurrentOrder} className="border-slate-600 text-slate-300 h-7 text-xs" disabled={cart.length === 0} data-testid="hold-btn">F4 {t('holdOrder')}</Button><Button size="sm" variant="outline" onClick={() => setShowHeldOrders(true)} className="border-slate-600 text-slate-300 h-7 text-xs relative" data-testid="recall-btn">F10 {t('recallOrder')}{heldOrders.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-orange-500 rounded-full text-xs flex items-center justify-center">{heldOrders.length}</span>}</Button><Button size="sm" variant="outline" onClick={openRefundDialog} className={`border-slate-600 h-7 text-xs ${canRefund ? 'text-slate-300' : 'text-slate-600 cursor-not-allowed'}`} data-testid="refund-btn">F11 {t('refund')}</Button></div>
           <div className="flex items-center gap-1 bg-slate-700 rounded-lg px-2 py-1"><span className="text-xs text-slate-400 mr-1">{t('currency')}</span><span className={`text-sm font-bold min-w-[36px] text-center ${showBs ? 'text-orange-400' : 'text-emerald-400'}`}>{showBs ? 'Bs.' : '$'}</span><div className="flex flex-col"><button onClick={() => !showPayment && setShowBs(!showBs)} className={`text-slate-400 hover:text-white leading-none ${showPayment ? 'opacity-30 cursor-not-allowed' : ''}`} data-testid="currency-up"><ChevronDown className="w-3 h-3 rotate-180" /></button><button onClick={() => !showPayment && setShowBs(!showBs)} className={`text-slate-400 hover:text-white leading-none ${showPayment ? 'opacity-30 cursor-not-allowed' : ''}`} data-testid="currency-down"><ChevronDown className="w-3 h-3" /></button></div></div>
           {shift ? <Badge className="bg-green-500/20 text-green-400 text-xs">{t('shiftSince')} {new Date(shift.start_time).toLocaleTimeString()}</Badge> : <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">{t('noShift')}</Badge>}
           {!shift ? <Button size="sm" onClick={handleStartShift} className="bg-green-600 hover:bg-green-700 h-7 text-xs" data-testid="start-shift-btn">{t('startShift')}</Button> : <Button size="sm" onClick={handleEndShift} className="bg-orange-600 hover:bg-orange-700 h-7 text-xs" data-testid="end-shift-btn">{t('endShift')}</Button>}
@@ -526,8 +554,53 @@ export default function PosPage() {
       {/* Held Orders (F10) */}
       <Dialog open={showHeldOrders} onOpenChange={setShowHeldOrders}><DialogContent className="bg-slate-800 border-slate-700 text-white"><DialogHeader><DialogTitle>{t('recallOrder')} (F10)</DialogTitle></DialogHeader>{heldOrders.length === 0 ? <p className="text-slate-400 text-center py-4">{t('noData')}</p> : <div className="space-y-2">{heldOrders.map(held => (<div key={held.id} className="flex items-center justify-between bg-slate-700/50 rounded-lg p-3 hover:bg-slate-700 cursor-pointer" onClick={() => recallOrder(held.id)} data-testid={`recall-${held.id}`}><div><p className="text-white font-medium">{held.items.length} {t('products')}</p><p className="text-slate-400 text-xs">{new Date(held.time).toLocaleTimeString()}</p></div><span className="text-emerald-400 font-bold">${held.total?.toFixed(2)}</span></div>))}</div>}</DialogContent></Dialog>
 
-      {/* Refund (F11) */}
-      <Dialog open={showRefund} onOpenChange={setShowRefund}><DialogContent className="bg-slate-800 border-slate-700 text-white"><DialogHeader><DialogTitle>{t('refund')} (F11)</DialogTitle></DialogHeader><div className="space-y-4"><div><label className="text-sm text-slate-300">{t('salesOrder')} #</label><Input value={refundOrderNo} onChange={e => setRefundOrderNo(e.target.value)} placeholder="SO20260313..." className="bg-slate-700 border-slate-600" data-testid="refund-order-no" /></div><div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setShowRefund(false)} className="border-slate-600">{t('cancel')}</Button><Button onClick={handleRefund} disabled={!refundOrderNo} className="bg-red-500 hover:bg-red-600" data-testid="confirm-refund">{t('refund')}</Button></div></div></DialogContent></Dialog>
+      {/* Refund (F11) - Manager/Admin Only */}
+      <Dialog open={showRefund} onOpenChange={setShowRefund}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-red-400">{t('refund')} (F11)</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input value={refundOrderNo} onChange={e => setRefundOrderNo(e.target.value)} placeholder="Enter order number: SO20260313..." className="bg-slate-700 border-slate-600 flex-1" data-testid="refund-order-no" onKeyDown={e => { if (e.key === 'Enter') lookupRefundOrder(); }} />
+              <Button onClick={lookupRefundOrder} disabled={!refundOrderNo.trim() || refundLoading} className="bg-blue-500 hover:bg-blue-600" data-testid="refund-lookup-btn">{refundLoading ? '...' : 'Search'}</Button>
+            </div>
+            {refundOrderDetail && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="bg-slate-700/50 rounded-lg p-3"><p className="text-slate-400 text-xs">Order #</p><p className="text-white font-mono">{refundOrderDetail.order_no}</p></div>
+                  <div className="bg-slate-700/50 rounded-lg p-3"><p className="text-slate-400 text-xs">Date</p><p className="text-white">{refundOrderDetail.created_at?.substring(0, 16)}</p></div>
+                  <div className="bg-slate-700/50 rounded-lg p-3"><p className="text-slate-400 text-xs">Total</p><p className="text-emerald-400 font-bold">${refundOrderDetail.total_amount?.toFixed(2)}</p></div>
+                </div>
+                <div className="border border-slate-700 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-900"><tr><th className="text-left text-slate-400 px-3 py-2 w-8"></th><th className="text-left text-slate-400 px-3 py-2">Product</th><th className="text-right text-slate-400 px-3 py-2">Price</th><th className="text-right text-slate-400 px-3 py-2">Qty</th><th className="text-right text-slate-400 px-3 py-2">Amount</th></tr></thead>
+                    <tbody className="divide-y divide-slate-700/50">
+                      {refundItems.map((item, idx) => (
+                        <tr key={idx} className={`${item.refund ? 'bg-red-500/5' : ''} hover:bg-slate-700/30`}>
+                          <td className="px-3 py-2"><input type="checkbox" checked={item.refund} onChange={e => { const u = [...refundItems]; u[idx] = { ...u[idx], refund: e.target.checked }; setRefundItems(u); }} className="rounded" /></td>
+                          <td className="px-3 py-2"><p className="text-white font-medium">{item.product_name || item.product_id}</p><p className="text-slate-500 text-xs">{item.product_code || ''}</p></td>
+                          <td className="px-3 py-2 text-right text-slate-300">${item.unit_price?.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right text-white">{item.quantity}</td>
+                          <td className="px-3 py-2 text-right text-emerald-400 font-medium">${item.amount?.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                  <span className="text-slate-300">Refund Amount:</span>
+                  <span className="text-red-400 text-xl font-bold" data-testid="refund-amount">${refundItems.filter(i => i.refund).reduce((s, i) => s + (i.amount || 0), 0).toFixed(2)}</span>
+                </div>
+                <Input value={refundReason} onChange={e => setRefundReason(e.target.value)} placeholder="Refund reason (optional)" className="bg-slate-700 border-slate-600" data-testid="refund-reason" />
+                <div className="flex justify-end gap-3">
+                  <Button variant="outline" onClick={() => setShowRefund(false)} className="border-slate-600">{t('cancel')}</Button>
+                  <Button onClick={handleRefund} disabled={refundItems.filter(i => i.refund).length === 0} className="bg-red-500 hover:bg-red-600" data-testid="confirm-refund">{t('refund')}</Button>
+                </div>
+              </div>
+            )}
+            {!refundOrderDetail && !refundLoading && <p className="text-slate-500 text-center py-8 text-sm">Enter order number and click Search</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Shortcut Toolbar */}
       <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 z-30" data-testid="pos-toolbar">
@@ -538,7 +611,7 @@ export default function PosPage() {
           { key: "F4", label: t('holdOrder'), action: () => holdCurrentOrder(), color: "bg-yellow-600 hover:bg-yellow-700" },
           { key: "F9", label: t('checkout'), action: () => setShowPayment(true), color: "bg-green-600 hover:bg-green-700", disabled: cart.length === 0 || !shift },
           { key: "F10", label: t('recallOrder'), action: () => setShowHeldOrders(true), color: "bg-purple-600 hover:bg-purple-700" },
-          { key: "F11", label: t('refund'), action: () => setShowRefund(true), color: "bg-red-600 hover:bg-red-700" },
+          { key: "F11", label: t('refund'), action: () => openRefundDialog(), color: "bg-red-600 hover:bg-red-700" },
         ].map(btn => (<button key={btn.key} onClick={btn.action} disabled={btn.disabled} className={`${btn.color} text-white px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed`} data-testid={`toolbar-${btn.key.toLowerCase()}`}><kbd className="bg-white/20 px-1.5 py-0.5 rounded text-xs font-bold">{btn.key}</kbd><span>{btn.label}</span></button>))}</div>
       </div>
 
