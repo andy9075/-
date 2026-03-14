@@ -1229,12 +1229,17 @@ async def get_sales_report(
 
 # ==================== Online Shop Routes ====================
 
-@api_router.get("/shop/products", response_model=List[dict])
+@api_router.get("/shop/{tenant_id}/products", response_model=List[dict])
 async def get_shop_products(
+    tenant_id: str,
     category_id: Optional[str] = None,
     search: Optional[str] = None
 ):
-    """Public endpoint for online shop - no auth required"""
+    """Public endpoint for tenant's online shop"""
+    tenant = await master_db.tenants.find_one({"id": tenant_id, "status": "active"})
+    if not tenant:
+        raise HTTPException(404, "Shop not found")
+    shop_db = get_tenant_db(tenant_id)
     query = {"status": "active"}
     if category_id:
         query["category_id"] = category_id
@@ -1243,92 +1248,109 @@ async def get_shop_products(
             {"name": {"$regex": search, "$options": "i"}},
             {"code": {"$regex": search, "$options": "i"}}
         ]
-    
-    products = await db.products.find(query, {"_id": 0}).to_list(1000)
-    
-    # Get main warehouse inventory
-    main_warehouse = await db.warehouses.find_one({"is_main": True})
-    
+    products = await shop_db.products.find(query, {"_id": 0}).to_list(1000)
+    main_warehouse = await shop_db.warehouses.find_one({"is_main": True})
     result = []
     for product in products:
         inv = None
         if main_warehouse:
-            inv = await db.inventory.find_one({
-                "product_id": product["id"],
-                "warehouse_id": main_warehouse["id"]
-            }, {"_id": 0})
-        
+            inv = await shop_db.inventory.find_one({"product_id": product["id"], "warehouse_id": main_warehouse["id"]}, {"_id": 0})
         product["stock"] = inv["quantity"] if inv else 0
         result.append(product)
-    
     return result
 
-@api_router.get("/shop/categories", response_model=List[CategoryResponse])
-async def get_shop_categories():
-    """Public endpoint for online shop categories"""
-    categories = await db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(1000)
+@api_router.get("/shop/{tenant_id}/categories", response_model=List[CategoryResponse])
+async def get_shop_categories(tenant_id: str):
+    """Public endpoint for tenant's shop categories"""
+    tenant = await master_db.tenants.find_one({"id": tenant_id, "status": "active"})
+    if not tenant:
+        raise HTTPException(404, "Shop not found")
+    shop_db = get_tenant_db(tenant_id)
+    categories = await shop_db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(1000)
     return [CategoryResponse(**c) for c in categories]
 
-@api_router.post("/shop/orders", response_model=OnlineOrderResponse)
-async def create_online_order(order: OnlineOrderCreate):
-    """Create online shop order - connects to main warehouse"""
+@api_router.get("/shop/{tenant_id}/info")
+async def get_shop_info(tenant_id: str):
+    """Public endpoint to get shop name/info"""
+    tenant = await master_db.tenants.find_one({"id": tenant_id, "status": "active"}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(404, "Shop not found")
+    return {"id": tenant["id"], "name": tenant.get("name", ""), "contact_phone": tenant.get("contact_phone", "")}
+
+@api_router.post("/shop/{tenant_id}/orders", response_model=OnlineOrderResponse)
+async def create_online_order(tenant_id: str, order: OnlineOrderCreate):
+    """Create online shop order for a specific tenant"""
+    tenant = await master_db.tenants.find_one({"id": tenant_id, "status": "active"})
+    if not tenant:
+        raise HTTPException(404, "Shop not found")
+    shop_db = get_tenant_db(tenant_id)
     order_id = generate_id()
     order_no = generate_order_no("ON")
-    
-    # Get main warehouse
-    main_warehouse = await db.warehouses.find_one({"is_main": True})
+    main_warehouse = await shop_db.warehouses.find_one({"is_main": True})
     if not main_warehouse:
-        raise HTTPException(status_code=400, detail="总部仓库未配置")
-    
+        raise HTTPException(status_code=400, detail="Warehouse not configured")
     total_amount = sum(item.amount for item in order.items)
-    shipping_fee = 0.0 if total_amount >= 100 else 10.0  # Free shipping over 100
-    
-    # Check and reserve inventory from main warehouse
+    shipping_fee = 0.0 if total_amount >= 100 else 10.0
     for item in order.items:
-        inv = await db.inventory.find_one({
-            "product_id": item.product_id,
-            "warehouse_id": main_warehouse["id"]
-        })
+        inv = await shop_db.inventory.find_one({"product_id": item.product_id, "warehouse_id": main_warehouse["id"]})
         if not inv or inv["quantity"] < item.quantity:
-            product = await db.products.find_one({"id": item.product_id})
-            raise HTTPException(status_code=400, detail=f"商品 {product['name'] if product else ''} 库存不足")
-        
-        # Reserve inventory
-        await db.inventory.update_one(
-            {"product_id": item.product_id, "warehouse_id": main_warehouse["id"]},
-            {"$inc": {"reserved": item.quantity}}
-        )
-    
-    # Build items with product names
+            product = await shop_db.products.find_one({"id": item.product_id})
+            raise HTTPException(status_code=400, detail=f"{product['name'] if product else ''} out of stock")
+        await shop_db.inventory.update_one({"product_id": item.product_id, "warehouse_id": main_warehouse["id"]}, {"$inc": {"reserved": item.quantity}})
     online_items = []
     for item in order.items:
         item_dict = item.model_dump()
-        product = await db.products.find_one({"id": item.product_id})
+        product = await shop_db.products.find_one({"id": item.product_id})
         if product:
             item_dict["product_name"] = product["name"]
         online_items.append(item_dict)
-    
     order_doc = {
-        "id": order_id,
-        "order_no": order_no,
-        "customer_id": order.customer_id,
-        "items": online_items,
-        "total_amount": total_amount,
-        "shipping_fee": shipping_fee,
-        "shipping_address": order.shipping_address,
-        "shipping_phone": order.shipping_phone,
-        "shipping_name": order.shipping_name,
-        "payment_method": order.payment_method,
-        "payment_reference": order.payment_reference,
-        "payment_status": "pending",
-        "order_status": "pending",
-        "warehouse_id": main_warehouse["id"],
-        "notes": order.notes,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "id": order_id, "order_no": order_no, "customer_id": order.customer_id,
+        "items": online_items, "total_amount": total_amount, "shipping_fee": shipping_fee,
+        "shipping_address": order.shipping_address, "shipping_phone": order.shipping_phone,
+        "shipping_name": order.shipping_name, "payment_method": order.payment_method,
+        "payment_reference": order.payment_reference, "payment_status": "pending",
+        "order_status": "pending", "warehouse_id": main_warehouse["id"],
+        "notes": order.notes, "created_at": datetime.now(timezone.utc).isoformat()
     }
-    
-    await db.online_orders.insert_one(order_doc)
+    await shop_db.online_orders.insert_one(order_doc)
     return OnlineOrderResponse(**order_doc)
+
+@api_router.get("/shop/{tenant_id}/orders/{order_no}")
+async def lookup_shop_order(tenant_id: str, order_no: str):
+    """Public: look up order status by order number"""
+    tenant = await master_db.tenants.find_one({"id": tenant_id, "status": "active"})
+    if not tenant:
+        raise HTTPException(404, "Shop not found")
+    shop_db = get_tenant_db(tenant_id)
+    order = await shop_db.online_orders.find_one({"order_no": order_no}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    return order
+
+@api_router.get("/shop/{tenant_id}/exchange-rates")
+async def get_shop_exchange_rates(tenant_id: str):
+    """Public: get tenant exchange rates for shop"""
+    tenant = await master_db.tenants.find_one({"id": tenant_id, "status": "active"})
+    if not tenant:
+        raise HTTPException(404, "Shop not found")
+    shop_db = get_tenant_db(tenant_id)
+    settings = await shop_db.settings.find_one({"type": "exchange_rates"}, {"_id": 0})
+    if not settings:
+        settings = {"type": "exchange_rates", "usd_to_ves": 36.5, "default_currency": "USD", "local_currency": "VES", "local_currency_symbol": "Bs."}
+    return settings
+
+@api_router.get("/shop/{tenant_id}/payment-settings")
+async def get_shop_payment_settings(tenant_id: str):
+    """Public: get tenant payment settings for shop checkout"""
+    tenant = await master_db.tenants.find_one({"id": tenant_id, "status": "active"})
+    if not tenant:
+        raise HTTPException(404, "Shop not found")
+    shop_db = get_tenant_db(tenant_id)
+    settings = await shop_db.settings.find_one({"type": "payment"}, {"_id": 0})
+    if not settings:
+        settings = {"type": "payment", "transfer_enabled": True, "transfer_bank_name": "", "transfer_account": "", "mobile_pay_enabled": False}
+    return settings
 
 @api_router.get("/shop/orders", response_model=List[OnlineOrderResponse])
 async def get_online_orders(

@@ -68,8 +68,8 @@ function AppContent() {
         <Toaster position="top-center" richColors />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/shop" element={<ShopPage />} />
-          <Route path="/shop/orders" element={<ShopOrdersPage />} />
+          <Route path="/shop/:tenantId" element={<ShopPage />} />
+          <Route path="/shop/:tenantId/orders" element={<ShopOrdersPage />} />
           <Route path="/pos" element={<PosPage />} />
 
           <Route path="/admin" element={<AdminRoute><Dashboard /></AdminRoute>} />
@@ -106,7 +106,7 @@ function AppContent() {
           <Route path="/admin/commission" element={<AdminRoute><CommissionPage /></AdminRoute>} />
           <Route path="/admin/tenants" element={<AdminRoute><TenantsPage /></AdminRoute>} />
 
-          <Route path="/" element={<Navigate to="/shop" replace />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
