@@ -5,7 +5,7 @@ import axios, { API } from "@/lib/api";
 import { LangProvider } from "@/context/LangContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { AdminLayout } from "@/components/AdminLayout";
+import AdminLayout from "@/components/AdminLayout";
 
 // Pages
 import LoginPage from "@/pages/LoginPage";
@@ -39,6 +39,12 @@ import ProfitAnalysisPage from "@/pages/admin/ProfitAnalysisPage";
 import AuditLogPage from "@/pages/admin/AuditLogPage";
 import PromotionsPage from "@/pages/admin/PromotionsPage";
 import AccountsPage from "@/pages/admin/AccountsPage";
+import WholesalePage from "@/pages/admin/WholesalePage";
+import AttendancePage from "@/pages/admin/AttendancePage";
+import SalesTargetsPage from "@/pages/admin/SalesTargetsPage";
+import PurchaseReturnsPage from "@/pages/admin/PurchaseReturnsPage";
+import BundlesPage from "@/pages/admin/BundlesPage";
+import NotificationsPage from "@/pages/admin/NotificationsPage";
 
 function AdminRoute({ children }) {
   return (
@@ -88,6 +94,12 @@ function AppContent() {
           <Route path="/admin/audit-log" element={<AdminRoute><AuditLogPage /></AdminRoute>} />
           <Route path="/admin/promotions" element={<AdminRoute><PromotionsPage /></AdminRoute>} />
           <Route path="/admin/accounts" element={<AdminRoute><AccountsPage /></AdminRoute>} />
+          <Route path="/admin/wholesale" element={<AdminRoute><WholesalePage /></AdminRoute>} />
+          <Route path="/admin/attendance" element={<AdminRoute><AttendancePage /></AdminRoute>} />
+          <Route path="/admin/sales-targets" element={<AdminRoute><SalesTargetsPage /></AdminRoute>} />
+          <Route path="/admin/purchase-returns" element={<AdminRoute><PurchaseReturnsPage /></AdminRoute>} />
+          <Route path="/admin/bundles" element={<AdminRoute><BundlesPage /></AdminRoute>} />
+          <Route path="/admin/notifications" element={<AdminRoute><NotificationsPage /></AdminRoute>} />
 
           <Route path="/" element={<Navigate to="/shop" replace />} />
         </Routes>

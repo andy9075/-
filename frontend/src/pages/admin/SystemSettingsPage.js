@@ -70,6 +70,15 @@ export default function SystemSettingsPage() {
             <Button onClick={() => { const a = document.createElement('a'); a.href = `${API}/backup/export`; a.download = 'backup.json'; document.body.appendChild(a); a.click(); a.remove(); toast.success(t('exporting')); }} className="w-full bg-blue-500 hover:bg-blue-600" data-testid="backup-export-btn">
               <Download className="w-4 h-4 mr-2" /> {t('exportBackup')}
             </Button>
+            <hr className="border-slate-700" />
+            <p className="text-slate-400 text-sm">{t('restoreDesc')}</p>
+            <p className="text-red-400 text-xs">{t('restoreWarning')}</p>
+            <input type="file" accept=".json" onChange={async (e) => {
+              const file = e.target.files[0]; if (!file) return;
+              if (!window.confirm(t('restoreWarning'))) return;
+              const formData = new FormData(); formData.append('file', file);
+              try { const res = await axios.post(`${API}/backup/restore`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }); toast.success(`${t('restoreBackup')} OK`); } catch (err) { toast.error(t('operationFailed')); }
+            }} className="w-full text-slate-300 text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-orange-500 file:text-white file:cursor-pointer hover:file:bg-orange-600" data-testid="backup-restore-input" />
           </CardContent>
         </Card>
       </div>

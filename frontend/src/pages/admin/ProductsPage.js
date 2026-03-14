@@ -295,6 +295,28 @@ export default function ProductsPage() {
               </Select>
             </div>
             <div className="col-span-2"><label className="text-sm text-slate-300">{t('notes')}</label><Input value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="bg-slate-700 border-slate-600" /></div>
+            {/* Product Image */}
+            {editingProduct && (
+              <div className="col-span-2 space-y-2">
+                <label className="text-sm text-slate-300">{t('uploadImage')}</label>
+                <div className="flex items-center gap-4">
+                  {formData.image_url && <img src={`${API.replace('/api', '')}${formData.image_url}`} alt="" className="w-16 h-16 rounded object-cover border border-slate-600" />}
+                  <input type="file" accept="image/*" onChange={async (e) => {
+                    const file = e.target.files[0]; if (!file) return;
+                    const fd = new FormData(); fd.append('file', file);
+                    try {
+                      const res = await axios.post(`${API}/products/${editingProduct.id}/image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                      setFormData({...formData, image_url: res.data.image_url});
+                      toast.success(t('uploadImage') + ' OK');
+                    } catch (err) { toast.error(t('operationFailed')); }
+                  }} className="text-sm text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-500 file:text-white file:cursor-pointer hover:file:bg-blue-600" data-testid="product-image-upload" />
+                  {formData.image_url && <Button size="sm" variant="ghost" className="text-red-400" onClick={async () => {
+                    try { await axios.delete(`${API}/products/${editingProduct.id}/image`); setFormData({...formData, image_url: ''}); toast.success(t('deleteImage') + ' OK'); }
+                    catch (err) { toast.error(t('operationFailed')); }
+                  }}>{t('deleteImage')}</Button>}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setShowForm(false)} className="border-slate-600">{t('cancel')}</Button>

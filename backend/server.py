@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -16,6 +17,7 @@ import jwt
 import json
 import csv
 import io
+import shutil
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -696,6 +698,15 @@ async def update_product(product_id: str, product: ProductCreate, current_user: 
     result = await db.products.update_one({"id": product_id}, {"$set": product_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="商品不存在")
+    # Track cost price changes
+    old_product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if old_product and cost > 0:
+        await db.cost_history.insert_one({
+            "id": generate_id(), "product_id": product_id,
+            "cost_price": cost, "price1": product_data.get("price1", 0),
+            "changed_by": current_user["user_id"],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
     updated = await db.products.find_one({"id": product_id}, {"_id": 0})
     return ProductResponse(**updated)
 
@@ -1027,6 +1038,22 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
     
     order_doc.pop("_id", None)
     order_doc["points_earned"] = points_earned
+    
+    # Auto-upgrade customer VIP level
+    if order.customer_id:
+        rules_doc = await db.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
+        vip_levels = (rules_doc or {}).get("levels", [
+            {"name": "normal", "min_spent": 0}, {"name": "silver", "min_spent": 200},
+            {"name": "gold", "min_spent": 500}, {"name": "vip", "min_spent": 1000}
+        ])
+        vip_levels.sort(key=lambda x: x["min_spent"], reverse=True)
+        all_orders = await db.sales_orders.find({"customer_id": order.customer_id}, {"_id": 0, "total_amount": 1}).to_list(10000)
+        total_spent = sum(o.get("total_amount", 0) for o in all_orders)
+        for lv in vip_levels:
+            if total_spent >= lv["min_spent"]:
+                await db.customers.update_one({"id": order.customer_id}, {"$set": {"member_level": lv["name"]}})
+                break
+    
     return SalesOrderResponse(**{k: v for k, v in order_doc.items() if k in SalesOrderResponse.model_fields})
 
 @api_router.get("/sales-orders", response_model=List[SalesOrderResponse])
@@ -2004,6 +2031,303 @@ async def get_import_template():
 async def root():
     return {"message": "POS System API", "status": "running"}
 
+# ==================== 1. VIP Auto-Upgrade ====================
+@api_router.get("/settings/vip-rules")
+async def get_vip_rules(current_user: dict = Depends(get_current_user)):
+    rules = await db.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
+    if not rules:
+        return {"levels": [
+            {"name": "normal", "label": "普通会员", "min_spent": 0, "points_multiplier": 1, "discount_percent": 0},
+            {"name": "silver", "label": "银卡会员", "min_spent": 200, "points_multiplier": 1.5, "discount_percent": 3},
+            {"name": "gold", "label": "金卡会员", "min_spent": 500, "points_multiplier": 2, "discount_percent": 5},
+            {"name": "vip", "label": "VIP会员", "min_spent": 1000, "points_multiplier": 3, "discount_percent": 8}
+        ]}
+    return {k: v for k, v in rules.items() if k != "key"}
+
+@api_router.put("/settings/vip-rules")
+async def update_vip_rules(data: Dict, current_user: dict = Depends(get_current_user)):
+    data["key"] = "vip_rules"
+    await db.system_settings.update_one({"key": "vip_rules"}, {"$set": data}, upsert=True)
+    return {"message": "VIP rules updated"}
+
+@api_router.post("/customers/check-upgrades")
+async def check_customer_upgrades(current_user: dict = Depends(get_current_user)):
+    rules_doc = await db.system_settings.find_one({"key": "vip_rules"}, {"_id": 0})
+    levels = (rules_doc or {}).get("levels", [
+        {"name": "normal", "min_spent": 0}, {"name": "silver", "min_spent": 200},
+        {"name": "gold", "min_spent": 500}, {"name": "vip", "min_spent": 1000}
+    ])
+    levels.sort(key=lambda x: x["min_spent"], reverse=True)
+    customers = await db.customers.find({}, {"_id": 0}).to_list(10000)
+    upgraded = 0
+    for cust in customers:
+        orders = await db.sales_orders.find({"customer_id": cust["id"]}, {"_id": 0, "total_amount": 1}).to_list(10000)
+        total_spent = sum(o.get("total_amount", 0) for o in orders)
+        new_level = "normal"
+        for lv in levels:
+            if total_spent >= lv["min_spent"]:
+                new_level = lv["name"]
+                break
+        if new_level != cust.get("member_level", "normal"):
+            await db.customers.update_one({"id": cust["id"]}, {"$set": {"member_level": new_level}})
+            upgraded += 1
+    return {"upgraded": upgraded, "total": len(customers)}
+
+# ==================== 2. Product Image Upload ====================
+@api_router.post("/products/{product_id}/image")
+async def upload_product_image(product_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    product = await db.products.find_one({"id": product_id})
+    if not product: raise HTTPException(404, "Product not found")
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+    if ext not in ("jpg", "jpeg", "png", "webp"): raise HTTPException(400, "Invalid image format")
+    filename = f"{product_id}.{ext}"
+    filepath = UPLOAD_DIR / "products" / filename
+    with open(filepath, "wb") as f:
+        content = await file.read()
+        f.write(content)
+    image_url = f"/uploads/products/{filename}"
+    await db.products.update_one({"id": product_id}, {"$set": {"image_url": image_url}})
+    await log_audit(current_user["user_id"], current_user["username"], "upload", "product", product_id, "Image uploaded")
+    return {"image_url": image_url}
+
+@api_router.delete("/products/{product_id}/image")
+async def delete_product_image(product_id: str, current_user: dict = Depends(get_current_user)):
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product: raise HTTPException(404, "Product not found")
+    if product.get("image_url"):
+        filepath = Path(__file__).parent / product["image_url"].lstrip("/")
+        if filepath.exists(): filepath.unlink()
+    await db.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
+    return {"message": "Image deleted"}
+
+# ==================== 3. Wholesale Module ====================
+@api_router.post("/wholesale-orders")
+async def create_wholesale_order(data: Dict, current_user: dict = Depends(get_current_user)):
+    order_id = generate_id()
+    order_no = generate_order_no("WS")
+    total = sum(item.get("amount", 0) for item in data.get("items", []))
+    order_doc = {
+        "id": order_id, "order_no": order_no, "customer_id": data.get("customer_id"),
+        "items": data.get("items", []), "total_amount": total,
+        "payment_method": data.get("payment_method", "cash"),
+        "paid_amount": data.get("paid_amount", 0), "status": "completed" if data.get("paid_amount", 0) >= total else "pending",
+        "notes": data.get("notes", ""), "type": "wholesale",
+        "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    # Deduct inventory from main warehouse
+    warehouse = await db.warehouses.find_one({"is_main": True}, {"_id": 0})
+    wh_id = warehouse["id"] if warehouse else None
+    if wh_id:
+        for item in data.get("items", []):
+            await db.inventory.update_one(
+                {"product_id": item["product_id"], "warehouse_id": wh_id},
+                {"$inc": {"quantity": -item.get("quantity", 0)}}
+            )
+    await db.wholesale_orders.insert_one(order_doc)
+    del order_doc["_id"]
+    await log_audit(current_user["user_id"], current_user["username"], "create", "wholesale", order_id, f"${total}")
+    return order_doc
+
+@api_router.get("/wholesale-orders")
+async def get_wholesale_orders(current_user: dict = Depends(get_current_user)):
+    return await db.wholesale_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+# ==================== 4. Data Restore ====================
+@api_router.post("/backup/restore")
+async def restore_backup(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin": raise HTTPException(403, "Admin only")
+    content = await file.read()
+    try: backup = json.loads(content)
+    except: raise HTTPException(400, "Invalid JSON file")
+    collections = ["products", "categories", "customers", "suppliers", "stores", "warehouses", "inventory", "sales_orders", "purchase_orders", "online_orders", "employees", "promotions", "accounts", "exchange_rates", "payment_settings", "system_settings"]
+    restored = {}
+    for col_name in collections:
+        if col_name in backup and isinstance(backup[col_name], list):
+            col = db[col_name]
+            if len(backup[col_name]) > 0:
+                await col.delete_many({})
+                for doc in backup[col_name]:
+                    doc.pop("_id", None)
+                await col.insert_many(backup[col_name])
+            restored[col_name] = len(backup[col_name])
+    await log_audit(current_user["user_id"], current_user["username"], "restore", "system", "", f"Restored {len(restored)} collections")
+    return {"message": "Backup restored", "collections": restored}
+
+# ==================== 5. Employee Attendance ====================
+@api_router.post("/attendance/clock-in")
+async def clock_in(current_user: dict = Depends(get_current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    existing = await db.attendance.find_one({"user_id": current_user["user_id"], "date": today})
+    if existing: raise HTTPException(400, "Already clocked in today")
+    record = {
+        "id": generate_id(), "user_id": current_user["user_id"],
+        "username": current_user["username"], "date": today,
+        "clock_in": datetime.now(timezone.utc).isoformat(), "clock_out": None,
+        "hours": 0, "status": "present"
+    }
+    await db.attendance.insert_one(record)
+    del record["_id"]
+    return record
+
+@api_router.post("/attendance/clock-out")
+async def clock_out(current_user: dict = Depends(get_current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    record = await db.attendance.find_one({"user_id": current_user["user_id"], "date": today})
+    if not record: raise HTTPException(400, "Not clocked in")
+    if record.get("clock_out"): raise HTTPException(400, "Already clocked out")
+    now = datetime.now(timezone.utc)
+    clock_in_time = datetime.fromisoformat(record["clock_in"])
+    hours = round((now - clock_in_time).total_seconds() / 3600, 2)
+    await db.attendance.update_one({"id": record["id"]}, {"$set": {"clock_out": now.isoformat(), "hours": hours}})
+    return {"clock_out": now.isoformat(), "hours": hours}
+
+@api_router.get("/attendance")
+async def get_attendance(start_date: Optional[str] = None, end_date: Optional[str] = None, user_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {}
+    if user_id: query["user_id"] = user_id
+    if start_date: query["date"] = {"$gte": start_date}
+    if end_date: query.setdefault("date", {})["$lte"] = end_date
+    records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
+    return records
+
+# ==================== 6. Sales Targets ====================
+@api_router.post("/sales-targets")
+async def create_sales_target(data: Dict, current_user: dict = Depends(get_current_user)):
+    target = {
+        "id": generate_id(), **data,
+        "created_by": current_user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.sales_targets.insert_one(target)
+    del target["_id"]
+    return target
+
+@api_router.get("/sales-targets")
+async def get_sales_targets(period: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {}
+    if period: query["period"] = period
+    targets = await db.sales_targets.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # Calculate progress
+    for t in targets:
+        start = t.get("start_date", "")
+        end = t.get("end_date", "")
+        q = {}
+        if start: q["created_at"] = {"$gte": start}
+        if end: q.setdefault("created_at", {})["$lte"] = end + "T23:59:59"
+        if t.get("employee_id"):
+            q["created_by"] = t["employee_id"]
+        if t.get("store_id"):
+            q["store_id"] = t["store_id"]
+        orders = await db.sales_orders.find(q, {"_id": 0, "total_amount": 1}).to_list(10000)
+        actual = sum(o.get("total_amount", 0) for o in orders)
+        t["actual"] = round(actual, 2)
+        t["progress"] = round(actual / t.get("target_amount", 1) * 100, 1) if t.get("target_amount") else 0
+    return targets
+
+@api_router.delete("/sales-targets/{target_id}")
+async def delete_sales_target(target_id: str, current_user: dict = Depends(get_current_user)):
+    await db.sales_targets.delete_one({"id": target_id})
+    return {"status": "deleted"}
+
+# ==================== 7. Purchase Returns ====================
+@api_router.post("/purchase-returns")
+async def create_purchase_return(data: Dict, current_user: dict = Depends(get_current_user)):
+    return_id = generate_id()
+    return_no = generate_order_no("PR")
+    total = sum(item.get("amount", 0) for item in data.get("items", []))
+    doc = {
+        "id": return_id, "return_no": return_no,
+        "supplier_id": data.get("supplier_id"), "purchase_order_id": data.get("purchase_order_id"),
+        "items": data.get("items", []), "total_amount": total,
+        "reason": data.get("reason", ""), "status": "pending",
+        "created_by": current_user["user_id"], "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.purchase_returns.insert_one(doc)
+    del doc["_id"]
+    # Deduct inventory
+    warehouse = await db.warehouses.find_one({"is_main": True}, {"_id": 0})
+    if warehouse:
+        for item in data.get("items", []):
+            await db.inventory.update_one(
+                {"product_id": item["product_id"], "warehouse_id": warehouse["id"]},
+                {"$inc": {"quantity": -item.get("quantity", 0)}}
+            )
+    await log_audit(current_user["user_id"], current_user["username"], "create", "purchase_return", return_id, f"${total}")
+    return doc
+
+@api_router.get("/purchase-returns")
+async def get_purchase_returns(current_user: dict = Depends(get_current_user)):
+    return await db.purchase_returns.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+@api_router.put("/purchase-returns/{return_id}/approve")
+async def approve_purchase_return(return_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.purchase_returns.update_one({"id": return_id}, {"$set": {"status": "approved"}})
+    if result.matched_count == 0: raise HTTPException(404, "Return not found")
+    return {"status": "approved"}
+
+# ==================== 8. Product Bundles ====================
+@api_router.post("/bundles")
+async def create_bundle(data: Dict, current_user: dict = Depends(get_current_user)):
+    bundle = {
+        "id": generate_id(), "name": data.get("name"),
+        "description": data.get("description", ""),
+        "items": data.get("items", []),  # [{product_id, quantity}]
+        "bundle_price": data.get("bundle_price", 0),
+        "original_price": data.get("original_price", 0),
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.bundles.insert_one(bundle)
+    del bundle["_id"]
+    return bundle
+
+@api_router.get("/bundles")
+async def get_bundles(current_user: dict = Depends(get_current_user)):
+    bundles = await db.bundles.find({}, {"_id": 0}).to_list(200)
+    products = {p["id"]: p for p in await db.products.find({}, {"_id": 0}).to_list(10000)}
+    for b in bundles:
+        for item in b.get("items", []):
+            p = products.get(item.get("product_id"))
+            if p: item["product_name"] = p.get("name", "?")
+    return bundles
+
+@api_router.put("/bundles/{bundle_id}")
+async def update_bundle(bundle_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
+    await db.bundles.update_one({"id": bundle_id}, {"$set": data})
+    return await db.bundles.find_one({"id": bundle_id}, {"_id": 0})
+
+@api_router.delete("/bundles/{bundle_id}")
+async def delete_bundle(bundle_id: str, current_user: dict = Depends(get_current_user)):
+    await db.bundles.delete_one({"id": bundle_id})
+    return {"status": "deleted"}
+
+# ==================== 9. Cost Price Tracking ====================
+@api_router.get("/products/{product_id}/cost-history")
+async def get_cost_history(product_id: str, current_user: dict = Depends(get_current_user)):
+    return await db.cost_history.find({"product_id": product_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+# ==================== 10. Notification Center ====================
+@api_router.get("/notifications")
+async def get_notifications(current_user: dict = Depends(get_current_user)):
+    notifications = []
+    # Low stock alerts
+    inventory = await db.inventory.find({}, {"_id": 0}).to_list(10000)
+    products = {p["id"]: p for p in await db.products.find({}, {"_id": 0}).to_list(10000)}
+    for inv in inventory:
+        product = products.get(inv.get("product_id"))
+        if product and inv.get("quantity", 0) <= product.get("min_stock", 5):
+            notifications.append({"type": "stock_low", "severity": "warning", "title": f"{product['name']} low stock", "detail": f"Current: {inv['quantity']}, Min: {product.get('min_stock', 5)}", "product_id": inv["product_id"]})
+    # Overdue accounts
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    overdue = await db.accounts.find({"status": {"$ne": "paid"}, "due_date": {"$lt": today}}, {"_id": 0}).to_list(100)
+    for acc in overdue:
+        notifications.append({"type": "overdue_account", "severity": "error", "title": f"Overdue: {acc.get('party_name')}", "detail": f"${acc.get('amount', 0)} due {acc.get('due_date')}", "account_id": acc["id"]})
+    # Pending online orders
+    pending_online = await db.online_orders.count_documents({"order_status": {"$in": ["pending", "confirmed"]}})
+    if pending_online > 0:
+        notifications.append({"type": "pending_orders", "severity": "info", "title": f"{pending_online} pending online orders", "detail": "Orders waiting for processing"})
+    return {"count": len(notifications), "items": notifications}
+
 # ==================== Audit Log ====================
 async def log_audit(user_id: str, username: str, action: str, target_type: str, target_id: str = "", detail: str = ""):
     await db.audit_logs.insert_one({
@@ -2319,6 +2643,12 @@ async def get_permissions(current_user: dict = Depends(get_current_user)):
     return {"role": role, "permissions": defaults}
 
 app.include_router(api_router)
+
+# Serve uploaded files
+UPLOAD_DIR = Path(__file__).parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+(UPLOAD_DIR / "products").mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
