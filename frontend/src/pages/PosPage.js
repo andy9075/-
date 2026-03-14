@@ -221,7 +221,11 @@ export default function PosPage() {
   const handleLogin = async () => {
     try {
       const loginData = selectedCashier ? { username: selectedCashier.username, password: loginForm.password } : loginForm;
-      const res = await axios.post(`${API}/auth/login`, loginData);
+      // Use tenant-login if user is in a tenant context
+      const isTenant = auth?.user?.tenant_id;
+      const endpoint = isTenant ? `${API}/auth/tenant-login` : `${API}/auth/login`;
+      const payload = isTenant ? { ...loginData, tenant_id: auth.user.tenant_id } : loginData;
+      const res = await axios.post(endpoint, payload);
       const userData = { ...res.data.user, token: res.data.token };
       setUser(userData); localStorage.setItem("pos_user", JSON.stringify(userData)); localStorage.setItem("pos_token", res.data.token);
       axios.defaults.headers.common["Authorization"] = `Bearer ${res.data.token}`;
