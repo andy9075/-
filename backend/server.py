@@ -1421,10 +1421,14 @@ async def get_order_detail(order_no: str, current_user: dict = Depends(get_curre
 @api_router.post("/refunds")
 async def create_refund(data: Dict, current_user: dict = Depends(get_current_user)):
     udb = get_user_db(current_user)
-    # Role check: only admin/manager can refund
+    # Role check: only users with can_refund permission
     role = current_user.get("role", "staff")
     if role not in ("admin", "manager"):
-        raise HTTPException(status_code=403, detail="Only managers and admins can process refunds")
+        # Check custom permissions
+        udb2 = get_user_db(current_user)
+        user_doc = await udb2.users.find_one({"id": current_user.get("user_id")}, {"_id": 0, "permissions": 1})
+        if not user_doc or not user_doc.get("permissions", {}).get("can_refund"):
+            raise HTTPException(status_code=403, detail="No refund permission")
     order_no = data.get("order_no", "")
     items = data.get("items", [])
     reason = data.get("reason", "")
@@ -2647,10 +2651,10 @@ async def get_permissions(current_user: dict = Depends(get_current_user)):
     role = user.get("role", "staff")
     perms = user.get("permissions", {})
     role_defaults = {
-        "admin": {"can_discount": True, "can_refund": True, "can_void": True, "can_export": True, "can_manage_employees": True, "can_view_reports": True, "can_manage_settings": True, "max_discount": 100},
-        "manager": {"can_discount": True, "can_refund": True, "can_void": True, "can_export": True, "can_manage_employees": False, "can_view_reports": True, "can_manage_settings": False, "max_discount": 50},
-        "cashier": {"can_discount": False, "can_refund": False, "can_void": False, "can_export": False, "can_manage_employees": False, "can_view_reports": False, "can_manage_settings": False, "max_discount": 0},
-        "staff": {"can_discount": False, "can_refund": False, "can_void": False, "can_export": False, "can_manage_employees": False, "can_view_reports": False, "can_manage_settings": False, "max_discount": 0},
+        "admin": {"can_access_pos": True, "can_discount": True, "can_refund": True, "can_void": True, "can_export": True, "can_manage_employees": True, "can_view_reports": True, "can_manage_settings": True, "can_manage_products": True, "can_manage_inventory": True, "can_manage_purchases": True, "can_manage_customers": True, "can_view_cost_price": True, "can_manage_promotions": True, "max_discount": 100},
+        "manager": {"can_access_pos": True, "can_discount": True, "can_refund": True, "can_void": True, "can_export": True, "can_manage_employees": False, "can_view_reports": True, "can_manage_settings": False, "can_manage_products": True, "can_manage_inventory": True, "can_manage_purchases": True, "can_manage_customers": True, "can_view_cost_price": True, "can_manage_promotions": True, "max_discount": 50},
+        "cashier": {"can_access_pos": True, "can_discount": False, "can_refund": False, "can_void": False, "can_export": False, "can_manage_employees": False, "can_view_reports": False, "can_manage_settings": False, "can_manage_products": False, "can_manage_inventory": False, "can_manage_purchases": False, "can_manage_customers": False, "can_view_cost_price": False, "can_manage_promotions": False, "max_discount": 0},
+        "staff": {"can_access_pos": True, "can_discount": False, "can_refund": False, "can_void": False, "can_export": False, "can_manage_employees": False, "can_view_reports": False, "can_manage_settings": False, "can_manage_products": False, "can_manage_inventory": True, "can_manage_purchases": False, "can_manage_customers": False, "can_view_cost_price": False, "can_manage_promotions": False, "max_discount": 0},
     }
     defaults = role_defaults.get(role, role_defaults["staff"])
     defaults.update(perms)
