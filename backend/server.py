@@ -2,417 +2,36 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, UploadFil
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-import uuid
 from datetime import datetime, timezone, timedelta
-import bcrypt
-import jwt
-import json
-import csv
-import io
-import shutil
+from pathlib import Path
+import os, logging, json, csv, io, shutil
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-master_db = client[os.environ['DB_NAME']]  # Master DB for tenant management
-
-def get_tenant_db(tenant_id: str):
-    """Get tenant-specific database"""
-    return client[f"tenant_{tenant_id}"]
-
-
-def get_user_db(current_user: dict):
-    """Return tenant DB if user is a tenant user, otherwise master DB"""
-    return current_user.get("_db", db)
-
-# JWT Config
-JWT_SECRET = os.environ.get('JWT_SECRET', 'pos-system-secret-key-2024')
-JWT_ALGORITHM = "HS256"
+# Core imports
+from core import db, master_db, client, get_tenant_db, get_user_db, JWT_SECRET, JWT_ALGORITHM, ROOT_DIR
+from core.auth import (
+    security, hash_password, verify_password, generate_id, generate_order_no,
+    create_token, get_current_user, log_audit
+)
+from core.models import (
+    UserCreate, UserLogin, UserResponse,
+    StoreCreate, StoreResponse,
+    WarehouseCreate, WarehouseResponse,
+    SupplierCreate, SupplierResponse,
+    CustomerCreate, CustomerResponse,
+    CategoryCreate, CategoryResponse,
+    ProductCreate, ProductResponse,
+    InventoryCreate, InventoryResponse, InventoryAdjust,
+    PurchaseItemCreate, PurchaseOrderCreate, PurchaseOrderResponse,
+    SalesItemCreate, SalesOrderCreate, SalesOrderResponse,
+    PaymentSettingsUpdate, SystemSettings,
+    OnlineOrderCreate, OnlineOrderResponse,
+)
 
 app = FastAPI(title="Sellox API")
 api_router = APIRouter(prefix="/api")
-security = HTTPBearer()
 
-# ==================== Models ====================
-
-# Auth Models
-class UserCreate(BaseModel):
-    username: str
-    password: str
-    role: str = "staff"  # admin, manager, cashier, staff
-    store_id: Optional[str] = None
-    name: str = ""
-    phone: str = ""
-    permissions: Dict = {}  # {can_discount: bool, can_refund: bool, can_void: bool, max_discount: int}
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-class UserResponse(BaseModel):
-    id: str
-    username: str
-    role: str
-    store_id: Optional[str]
-    name: str
-    phone: str
-    permissions: Dict = {}
-    created_at: str
-
-# Store/Shop Models
-class StoreCreate(BaseModel):
-    code: str
-    name: str
-    type: str = "retail"  # retail, online, warehouse
-    address: str = ""
-    phone: str = ""
-    warehouse_id: Optional[str] = None
-    is_headquarters: bool = False
-    status: str = "active"
-
-class StoreResponse(BaseModel):
-    id: str
-    code: str
-    name: str
-    type: str
-    address: str
-    phone: str
-    warehouse_id: Optional[str]
-    is_headquarters: bool
-    status: str
-    created_at: str
-
-# Warehouse Models
-class WarehouseCreate(BaseModel):
-    code: str
-    name: str
-    address: str = ""
-    is_main: bool = False
-    store_id: Optional[str] = None
-
-class WarehouseResponse(BaseModel):
-    id: str
-    code: str
-    name: str
-    address: str
-    is_main: bool
-    store_id: Optional[str]
-    created_at: str
-
-# Supplier Models
-class SupplierCreate(BaseModel):
-    code: str
-    name: str
-    contact: str = ""
-    phone: str = ""
-    address: str = ""
-    bank_account: str = ""
-    tax_id: str = ""
-
-class SupplierResponse(BaseModel):
-    id: str
-    code: str
-    name: str
-    contact: str
-    phone: str
-    address: str
-    bank_account: str
-    tax_id: str
-    created_at: str
-
-# Customer Models
-class CustomerCreate(BaseModel):
-    code: str
-    name: str
-    phone: str = ""
-    email: str = ""
-    address: str = ""
-    member_level: str = "normal"
-    points: int = 0
-    balance: float = 0.0
-
-class CustomerResponse(BaseModel):
-    id: str
-    code: str
-    name: str
-    phone: str
-    email: str
-    address: str
-    member_level: str
-    points: int
-    balance: float
-    created_at: str
-
-# Category Models
-class CategoryCreate(BaseModel):
-    code: str
-    name: str
-    parent_id: Optional[str] = None
-    sort_order: int = 0
-    exchange_rate: float = 1.0  # 汇率 (例如 USD to VES)
-
-class CategoryResponse(BaseModel):
-    id: str
-    code: str
-    name: str
-    parent_id: Optional[str] = None
-    sort_order: int = 0
-    exchange_rate: float = 1.0
-    created_at: str
-
-# Product Models
-class ProductCreate(BaseModel):
-    code: str
-    barcode: str = ""
-    name: str
-    category_id: Optional[str] = None
-    unit: str = "件"
-    cost_price: float = 0.0
-    margin1: float = 0.0  # 利率1%
-    margin2: float = 0.0  # 利率2%
-    margin3: float = 0.0  # 利率3% (整箱价)
-    price1: float = 0.0  # 价格1 = cost × (1 + margin1%)
-    price2: float = 0.0  # 价格2 = cost × (1 + margin2%)
-    price3: float = 0.0  # 价格3/整箱价 = cost × (1 + margin3%)
-    wholesale_price: float = 0.0  # 兼容旧字段
-    box_quantity: int = 1  # 每箱数量
-    retail_price: float = 0.0  # 兼容旧字段
-    min_stock: int = 0
-    max_stock: int = 9999
-    image_url: str = ""
-    description: str = ""
-    status: str = "active"
-
-class ProductResponse(BaseModel):
-    id: str
-    code: str
-    barcode: str = ""
-    name: str
-    category_id: Optional[str] = None
-    unit: str = "件"
-    cost_price: float = 0.0
-    margin1: float = 0.0
-    margin2: float = 0.0
-    margin3: float = 0.0
-    price1: float = 0.0
-    price2: float = 0.0
-    price3: float = 0.0
-    wholesale_price: float = 0.0
-    box_quantity: int = 1
-    retail_price: float = 0.0
-    min_stock: int = 0
-    max_stock: int = 9999
-    image_url: str = ""
-    description: str = ""
-    status: str = "active"
-    created_at: str
-
-# Inventory Models
-class InventoryCreate(BaseModel):
-    product_id: str
-    warehouse_id: str
-    quantity: int = 0
-    reserved: int = 0
-
-class InventoryResponse(BaseModel):
-    id: str
-    product_id: str
-    warehouse_id: str
-    quantity: int
-    reserved: int
-    available: int
-    updated_at: str
-
-class InventoryAdjust(BaseModel):
-    product_id: str
-    warehouse_id: str
-    quantity: int
-    reason: str = ""
-
-# Purchase Order Models
-class PurchaseItemCreate(BaseModel):
-    product_id: str
-    quantity: int
-    unit_price: float
-    amount: float
-
-class PurchaseOrderCreate(BaseModel):
-    supplier_id: str
-    warehouse_id: str
-    items: List[PurchaseItemCreate]
-    notes: str = ""
-
-class PurchaseOrderResponse(BaseModel):
-    id: str
-    order_no: str
-    supplier_id: str
-    warehouse_id: str
-    items: List[Dict]
-    total_amount: float
-    status: str
-    notes: str
-    created_by: str
-    created_at: str
-
-# Sales Order Models
-class SalesItemCreate(BaseModel):
-    product_id: str
-    quantity: float  # Support decimal for weight-based items (kg, g)
-    unit_price: float
-    discount: float = 0.0
-    amount: float
-
-class SalesOrderCreate(BaseModel):
-    store_id: str
-    customer_id: Optional[str] = None
-    items: List[SalesItemCreate]
-    payment_method: str = "cash"
-    paid_amount: float = 0.0
-    notes: str = ""
-    points_used: int = 0  # Points redeemed for discount
-
-class SalesOrderResponse(BaseModel):
-    id: str
-    order_no: str
-    store_id: str
-    customer_id: Optional[str]
-    items: List[Dict]
-    total_amount: float
-    discount_amount: float = 0
-    paid_amount: float
-    payment_method: str
-    status: str
-    notes: str = ""
-    created_by: str
-    created_at: str
-    points_used: int = 0
-    points_discount: float = 0
-    points_earned: int = 0
-
-# Payment Settings Models
-class PaymentSettingsUpdate(BaseModel):
-    transfer_enabled: bool = True
-    transfer_bank_name: str = ""
-    transfer_account_number: str = ""
-    transfer_account_holder: str = ""
-    transfer_rif: str = ""
-    pago_movil_enabled: bool = True
-    pago_movil_phone: str = ""
-    pago_movil_bank_code: str = ""
-    pago_movil_cedula: str = ""
-    whatsapp_number: str = ""
-
-# System Settings Model
-class SystemSettings(BaseModel):
-    # Invoice/Receipt
-    company_name: str = ""
-    company_tax_id: str = ""
-    company_address: str = ""
-    company_phone: str = ""
-    invoice_header: str = ""
-    invoice_footer: str = ""
-    # Print
-    default_print_format: str = "80mm"  # 80mm or A4
-    auto_print_receipt: bool = True
-    receipt_copies: int = 1
-    # Report
-    default_report_currency: str = "USD"
-    default_date_range: str = "today"
-    # Document numbering
-    sales_prefix: str = "SO"
-    transfer_prefix: str = "TR"
-    purchase_prefix: str = "PO"
-    next_sales_number: int = 1
-    # Scanner
-    barcode_scanner_enabled: bool = True
-    scanner_input_delay: int = 50  # ms between chars for scanner detection
-    # Wholesale
-    wholesale_enabled: bool = True
-    wholesale_min_quantity: int = 10
-    wholesale_discount_percent: float = 0.0
-    # Pricing Mode: "local_based" or "foreign_direct"
-    pricing_mode: str = "local_based"
-    # Points/Loyalty
-    points_per_dollar: int = 1  # Points earned per $1 spent
-    points_value_rate: int = 100  # Points needed for $1 discount
-
-# Online Shop Order Models
-class OnlineOrderCreate(BaseModel):
-    customer_id: str
-    items: List[SalesItemCreate]
-    shipping_address: str
-    shipping_phone: str
-    shipping_name: str
-    payment_method: str = "transfer"  # transfer, pago_movil
-    payment_reference: str = ""
-    notes: str = ""
-
-class OnlineOrderResponse(BaseModel):
-    id: str
-    order_no: str
-    customer_id: str
-    items: List[Dict]
-    total_amount: float
-    shipping_fee: float
-    shipping_address: str
-    shipping_phone: str
-    shipping_name: str
-    payment_method: str
-    payment_reference: Optional[str] = ""
-    payment_status: str
-    order_status: str
-    warehouse_id: Optional[str]
-    notes: str
-    created_at: str
-
-# ==================== Helper Functions ====================
-
-def generate_id():
-    return str(uuid.uuid4())
-
-def generate_order_no(prefix: str):
-    now = datetime.now(timezone.utc)
-    return f"{prefix}{now.strftime('%Y%m%d%H%M%S')}{str(uuid.uuid4())[:4].upper()}"
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
-
-def create_token(user_id: str, username: str, role: str, tenant_id: str = "") -> str:
-    payload = {
-        "user_id": user_id,
-        "username": username,
-        "role": role,
-        "tenant_id": tenant_id,
-        "exp": datetime.now(timezone.utc) + timedelta(days=7)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        # If tenant_id exists, switch db context
-        if payload.get("tenant_id"):
-            payload["_db"] = get_tenant_db(payload["tenant_id"])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token已过期")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="无效的Token")
 
 # ==================== Auth Routes ====================
 
@@ -2423,7 +2042,7 @@ async def delete_product_image(product_id: str, current_user: dict = Depends(get
     product = await udb.products.find_one({"id": product_id}, {"_id": 0})
     if not product: raise HTTPException(404, "Product not found")
     if product.get("image_url"):
-        filepath = Path(__file__).parent / product["image_url"].lstrip("/")
+        filepath = ROOT_DIR / product["image_url"].lstrip("/")
         if filepath.exists(): filepath.unlink()
     await udb.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
     return {"message": "Image deleted"}
@@ -2674,12 +2293,6 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
     return {"count": len(notifications), "items": notifications}
 
 # ==================== Audit Log ====================
-async def log_audit(user_id: str, username: str, action: str, target_type: str, target_id: str = "", detail: str = "", audit_db=None):
-    await (audit_db or db).audit_logs.insert_one({
-        "id": generate_id(), "user_id": user_id, "username": username,
-        "action": action, "target_type": target_type, "target_id": target_id,
-        "detail": detail, "created_at": datetime.now(timezone.utc).isoformat()
-    })
 
 @api_router.get("/audit-logs")
 async def get_audit_logs(
@@ -3011,7 +2624,7 @@ async def get_permissions(current_user: dict = Depends(get_current_user)):
 app.include_router(api_router)
 
 # Serve uploaded files
-UPLOAD_DIR = Path(__file__).parent / "uploads"
+UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 (UPLOAD_DIR / "products").mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
