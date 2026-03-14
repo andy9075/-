@@ -41,7 +41,7 @@ def get_user_db(current_user: dict):
 JWT_SECRET = os.environ.get('JWT_SECRET', 'pos-system-secret-key-2024')
 JWT_ALGORITHM = "HS256"
 
-app = FastAPI(title="POS管理系统 API")
+app = FastAPI(title="Sellox API")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
@@ -2108,7 +2108,7 @@ async def get_import_template():
 
 @api_router.get("/")
 async def root():
-    return {"message": "POS System API", "status": "running"}
+    return {"message": "Sellox API", "status": "running"}
 
 # ==================== Multi-Tenant Management ====================
 @api_router.post("/tenants")

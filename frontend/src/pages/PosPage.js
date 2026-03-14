@@ -280,7 +280,7 @@ export default function PosPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-slate-800/80 border-slate-700 backdrop-blur">
-          <CardHeader className="text-center"><div className="mx-auto w-20 h-20 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mb-4"><CreditCard className="w-10 h-10 text-white" /></div><CardTitle className="text-2xl text-white">POS</CardTitle><p className="text-slate-400">{t('posTitle')}</p></CardHeader>
+          <CardHeader className="text-center"><div className="mx-auto w-20 h-20 rounded-2xl overflow-hidden mb-4"><img src="/sellox-logo.png" alt="Sellox" className="w-full h-full object-cover" /></div><CardTitle className="text-2xl text-white">Sellox POS</CardTitle><p className="text-slate-400">{t('posTitle')}</p></CardHeader>
           <CardContent className="space-y-4">
             {cashiers.length > 0 && !selectedCashier && (
               <div className="space-y-2"><label className="text-sm text-slate-300">{t('employees')}</label><div className="grid grid-cols-2 gap-2">{cashiers.map(c => (<div key={c.id} onClick={() => { setSelectedCashier(c); setLoginForm({...loginForm, username: c.username}); }} className="p-3 rounded-lg border border-slate-600 hover:border-emerald-500 cursor-pointer text-center transition-colors" data-testid={`cashier-${c.username}`}><div className="w-10 h-10 bg-slate-600 rounded-full mx-auto mb-2 flex items-center justify-center text-white font-bold">{(c.name || c.username).charAt(0).toUpperCase()}</div><p className="text-white text-sm font-medium">{c.name || c.username}</p><p className="text-slate-500 text-xs">{c.role}</p></div>))}</div></div>
@@ -316,7 +316,7 @@ export default function PosPage() {
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-blue-400" /><span className="text-white font-bold text-sm">POS</span></div>
+          <div className="flex items-center gap-2"><img src="/sellox-logo.png" alt="Sellox" className="w-5 h-5 rounded" /><span className="text-white font-bold text-sm">Sellox</span></div>
           <span className="text-slate-400 text-sm"><span className="text-white">{selectedStore?.name}</span> | {user?.name || user?.username}</span>
           {/* Customer selector */}
           <div className="relative">

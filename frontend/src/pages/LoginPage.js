@@ -51,11 +51,11 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-slate-800/50 border-slate-700 backdrop-blur">
         <CardHeader className="text-center">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mb-4">
-            <Store className="w-8 h-8 text-white" />
+          <div className="mx-auto w-16 h-16 rounded-2xl overflow-hidden mb-4">
+            <img src="/sellox-logo.png" alt="Sellox" className="w-full h-full object-cover" />
           </div>
-          <CardTitle className="text-2xl text-white">POS收银系统</CardTitle>
-          <p className="text-slate-400 text-sm">{t('storeManagement')} · {t('warehouseManagement')}</p>
+          <CardTitle className="text-2xl text-white">Sellox</CardTitle>
+          <p className="text-slate-400 text-sm">Smart POS · {t('storeManagement')}</p>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="admin" className="w-full">

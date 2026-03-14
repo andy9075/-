@@ -80,7 +80,10 @@ const AdminLayout = ({ children }) => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-slate-700">
-        <h2 className="text-lg font-bold text-white tracking-wide">POS System</h2>
+        <div className="flex items-center gap-2.5">
+          <img src="/sellox-logo.png" alt="Sellox" className="w-8 h-8 rounded-lg" />
+          <h2 className="text-lg font-bold text-white tracking-wide">Sellox</h2>
+        </div>
         <p className="text-xs text-slate-400 mt-1">{user?.name || user?.username}</p>
         {user?.tenant_id && <p className="text-xs text-blue-400 mt-0.5">{user?.tenant_name || user?.tenant_id}</p>}
         {isSuperAdmin && <Badge className="mt-1 bg-amber-500/20 text-amber-400 text-xs">Super Admin</Badge>}
@@ -134,7 +137,7 @@ const AdminLayout = ({ children }) => {
       <main className="flex-1 min-w-0">
         <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between lg:hidden">
           <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(true)} className="text-white"><Menu className="w-5 h-5" /></Button>
-          <span className="text-white font-medium">POS System</span>
+          <span className="text-white font-medium">Sellox</span>
           <Link to="/pos"><Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-sm">{t('posMode')}</Button></Link>
         </header>
         <div className="p-4 lg:p-6 overflow-auto" style={{ maxHeight: 'calc(100vh - 0px)' }}>
