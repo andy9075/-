@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import VideoGenerator from "@/components/VideoGenerator";
 import axios, { API } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -142,6 +143,7 @@ export default function VideoTutorialsPage() {
           <Video className="w-6 h-6 text-red-400" /> 视频教程管理
         </h1>
         <div className="flex gap-2">
+          <VideoGenerator onComplete={fetchVideos} />
           {!recording ? (
             <Button onClick={startRecording} className="bg-red-500 hover:bg-red-600" data-testid="start-recording-btn">
               <Circle className="w-4 h-4 mr-2 fill-current" /> 开始录屏
