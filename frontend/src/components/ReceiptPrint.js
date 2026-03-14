@@ -97,6 +97,23 @@ export const ReceiptPrint = forwardRef(({ order, settings, exchangeRates, t }, r
             <span>{t('discount')} ({order.discount}%):</span>
             <span>-${((order.subtotal || order.total_amount || 0) * order.discount / 100).toFixed(2)}</span>
           </div>}
+          {/* Tax breakdown */}
+          {order?.tax_breakdown && Object.keys(order.tax_breakdown).length > 0 && (
+            <div style={{ borderTop: '1px dotted #000', marginTop: '2px', paddingTop: '2px' }}>
+              {Object.entries(order.tax_breakdown).sort(([a],[b]) => Number(b) - Number(a)).map(([rate, info]) => (
+                <div key={rate}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                    <span>Base {rate}%:</span>
+                    <span>${(info.base || 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                    <span>IVA {rate}%:</span>
+                    <span>${(info.tax || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 'bold', marginTop: '4px' }}>
             <span>TOTAL $:</span>
             <span>${(order?.total_amount || 0).toFixed(2)}</span>

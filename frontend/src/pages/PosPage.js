@@ -15,6 +15,8 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
 import { InvoicePrint } from "@/components/InvoicePrint";
+import { FiscalPrint } from "@/components/FiscalPrint";
+import { DotMatrixPrint } from "@/components/DotMatrixPrint";
 
 export default function PosPage() {
   const { t, lang, changeLang } = useLang();
@@ -66,6 +68,8 @@ export default function PosPage() {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const receiptRef = useRef(null);
   const invoiceRef = useRef(null);
+  const fiscalRef = useRef(null);
+  const dotMatrixRef = useRef(null);
 
   // Network detection
   useEffect(() => { const goOnline = () => setIsOnline(true); const goOffline = () => setIsOnline(false); window.addEventListener('online', goOnline); window.addEventListener('offline', goOffline); return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); }; }, []);
@@ -276,10 +280,22 @@ export default function PosPage() {
   // === Payment ===
   const handlePayment = async () => {
     if (!shift) { toast.error(t('noShift')); return; }
-    const orderItems = cart.map(i => ({ product_id: i.product_id, product_name: i.product.name, quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity, unit_price: i.unit_price, discount: safeDiscount, amount: i.amount * (1 - safeDiscount / 100) }));
+    const orderItems = cart.map(i => ({ product_id: i.product_id, product_name: i.product.name, product_code: i.product.code, quantity: i.price_mode === "box" ? getActualItems(i) : i.quantity, unit_price: i.unit_price, discount: safeDiscount, amount: i.amount * (1 - safeDiscount / 100), tax_rate: i.product.tax_rate ?? 16 }));
     const orderData = { store_id: selectedStore.id, customer_id: selectedCustomer?.id || null, items: orderItems, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, notes: safeDiscount > 0 ? `Discount: ${safeDiscount}%` : "", points_used: pointsToUse };
+    // Compute tax breakdown for receipt
+    const taxBreakdown = {};
+    orderItems.forEach(item => {
+      const rate = item.tax_rate ?? 16;
+      const rateKey = String(rate);
+      if (!taxBreakdown[rateKey]) taxBreakdown[rateKey] = { base: 0, tax: 0 };
+      const taxIncluded = systemSettings?.tax_included_in_price !== false;
+      const base = taxIncluded ? item.amount / (1 + rate / 100) : item.amount;
+      const tax = taxIncluded ? item.amount - base : item.amount * rate / 100;
+      taxBreakdown[rateKey].base += Math.round(base * 100) / 100;
+      taxBreakdown[rateKey].tax += Math.round(tax * 100) / 100;
+    });
     // Capture receipt data before clearing cart
-    const receiptData = { order_no: `SO${Date.now()}`, date: new Date().toISOString(), items: orderItems, subtotal: cartTotal, total_amount: finalTotal, discount: safeDiscount, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, cashier: user?.name || user?.username, store: selectedStore?.name, customer_name: selectedCustomer?.name, points_used: pointsToUse, points_discount: pointsDiscount, points_earned: 0 };
+    const receiptData = { order_no: `SO${Date.now()}`, date: new Date().toISOString(), items: orderItems, subtotal: cartTotal, total_amount: finalTotal, discount: safeDiscount, payment_method: paymentMethod, paid_amount: parseFloat(receivedAmount) || finalTotal, cashier: user?.name || user?.username, store: selectedStore?.name, customer_name: selectedCustomer?.name, points_used: pointsToUse, points_discount: pointsDiscount, points_earned: 0, tax_breakdown: taxBreakdown };
     try {
       if (isOnline) {
         const res = await axios.post(`${API}/sales-orders`, orderData);
@@ -311,6 +327,12 @@ export default function PosPage() {
   };
   const handlePrintInvoice = () => {
     if (invoiceRef.current) { invoiceRef.current.style.display = 'block'; window.print(); invoiceRef.current.style.display = 'none'; }
+  };
+  const handlePrintFiscal = () => {
+    if (fiscalRef.current) { fiscalRef.current.style.display = 'block'; window.print(); fiscalRef.current.style.display = 'none'; }
+  };
+  const handlePrintDotMatrix = () => {
+    if (dotMatrixRef.current) { dotMatrixRef.current.style.display = 'block'; window.print(); dotMatrixRef.current.style.display = 'none'; }
   };
 
   const filteredProducts = products.filter(p => {
@@ -627,12 +649,30 @@ export default function PosPage() {
               {lastOrder?.points_used > 0 && <p className="text-purple-400 text-xs mt-1">{t('pointsDiscount')}: -{lastOrder.points_used} pts (-${lastOrder.points_discount?.toFixed(2)})</p>}
               {lastOrder?.points_earned > 0 && <p className="text-emerald-300 text-xs mt-1">{t('pointsEarned')}: +{lastOrder.points_earned} pts</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button onClick={handlePrintReceipt} className="bg-blue-500 hover:bg-blue-600" data-testid="print-receipt-btn">
-                <Printer className="w-4 h-4 mr-2" /> {t('printReceipt80mm')}
+            {/* Tax summary in dialog */}
+            {lastOrder?.tax_breakdown && Object.keys(lastOrder.tax_breakdown).length > 0 && (
+              <div className="bg-slate-700/50 rounded-lg p-3 text-xs space-y-1">
+                <p className="text-slate-400 font-medium">IVA:</p>
+                {Object.entries(lastOrder.tax_breakdown).sort(([a],[b]) => Number(b) - Number(a)).map(([rate, info]) => (
+                  <div key={rate} className="flex justify-between text-slate-300">
+                    <span>Base {rate}%: ${(info.base || 0).toFixed(2)}</span>
+                    <span>IVA: ${(info.tax || 0).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={handlePrintReceipt} className="bg-blue-500 hover:bg-blue-600 text-xs h-9" data-testid="print-receipt-btn">
+                <Printer className="w-3.5 h-3.5 mr-1.5" /> {t('printReceipt80mm')}
               </Button>
-              <Button onClick={handlePrintInvoice} variant="outline" className="border-slate-600 text-slate-300" data-testid="print-invoice-btn">
-                <Printer className="w-4 h-4 mr-2" /> {t('printInvoiceA4')}
+              <Button onClick={handlePrintInvoice} variant="outline" className="border-slate-600 text-slate-300 text-xs h-9" data-testid="print-invoice-btn">
+                <Printer className="w-3.5 h-3.5 mr-1.5" /> {t('printInvoiceA4')}
+              </Button>
+              <Button onClick={handlePrintFiscal} className="bg-amber-600 hover:bg-amber-700 text-xs h-9" data-testid="print-fiscal-btn">
+                <Printer className="w-3.5 h-3.5 mr-1.5" /> Fiscal SENIAT
+              </Button>
+              <Button onClick={handlePrintDotMatrix} variant="outline" className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10 text-xs h-9" data-testid="print-dotmatrix-btn">
+                <Printer className="w-3.5 h-3.5 mr-1.5" /> Mayorista
               </Button>
             </div>
             <Button onClick={() => setShowReceipt(false)} variant="outline" className="w-full border-slate-600 text-slate-300" data-testid="close-receipt-btn">{t('close')}</Button>
@@ -643,6 +683,8 @@ export default function PosPage() {
       {/* Hidden print components */}
       <ReceiptPrint ref={receiptRef} order={lastOrder} settings={systemSettings} exchangeRates={exchangeRates} t={t} />
       <InvoicePrint ref={invoiceRef} order={lastOrder} settings={systemSettings} exchangeRates={exchangeRates} t={t} />
+      <FiscalPrint ref={fiscalRef} order={lastOrder} settings={systemSettings} exchangeRates={exchangeRates} t={t} />
+      <DotMatrixPrint ref={dotMatrixRef} order={lastOrder} settings={systemSettings} exchangeRates={exchangeRates} t={t} />
     </div>
   );
 }

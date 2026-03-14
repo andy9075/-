@@ -91,11 +91,26 @@ export const InvoicePrint = forwardRef(({ order, settings, exchangeRates, t }, r
 
         {/* Totals */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <div style={{ width: '320px' }}>
+          <div style={{ width: '360px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #eee' }}>
               <span>Subtotal:</span>
               <span>${subtotal.toFixed(2)} / {localSymbol}{(subtotal * sysRate).toFixed(2)}</span>
             </div>
+            {/* Tax breakdown */}
+            {order?.tax_breakdown && Object.keys(order.tax_breakdown).length > 0 && (
+              Object.entries(order.tax_breakdown).sort(([a],[b]) => Number(b) - Number(a)).map(([rate, info]) => (
+                <div key={rate}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: '11px', color: '#555' }}>
+                    <span>Base Imponible {rate}%:</span>
+                    <span>${(info.base || 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: '11px', color: '#555' }}>
+                    <span>IVA {rate}%:</span>
+                    <span>${(info.tax || 0).toFixed(2)} / {localSymbol}{((info.tax || 0) * sysRate).toFixed(2)}</span>
+                  </div>
+                </div>
+              ))
+            )}
             {order?.discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #eee', color: 'red' }}>
               <span>{t('discount')} ({order.discount}%):</span>
               <span>-${(subtotal * order.discount / 100).toFixed(2)}</span>

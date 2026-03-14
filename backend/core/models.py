@@ -148,6 +148,7 @@ class ProductCreate(BaseModel):
     image_url: str = ""
     description: str = ""
     status: str = "active"
+    tax_rate: float = 16.0
 
 class ProductResponse(BaseModel):
     id: str
@@ -171,6 +172,7 @@ class ProductResponse(BaseModel):
     image_url: str = ""
     description: str = ""
     status: str = "active"
+    tax_rate: float = 16.0
     created_at: str
 
 # Inventory
@@ -293,6 +295,21 @@ class SystemSettings(BaseModel):
     pricing_mode: str = "local_based"
     points_per_dollar: int = 1
     points_value_rate: int = 100
+    # Tax / Fiscal settings
+    tax_enabled: bool = True
+    tax_included_in_price: bool = True
+    default_tax_rate: float = 16.0
+    tax_rates: str = "16,8,0"
+    seniat_enabled: bool = False
+    seniat_printer_ip: str = ""
+    seniat_printer_port: int = 9100
+    seniat_machine_serial: str = ""
+    seniat_authorization_number: str = ""
+    fiscal_prefix: str = "FC"
+    next_fiscal_number: int = 1
+    dot_matrix_enabled: bool = False
+    dot_matrix_printer_ip: str = ""
+    dot_matrix_printer_port: int = 9100
 
 # Online Shop
 class OnlineOrderCreate(BaseModel):

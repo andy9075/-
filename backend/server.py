@@ -648,14 +648,40 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
                 {"$inc": {"quantity": -item.quantity}}
             )
     
-    # Build items with product names
+    # Build items with product names and tax info
     order_items = []
+    tax_breakdown = {}  # {rate: {"base": ..., "tax": ...}}
     for item in order.items:
         item_dict = item.model_dump()
         product = await udb.products.find_one({"id": item.product_id})
         if product:
             item_dict["product_name"] = product["name"]
+            item_dict["tax_rate"] = product.get("tax_rate", sys_settings.get("default_tax_rate", 16.0))
+        else:
+            item_dict["tax_rate"] = sys_settings.get("default_tax_rate", 16.0)
+        # Calculate tax for this item
+        rate = item_dict["tax_rate"]
+        item_amount = item_dict.get("amount", 0)
+        if sys_settings.get("tax_included_in_price", True):
+            base = round(item_amount / (1 + rate / 100), 2)
+            tax = round(item_amount - base, 2)
+        else:
+            base = item_amount
+            tax = round(item_amount * rate / 100, 2)
+        item_dict["tax_amount"] = tax
+        item_dict["base_amount"] = base
+        if rate not in tax_breakdown:
+            tax_breakdown[rate] = {"base": 0, "tax": 0}
+        tax_breakdown[rate]["base"] += base
+        tax_breakdown[rate]["tax"] += tax
         order_items.append(item_dict)
+    
+    # Round tax breakdown
+    for rate in tax_breakdown:
+        tax_breakdown[rate]["base"] = round(tax_breakdown[rate]["base"], 2)
+        tax_breakdown[rate]["tax"] = round(tax_breakdown[rate]["tax"], 2)
+    total_tax = round(sum(v["tax"] for v in tax_breakdown.values()), 2)
+    total_base = round(sum(v["base"] for v in tax_breakdown.values()), 2)
     
     order_doc = {
         "id": order_id,
@@ -670,6 +696,9 @@ async def create_sales_order(order: SalesOrderCreate, current_user: dict = Depen
         "points_discount": round(points_discount, 2),
         "paid_amount": order.paid_amount,
         "payment_method": order.payment_method,
+        "tax_breakdown": {str(k): v for k, v in tax_breakdown.items()},
+        "total_tax": total_tax,
+        "total_base": total_base,
         "status": "completed" if order.paid_amount >= final_total else "pending",
         "notes": order.notes,
         "created_by": current_user["user_id"],
@@ -2436,6 +2465,42 @@ async def get_customer_balance_log(customer_id: str, current_user: dict = Depend
     udb = get_user_db(current_user)
     logs = await udb.balance_log.find({"customer_id": customer_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return logs
+
+# ==================== Tax Report ====================
+@api_router.get("/reports/tax")
+async def get_tax_report(start_date: Optional[str] = None, end_date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    udb = get_user_db(current_user)
+    query = {"status": "completed"}
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        query.setdefault("created_at", {})["$lte"] = end_date
+    orders = await udb.sales_orders.find(query, {"_id": 0}).to_list(10000)
+    tax_summary = {}
+    total_sales = 0
+    total_tax = 0
+    total_base = 0
+    for order in orders:
+        total_sales += order.get("total_amount", 0)
+        total_tax += order.get("total_tax", 0)
+        total_base += order.get("total_base", 0)
+        for rate_str, info in order.get("tax_breakdown", {}).items():
+            if rate_str not in tax_summary:
+                tax_summary[rate_str] = {"base": 0, "tax": 0, "count": 0}
+            tax_summary[rate_str]["base"] += info.get("base", 0)
+            tax_summary[rate_str]["tax"] += info.get("tax", 0)
+            tax_summary[rate_str]["count"] += 1
+    # Round
+    for k in tax_summary:
+        tax_summary[k]["base"] = round(tax_summary[k]["base"], 2)
+        tax_summary[k]["tax"] = round(tax_summary[k]["tax"], 2)
+    return {
+        "total_sales": round(total_sales, 2),
+        "total_tax": round(total_tax, 2),
+        "total_base": round(total_base, 2),
+        "breakdown": tax_summary,
+        "order_count": len(orders)
+    }
 
 # ==================== Report Export (Excel) ====================
 @api_router.get("/reports/export/sales")

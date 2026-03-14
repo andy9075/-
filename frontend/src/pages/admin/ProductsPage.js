@@ -25,7 +25,8 @@ export default function ProductsPage() {
     code: "", barcode: "", name: "", category_id: "", unit: "件",
     cost_price: 0, margin1: 0, margin2: 0, margin3: 0,
     price1: 0, price2: 0, price3: 0, wholesale_price: 0, box_quantity: 1,
-    retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active"
+    retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active",
+    tax_rate: 16
   });
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -75,7 +76,7 @@ export default function ProductsPage() {
     try { await axios.delete(`${API}/products/${id}`); toast.success(t('deleteSuccess')); fetchProducts(); } catch (e) { toast.error(t('deleteFailed')); }
   };
 
-  const resetForm = () => setFormData({ code: "", barcode: "", name: "", category_id: "", unit: "件", cost_price: 0, margin1: 0, margin2: 0, margin3: 0, price1: 0, price2: 0, price3: 0, wholesale_price: 0, box_quantity: 1, retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active" });
+  const resetForm = () => setFormData({ code: "", barcode: "", name: "", category_id: "", unit: "件", cost_price: 0, margin1: 0, margin2: 0, margin3: 0, price1: 0, price2: 0, price3: 0, wholesale_price: 0, box_quantity: 1, retail_price: 0, min_stock: 0, max_stock: 9999, image_url: "", description: "", status: "active", tax_rate: 16 });
 
   const getCategoryRate = (categoryId) => {
     const cat = categories.find(c => c.id === categoryId);
@@ -176,6 +177,7 @@ export default function ProductsPage() {
               <TableHead className="text-slate-300">{t('price2')}</TableHead>
               <TableHead className="text-slate-300">{t('margin')}3%</TableHead>
               <TableHead className="text-slate-300">{t('price3Box')}</TableHead>
+              <TableHead className="text-slate-300">IVA</TableHead>
               <TableHead className="text-slate-300">{t('status')}</TableHead>
               <TableHead className="text-slate-300">{t('actions')}</TableHead>
             </TableRow>
@@ -209,6 +211,7 @@ export default function ProductsPage() {
                     <div>${(product.price3 || product.wholesale_price || 0).toFixed(2)}</div>
                     <div className="text-cyan-400 text-xs">{localSymbol}{((product.price3 || product.wholesale_price || 0) * catRate).toFixed(2)}</div>
                   </TableCell>
+                  <TableCell><span className={`text-xs font-medium ${(product.tax_rate ?? 16) === 0 ? 'text-emerald-400' : (product.tax_rate ?? 16) === 8 ? 'text-blue-400' : 'text-amber-400'}`}>{product.tax_rate ?? 16}%</span></TableCell>
                   <TableCell><Badge variant={product.status === 'active' ? 'default' : 'secondary'}>{product.status === 'active' ? t('active') : t('inactive')}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-2">
@@ -288,6 +291,16 @@ export default function ProductsPage() {
             <div><label className="text-sm text-slate-300">{t('wholesale')} ($)</label><Input type="number" step="0.01" value={formData.wholesale_price} onChange={(e) => setFormData({...formData, wholesale_price: parseFloat(e.target.value) || 0})} className="bg-slate-700 border-slate-600" />{formData.wholesale_price > 0 && formData.category_id && <p className="text-xs text-cyan-400 mt-0.5">{localSymbol}{toBs(formData.wholesale_price)}</p>}</div>
             <div><label className="text-sm text-slate-300">{t('boxQuantity')}</label><Input type="number" value={formData.box_quantity} onChange={(e) => setFormData({...formData, box_quantity: parseInt(e.target.value) || 1})} className="bg-slate-700 border-slate-600" /></div>
             <div><label className="text-sm text-slate-300">{t('stockAlerts')} ({t('quantity')})</label><Input type="number" value={formData.min_stock} onChange={(e) => setFormData({...formData, min_stock: parseInt(e.target.value) || 0})} className="bg-slate-700 border-slate-600" placeholder="0" /></div>
+            <div><label className="text-sm text-slate-300">IVA (%)</label>
+              <Select value={String(formData.tax_rate ?? 16)} onValueChange={(v) => setFormData({...formData, tax_rate: parseFloat(v)})}>
+                <SelectTrigger className="bg-slate-700 border-slate-600" data-testid="product-tax-rate"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="16">16% General</SelectItem>
+                  <SelectItem value="8">8% Reducido</SelectItem>
+                  <SelectItem value="0">0% Exento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div><label className="text-sm text-slate-300">{t('status')}</label>
               <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}>
                 <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
