@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import VideoGenerator from "@/components/VideoGenerator";
-import axios, { API } from "@/lib/api";
+import axios, { API, BACKEND_URL } from "@/lib/api";
 import { toast } from "sonner";
 
 const CATEGORIES = [
@@ -179,7 +179,7 @@ export default function VideoTutorialsPage() {
           {videos.map(v => (
             <Card key={v.id} className="bg-slate-800 border-slate-700 overflow-hidden group hover:border-slate-600 transition-colors">
               <div className="relative aspect-video bg-slate-900 flex items-center justify-center cursor-pointer" onClick={() => setPlayVideo(v)} data-testid={`video-play-${v.id}`}>
-                <video src={`${API.replace('/api', '')}${v.url}`} className="w-full h-full object-cover" preload="metadata" />
+                <video src={`${BACKEND_URL}${v.url}`} className="w-full h-full object-cover" preload="metadata" />
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <Play className="w-12 h-12 text-white fill-white" />
                 </div>
@@ -224,7 +224,7 @@ export default function VideoTutorialsPage() {
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-4xl p-0">
           {playVideo && (
             <div>
-              <video src={`${API.replace('/api', '')}${playVideo.url}`} controls autoPlay className="w-full rounded-t-lg" />
+              <video src={`${BACKEND_URL}${playVideo.url}`} controls autoPlay className="w-full rounded-t-lg" />
               <div className="p-4">
                 <h3 className="text-white font-medium">{playVideo.title}</h3>
                 <p className="text-slate-400 text-sm mt-1">{getCatLabel(playVideo.category)} · {new Date(playVideo.created_at).toLocaleString()}</p>

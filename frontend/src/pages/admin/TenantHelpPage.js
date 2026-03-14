@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ChevronDown, ChevronRight, Monitor, Package, Warehouse, Users, ShoppingCart, BarChart3, Settings, Globe, DollarSign, FileText, RotateCcw, Shield, CreditCard, Tag, Box, AlertCircle, ArrowLeftRight, Calendar, TrendingUp, Megaphone, Banknote, ClipboardList, Target, Clock, Bell, Video, Play, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import axios, { API } from "@/lib/api";
+import axios, { API, BACKEND_URL } from "@/lib/api";
 
 const Section = ({ icon: Icon, title, color, children }) => {
   const [open, setOpen] = useState(false);
@@ -59,7 +59,7 @@ export default function TenantHelpPage() {
             {videos.map(v => (
               <Card key={v.id} className="bg-slate-800 border-slate-700 overflow-hidden group cursor-pointer hover:border-slate-600 transition-colors" onClick={() => setPlayVideo(v)} data-testid={`help-video-${v.id}`}>
                 <div className="relative aspect-video bg-slate-900 flex items-center justify-center">
-                  <video src={`${API.replace('/api', '')}${v.url}`} className="w-full h-full object-cover" preload="metadata" />
+                  <video src={`${BACKEND_URL}${v.url}`} className="w-full h-full object-cover" preload="metadata" />
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <Play className="w-10 h-10 text-white fill-white" />
                   </div>
@@ -74,7 +74,7 @@ export default function TenantHelpPage() {
           {playVideo && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPlayVideo(null)}>
               <div className="max-w-4xl w-full bg-slate-900 rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                <video src={`${API.replace('/api', '')}${playVideo.url}`} controls autoPlay className="w-full" />
+                <video src={`${BACKEND_URL}${playVideo.url}`} controls autoPlay className="w-full" />
                 <div className="p-3 flex items-center justify-between">
                   <span className="text-white font-medium">{playVideo.title}</span>
                   <Button size="sm" variant="ghost" onClick={() => setPlayVideo(null)} className="text-slate-400">关闭</Button>
