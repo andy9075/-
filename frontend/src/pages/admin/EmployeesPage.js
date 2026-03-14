@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { UserPlus, Edit, Trash2, Shield, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,33 +11,33 @@ import axios, { API } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
 import { toast } from "sonner";
 
-const ALL_PERMISSIONS = [
-  { key: "can_access_pos", label: "POS", group: "pos", desc: "Use POS register" },
-  { key: "can_discount", label: "Discount", group: "pos", desc: "Apply discounts" },
-  { key: "can_refund", label: "Refund", group: "pos", desc: "Process refunds" },
-  { key: "can_void", label: "Void", group: "pos", desc: "Void transactions" },
-  { key: "can_manage_products", label: "Products", group: "catalog", desc: "Add/edit/delete products" },
-  { key: "can_manage_inventory", label: "Inventory", group: "catalog", desc: "Manage stock & transfers" },
-  { key: "can_manage_purchases", label: "Purchases", group: "catalog", desc: "Create purchase orders" },
-  { key: "can_manage_customers", label: "Customers", group: "crm", desc: "Manage customer data" },
-  { key: "can_view_reports", label: "Reports", group: "reports", desc: "View sales reports" },
-  { key: "can_export", label: "Export", group: "reports", desc: "Export data to Excel" },
-  { key: "can_view_cost_price", label: "Cost Price", group: "reports", desc: "View product cost prices" },
-  { key: "can_manage_employees", label: "Employees", group: "system", desc: "Manage employees" },
-  { key: "can_manage_settings", label: "Settings", group: "system", desc: "System settings" },
-  { key: "can_manage_promotions", label: "Promotions", group: "crm", desc: "Manage promotions" },
+const PERM_KEYS = [
+  { key: "can_access_pos", labelKey: "permPOS", group: "pos", descKey: "permDescPOS" },
+  { key: "can_discount", labelKey: "permDiscount", group: "pos", descKey: "permDescDiscount" },
+  { key: "can_refund", labelKey: "permRefund", group: "pos", descKey: "permDescRefund" },
+  { key: "can_void", labelKey: "permVoid", group: "pos", descKey: "permDescVoid" },
+  { key: "can_manage_products", labelKey: "permProducts", group: "catalog", descKey: "permDescProducts" },
+  { key: "can_manage_inventory", labelKey: "permInventory", group: "catalog", descKey: "permDescInventory" },
+  { key: "can_manage_purchases", labelKey: "permPurchases", group: "catalog", descKey: "permDescPurchases" },
+  { key: "can_manage_customers", labelKey: "permCustomers", group: "crm", descKey: "permDescCustomers" },
+  { key: "can_view_reports", labelKey: "permReports", group: "reports", descKey: "permDescReports" },
+  { key: "can_export", labelKey: "permExport", group: "reports", descKey: "permDescExport" },
+  { key: "can_view_cost_price", labelKey: "permCostPrice", group: "reports", descKey: "permDescCostPrice" },
+  { key: "can_manage_employees", labelKey: "permEmployees", group: "system", descKey: "permDescEmployees" },
+  { key: "can_manage_settings", labelKey: "permSettings", group: "system", descKey: "permDescSettings" },
+  { key: "can_manage_promotions", labelKey: "permPromotions", group: "crm", descKey: "permDescPromotions" },
 ];
 
-const PERM_GROUPS = {
-  pos: { label: "POS", color: "text-emerald-400" },
-  catalog: { label: "Catalog", color: "text-blue-400" },
-  crm: { label: "CRM", color: "text-purple-400" },
-  reports: { label: "Reports", color: "text-amber-400" },
-  system: { label: "System", color: "text-red-400" },
+const PERM_GROUP_KEYS = {
+  pos: { labelKey: "permGroupPOS", color: "text-emerald-400" },
+  catalog: { labelKey: "permGroupCatalog", color: "text-blue-400" },
+  crm: { labelKey: "permGroupCRM", color: "text-purple-400" },
+  reports: { labelKey: "permGroupReports", color: "text-amber-400" },
+  system: { labelKey: "permGroupSystem", color: "text-red-400" },
 };
 
 const ROLE_PRESETS = {
-  admin: ALL_PERMISSIONS.map(p => p.key),
+  admin: PERM_KEYS.map(p => p.key),
   manager: ["can_access_pos", "can_discount", "can_refund", "can_void", "can_manage_products", "can_manage_inventory", "can_manage_purchases", "can_manage_customers", "can_view_reports", "can_export", "can_view_cost_price", "can_manage_promotions"],
   cashier: ["can_access_pos"],
   staff: ["can_access_pos", "can_manage_inventory"],
@@ -61,7 +61,7 @@ export default function EmployeesPage() {
       toast.success(t('save') + " OK"); setShowForm(false); fetchData();
     } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
   };
-  const handleDelete = async (id) => { if (!confirm("Delete this employee?")) return; try { await axios.delete(`${API}/employees/${id}`); toast.success("Deleted"); fetchData(); } catch (e) { toast.error(e.response?.data?.detail || "Error"); } };
+  const handleDelete = async (id) => { if (!confirm(t('deleteEmployeeConfirm'))) return; try { await axios.delete(`${API}/employees/${id}`); toast.success(t('deleteSuccess')); fetchData(); } catch (e) { toast.error(e.response?.data?.detail || "Error"); } };
 
   const togglePerm = (key) => {
     setForm(prev => ({ ...prev, permissions: { ...prev.permissions, [key]: !prev.permissions[key] } }));
@@ -70,7 +70,7 @@ export default function EmployeesPage() {
   const applyRolePreset = (role) => {
     const preset = ROLE_PRESETS[role] || [];
     const perms = {};
-    ALL_PERMISSIONS.forEach(p => { perms[p.key] = preset.includes(p.key); });
+    PERM_KEYS.forEach(p => { perms[p.key] = preset.includes(p.key); });
     perms.max_discount = role === 'admin' ? 100 : role === 'manager' ? 50 : 0;
     setForm(prev => ({ ...prev, role, permissions: perms }));
   };
@@ -80,7 +80,7 @@ export default function EmployeesPage() {
       setForm({ ...emp, password: "" }); setEditing(emp.id);
     } else {
       const defaultPerms = {};
-      ALL_PERMISSIONS.forEach(p => { defaultPerms[p.key] = false; });
+      PERM_KEYS.forEach(p => { defaultPerms[p.key] = false; });
       defaultPerms.can_access_pos = true;
       defaultPerms.max_discount = 0;
       setForm({ username: "", password: "", name: "", phone: "", role: "cashier", store_id: "", permissions: defaultPerms });
@@ -90,7 +90,7 @@ export default function EmployeesPage() {
   };
 
   const roleColors = { admin: "bg-red-500/20 text-red-400", manager: "bg-purple-500/20 text-purple-400", cashier: "bg-blue-500/20 text-blue-400", staff: "bg-slate-500/20 text-slate-400" };
-  const enabledPerms = (perms) => ALL_PERMISSIONS.filter(p => perms?.[p.key]).map(p => p.label);
+  const enabledPerms = (perms) => PERM_KEYS.filter(p => perms?.[p.key]).map(p => t(p.labelKey));
 
   return (
     <div className="space-y-6" data-testid="employees-page">
@@ -105,9 +105,9 @@ export default function EmployeesPage() {
             <TableHead className="text-slate-300">{t('username')}</TableHead>
             <TableHead className="text-slate-300">{t('name')}</TableHead>
             <TableHead className="text-slate-300">{t('phone')}</TableHead>
-            <TableHead className="text-slate-300">Role</TableHead>
+            <TableHead className="text-slate-300">{t('role')}</TableHead>
             <TableHead className="text-slate-300">{t('permission')}</TableHead>
-            <TableHead className="text-slate-300">Actions</TableHead>
+            <TableHead className="text-slate-300">{t('actions')}</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {employees.map(emp => (
@@ -115,13 +115,13 @@ export default function EmployeesPage() {
                 <TableCell className="text-white font-medium">{emp.username}</TableCell>
                 <TableCell className="text-slate-300">{emp.name}</TableCell>
                 <TableCell className="text-slate-400">{emp.phone}</TableCell>
-                <TableCell><Badge className={roleColors[emp.role] || roleColors.staff}>{emp.role}</Badge></TableCell>
+                <TableCell><Badge className={roleColors[emp.role] || roleColors.staff}>{t(emp.role)}</Badge></TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {enabledPerms(emp.permissions).map(label => (
                       <Badge key={label} className="bg-slate-700 text-slate-300 text-xs">{label}</Badge>
                     ))}
-                    {emp.permissions?.max_discount > 0 && <Badge className="bg-amber-500/20 text-amber-400 text-xs">Max {emp.permissions.max_discount}%</Badge>}
+                    {emp.permissions?.max_discount > 0 && <Badge className="bg-amber-500/20 text-amber-400 text-xs">{t('maxDiscount')} {emp.permissions.max_discount}%</Badge>}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -140,12 +140,12 @@ export default function EmployeesPage() {
       {/* Employee Form Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Edit' : 'Add'} Employee</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t('editEmployee') : t('addEmployee')}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-slate-400">{t('username')} *</label><Input value={form.username} onChange={e => setForm({...form, username: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="emp-username" /></div>
-              <div><label className="text-xs text-slate-400">{t('password')} {editing ? '(leave empty to keep)' : '*'}</label><Input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="emp-password" /></div>
+              <div><label className="text-xs text-slate-400">{t('password')} {editing ? `(${t('passwordKeepHint')})` : '*'}</label><Input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="bg-slate-700 border-slate-600" data-testid="emp-password" /></div>
               <div><label className="text-xs text-slate-400">{t('name')}</label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-slate-700 border-slate-600" /></div>
               <div><label className="text-xs text-slate-400">{t('phone')}</label><Input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-slate-700 border-slate-600" /></div>
             </div>
@@ -153,10 +153,10 @@ export default function EmployeesPage() {
             {/* Role with Preset */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-slate-400">Role (click to apply preset permissions)</label>
+                <label className="text-xs text-slate-400">{t('rolePresetHint')}</label>
                 <div className="flex gap-2 mt-1">
                   {['admin', 'manager', 'cashier', 'staff'].map(r => (
-                    <button key={r} onClick={() => applyRolePreset(r)} className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${form.role === r ? (roleColors[r] || '') + ' ring-1 ring-white/20' : 'bg-slate-700 text-slate-400 hover:text-white'}`} data-testid={`role-${r}`}>{r}</button>
+                    <button key={r} onClick={() => applyRolePreset(r)} className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${form.role === r ? (roleColors[r] || '') + ' ring-1 ring-white/20' : 'bg-slate-700 text-slate-400 hover:text-white'}`} data-testid={`role-${r}`}>{t(r)}</button>
                   ))}
                 </div>
               </div>
@@ -172,23 +172,23 @@ export default function EmployeesPage() {
             {/* Permissions Grid */}
             <div className="bg-slate-900 rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-emerald-400 flex items-center gap-2"><Shield className="w-4 h-4" /> Permissions</h4>
-                <span className="text-xs text-slate-500">{ALL_PERMISSIONS.filter(p => form.permissions?.[p.key]).length}/{ALL_PERMISSIONS.length} enabled</span>
+                <h4 className="text-sm font-medium text-emerald-400 flex items-center gap-2"><Shield className="w-4 h-4" /> {t('permission')}</h4>
+                <span className="text-xs text-slate-500">{PERM_KEYS.filter(p => form.permissions?.[p.key]).length}/{PERM_KEYS.length} {t('enabledCount')}</span>
               </div>
 
-              {Object.entries(PERM_GROUPS).map(([groupKey, group]) => (
+              {Object.entries(PERM_GROUP_KEYS).map(([groupKey, group]) => (
                 <div key={groupKey}>
-                  <p className={`text-xs font-medium ${group.color} mb-1.5`}>{group.label}</p>
+                  <p className={`text-xs font-medium ${group.color} mb-1.5`}>{t(group.labelKey)}</p>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {ALL_PERMISSIONS.filter(p => p.group === groupKey).map(perm => (
+                    {PERM_KEYS.filter(p => p.group === groupKey).map(perm => (
                       <label key={perm.key} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all ${form.permissions?.[perm.key] ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-slate-800 border border-slate-700 hover:border-slate-600'}`} data-testid={`perm-${perm.key}`}>
                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${form.permissions?.[perm.key] ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`}>
                           {form.permissions?.[perm.key] && <Check className="w-3 h-3 text-white" />}
                         </div>
                         <input type="checkbox" checked={!!form.permissions?.[perm.key]} onChange={() => togglePerm(perm.key)} className="sr-only" />
                         <div>
-                          <p className="text-sm text-white">{perm.label}</p>
-                          <p className="text-xs text-slate-500">{perm.desc}</p>
+                          <p className="text-sm text-white">{t(perm.labelKey)}</p>
+                          <p className="text-xs text-slate-500">{t(perm.descKey)}</p>
                         </div>
                       </label>
                     ))}
@@ -198,7 +198,7 @@ export default function EmployeesPage() {
 
               {/* Max Discount */}
               <div className="border-t border-slate-700 pt-3">
-                <label className="text-xs text-slate-400">{t('maxDiscount')} %</label>
+                <label className="text-xs text-slate-400">{t('maxDiscountPercent')} %</label>
                 <Input type="number" min="0" max="100" value={form.permissions?.max_discount || 0} onChange={e => setForm({...form, permissions: {...form.permissions, max_discount: parseInt(e.target.value) || 0}})} className="bg-slate-700 border-slate-600 w-24 mt-1" data-testid="max-discount" />
               </div>
             </div>
