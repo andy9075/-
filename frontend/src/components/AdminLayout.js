@@ -10,7 +10,7 @@ import {
   Globe, DollarSign, FileText, AlertCircle, ClipboardList, ArrowLeftRight,
   Tag, Calendar, RotateCcw, TrendingUp, Shield, Megaphone, Banknote,
   ChevronDown, ChevronRight, Clock, Target, Box, Bell, Monitor, ShoppingBag,
-  HelpCircle
+  HelpCircle, Receipt
 } from "lucide-react";
 
 const AdminLayout = ({ children }) => {
@@ -59,6 +59,7 @@ const AdminLayout = ({ children }) => {
     ]},
     { key: "finance", label: t('reports'), items: [
       { icon: BarChart3, label: t('reports'), path: "/admin/reports" },
+      { icon: Receipt, label: "Reporte Fiscal", path: "/admin/tax-report" },
       { icon: TrendingUp, label: t('profitAnalysis'), path: "/admin/profit-analysis" },
       { icon: Target, label: t('salesTarget'), path: "/admin/sales-targets" },
       { icon: Banknote, label: t('accountsReceivable'), path: "/admin/accounts" },

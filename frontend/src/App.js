@@ -26,6 +26,7 @@ import SalesPage from "@/pages/admin/SalesPage";
 import OnlineOrdersPage from "@/pages/admin/OnlineOrdersPage";
 import SalesReportPage from "@/pages/admin/SalesReportPage";
 import ReportsPage from "@/pages/admin/ReportsPage";
+import TaxReportPage from "@/pages/admin/TaxReportPage";
 import ExchangeRatesPage from "@/pages/admin/ExchangeRatesPage";
 import PaymentSettingsPage from "@/pages/admin/PaymentSettingsPage";
 import SystemSettingsPage from "@/pages/admin/SystemSettingsPage";
@@ -86,6 +87,7 @@ function AppContent() {
           <Route path="/admin/online-orders" element={<AdminRoute><OnlineOrdersPage /></AdminRoute>} />
           <Route path="/admin/sales-report" element={<AdminRoute><SalesReportPage /></AdminRoute>} />
           <Route path="/admin/reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
+          <Route path="/admin/tax-report" element={<AdminRoute><TaxReportPage /></AdminRoute>} />
           <Route path="/admin/exchange-rates" element={<AdminRoute><ExchangeRatesPage /></AdminRoute>} />
           <Route path="/admin/payment-settings" element={<AdminRoute><PaymentSettingsPage /></AdminRoute>} />
           <Route path="/admin/settings" element={<AdminRoute><SystemSettingsPage /></AdminRoute>} />
