@@ -21,11 +21,12 @@ Build a comprehensive POS application as a multi-tenant SaaS system. Branded as 
 ### Backend Structure (Refactored)
 ```
 backend/
-├── server.py        (2648 lines - routes)
+├── server.py        (2695 lines - routes, needs splitting)
 ├── core/
 │   ├── __init__.py  (DB connections, tenant helpers)
 │   ├── auth.py      (JWT, password, auth dependencies)
 │   └── models.py    (All Pydantic models)
+├── routers/         (Empty - next refactoring target)
 ```
 
 ### PWA: Service worker + offline POS + auto-sync
@@ -39,12 +40,20 @@ backend/
 - Quick POS/Shop buttons in sidebar
 - Backend modular refactoring (core/ extracted)
 - Docker deployment files (Dockerfile, docker-compose.yml, DEPLOY.md)
+- **User Manuals** (2025-03-14):
+  - SuperAdminHelpPage: SaaS platform admin guide (protected, super-admin only)
+  - TenantHelpPage: Store operations guide for tenants
+  - Route protection: tenant users redirected from super admin help
+  - Sidebar navigation with role-based link visibility
 
 ## Credentials
 - Super Admin: username=admin, password=admin123
+- Tenant Admin: tenant_id=4e151812, username=shop1admin, password=shop1pass
 
 ## P1 - Next Tasks
-- Further backend router splitting (server.py → routers/)
+- Backend router splitting (server.py → routers/)
+
+## P2 - Future Tasks
 - Wholesale Module improvements
-- Enhanced Reporting
+- Enhanced Reporting (complex filters, exports, visualizations)
 - UI/UX Polish
